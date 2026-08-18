@@ -34,28 +34,36 @@ export function DashboardHeader() {
 }
 
 export function DashboardStats() {
-  const { role, statusOf } = useAppState();
+  const { role, statusOf, records } = useAppState();
   const isAdvocate = role === "Advocate/Lawyer";
+
+  // Everything the forms have created counts towards the band too.
+  const cases = [...records.cases, ...CASES];
+  const hearings = [...records.hearings, ...HEARINGS];
+  const invoices = [...records.invoices, ...INVOICES];
+  const pendingTasks =
+    PENDING_TASK_COUNT +
+    records.tasks.filter((task) => task.status !== "Done").length;
 
   // An advocate's dashboard counts only their own matters.
   const scoped = isAdvocate
-    ? CASES.filter((legalCase) => legalCase.advocate === SIGNED_IN_ADVOCATE)
-    : CASES;
+    ? cases.filter((legalCase) => legalCase.advocate === SIGNED_IN_ADVOCATE)
+    : cases;
 
   const activeCases = scoped.filter(
     (legalCase) =>
       legalCase.status === "Active" || legalCase.status === "Hearing Scheduled",
   ).length;
 
-  const unpaid = INVOICES.filter(
+  const unpaid = invoices.filter(
     (invoice) => statusOf(invoice) !== "Paid",
   ).length;
 
   return (
     <div className="stat-grid stat-grid-ruled">
       <Stat label="Active cases" value={activeCases} tone="accent" />
-      <Stat label="Upcoming hearings" value={HEARINGS.length} />
-      <Stat label="Pending tasks" value={PENDING_TASK_COUNT} />
+      <Stat label="Upcoming hearings" value={hearings.length} />
+      <Stat label="Pending tasks" value={pendingTasks} />
       <Stat label="Unpaid invoices" value={unpaid} tone="accent-2" />
       <Stat label="Revenue (Aug)" value={kes(REVENUE_THIS_MONTH)} />
       <Stat label="Trust balance" value={kes(TRUST_ON_HAND)} />
