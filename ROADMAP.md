@@ -197,7 +197,7 @@ solo hacker gets away with.
 
 ---
 
-### Phase 1 — The domain in Effect Schema · 3–5 weeks
+### Phase 1 — The domain in Effect Schema · 3–5 days
 
 Rebuild `src/lib/types.ts` as a real domain model. Pure, dependency-free, and
 exhaustively tested. This is the highest-leverage phase in the roadmap — it is
@@ -209,9 +209,11 @@ money, the court hierarchy and pecuniary jurisdiction limits, KRA PIN format.
 Write it up as `docs/domain-notes.md` with citations — that document alone will
 distinguish this from every other portfolio project.
 
-- [ ] Branded primitives: `CaseId`, `ClientId`, `InvoiceId`, `Money`, `CaseNumber`, `KRAPin`, `PhoneNumber` (Kenyan format, `+254…`)
-- [ ] `Money` as integer minor units (KES cents) — never floats for currency, and say so in a comment
-- [ ] **Court hierarchy as a tagged union**, not a string: Supreme, Court of Appeal, High Court (+ division), Magistrates (+ tier and pecuniary limit), ELRC, ELC. Encode which courts can hear which matter types
+- [x] **Research written up** as `docs/domain-notes.md`, every entry marked ✅ verified against primary text or ⚠️ secondary and unconfirmed. Pecuniary limits, Advocates (Accounts) Rules 2/4/9/10, and Limitation of Actions s. 4 are ✅; procedural timelines, KRA PIN spec, and High Court divisions remain ⚠️
+- [x] `Money` as integer minor units (KES cents) — `add`/`subtract`/`multiply`/`allocate`, with `allocate` proven never to lose a cent across 1,400 splits
+- [x] **Court hierarchy as a tagged union**, not a string: Supreme, Court of Appeal, High Court (+ division), Magistrates (+ rank and pecuniary limit), ELRC, ELC. `canHear` returns the statutory reason on refusal, and honours the s. 7(3) customary-law exemption
+- [x] ESLint boundary gap closed: `domain/` could still import `@/lib/*`, and every rule was bypassable with a relative path. Both now blocked, verified with probe files
+- [ ] Remaining branded primitives: `CaseId`, `ClientId`, `InvoiceId`, `CaseNumber`, `KRAPin`, `PhoneNumber` (Kenyan format, `+254…`)
 - [ ] Port each entity to `Schema.Struct` with real constraints, not just shapes
 - [ ] Replace stringly-typed dates with `Schema.Date` / `DateTime`
 - [ ] Model case status as a **state machine**: legal transitions only, `New → Active → …`, with an explicit transition function returning `Either`

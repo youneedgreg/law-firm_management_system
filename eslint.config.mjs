@@ -10,32 +10,46 @@ import nextTs from "eslint-config-next/typescript";
  * are what stop that from decaying into a suggestion — a layering violation
  * fails CI rather than surviving review.
  */
+/**
+ * Patterns are written twice — once for the `@/` alias and once as `**​/dir/**`
+ * — because `no-restricted-imports` matches the import string, not the resolved
+ * file. Blocking only `@/lib/*` would leave `../../lib/data/clients` wide open,
+ * which is exactly the import someone reaches for when the alias is refused.
+ */
+const layer = (dir) => [`@/${dir}/*`, `@/${dir}`, `**/${dir}/**`];
+
 const layerBoundaries = [
   {
     name: "domain",
     files: ["src/domain/**/*.ts", "src/domain/**/*.tsx"],
     forbidden: [
-      "@/services/*",
-      "@/infra/*",
-      "@/api/*",
-      "@/app/*",
-      "@/components/*",
-      "@/runtime/*",
+      ...layer("services"),
+      ...layer("infra"),
+      ...layer("api"),
+      ...layer("app"),
+      ...layer("components"),
+      ...layer("runtime"),
+      ...layer("lib"),
     ],
     because:
-      "domain/ must stay pure: no I/O, no framework, no knowledge of how it is stored or served.",
+      "domain/ must stay pure: no I/O, no framework, no knowledge of how it is stored or served. It imports nothing else in src/.",
   },
   {
     name: "services",
     files: ["src/services/**/*.ts"],
-    forbidden: ["@/infra/*", "@/app/*", "@/components/*"],
+    forbidden: [
+      ...layer("infra"),
+      ...layer("app"),
+      ...layer("components"),
+      ...layer("lib"),
+    ],
     because:
-      "services/ depends on repository interfaces it declares, never on a concrete implementation.",
+      "services/ depends on repository interfaces it declares, never on a concrete implementation or on UI helpers.",
   },
   {
     name: "infra",
     files: ["src/infra/**/*.ts"],
-    forbidden: ["@/app/*", "@/components/*"],
+    forbidden: [...layer("app"), ...layer("components")],
     because:
       "infra/ is a leaf: it implements interfaces, it does not call into the UI.",
   },
