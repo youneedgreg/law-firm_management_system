@@ -86,22 +86,34 @@ export function today(): string {
   return `${now.getDate()} ${MONTHS[now.getMonth()]} ${now.getFullYear()}`;
 }
 
+/**
+ * Reads a "HH:MM" time field, or null when the value is malformed.
+ *
+ * `Number.isFinite` alone cannot narrow the destructured parts: a short value
+ * like "14" yields no minutes at all, so the absent case has to be handled
+ * before the finite check rather than folded into it.
+ */
+function parseClock(value: string): { hours: number; minutes: number } | null {
+  const [hours, minutes] = value.split(":").map(Number);
+  if (hours === undefined || minutes === undefined) return null;
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  return { hours, minutes };
+}
+
 /** A time field's value ("14:30") as the diary writes it ("2:30 PM"). */
 export function displayTime(value: string): string {
-  const [hours, minutes] = value.split(":").map(Number);
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return value;
-  const suffix = hours < 12 ? "AM" : "PM";
-  const clockHour = hours % 12 === 0 ? 12 : hours % 12;
-  return `${clockHour}:${String(minutes).padStart(2, "0")} ${suffix}`;
+  const clock = parseClock(value);
+  if (!clock) return value;
+  const suffix = clock.hours < 12 ? "AM" : "PM";
+  const clockHour = clock.hours % 12 === 0 ? 12 : clock.hours % 12;
+  return `${clockHour}:${String(clock.minutes).padStart(2, "0")} ${suffix}`;
 }
 
 /** Billable hours between two time fields, to the quarter hour. */
 export function hoursBetween(start: string, end: string): number {
   const toMinutes = (value: string) => {
-    const [hours, minutes] = value.split(":").map(Number);
-    return Number.isFinite(hours) && Number.isFinite(minutes)
-      ? hours * 60 + minutes
-      : Number.NaN;
+    const clock = parseClock(value);
+    return clock ? clock.hours * 60 + clock.minutes : Number.NaN;
   };
   const span = toMinutes(end) - toMinutes(start);
   if (!Number.isFinite(span) || span <= 0) return 0;

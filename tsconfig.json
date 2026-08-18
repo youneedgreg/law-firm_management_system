@@ -1,10 +1,20 @@
 {
   "compilerOptions": {
-    "target": "ES2017",
+    "target": "ES2022",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
+
+    // Beyond `strict`. Indexed access returns `T | undefined`, optional props
+    // distinguish "absent" from "explicitly undefined", and fallthrough or
+    // missing returns are errors. See ROADMAP §7.
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+
     "noEmit": true,
     "esModuleInterop": true,
     "module": "esnext",

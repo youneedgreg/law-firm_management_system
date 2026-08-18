@@ -9,7 +9,7 @@ export function CaseDetail({
   client,
 }: {
   legalCase: Case;
-  client?: Client;
+  client?: Client | undefined;
 }) {
   return (
     <>

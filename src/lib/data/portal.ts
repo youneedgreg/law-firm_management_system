@@ -10,7 +10,21 @@ import type { Client, PortalMessage } from "../types";
  * authentication, General Innovations Ltd stands in for that session — the
  * corporate client with the fullest file (two matters, several invoices).
  */
-export const PORTAL_CLIENT: Client = CLIENTS[3];
+const PORTAL_CLIENT_NUMBER = "CLT-2001";
+
+const portalClient = CLIENTS.find(
+  (client) => client.number === PORTAL_CLIENT_NUMBER,
+);
+
+// Looked up by client number rather than array position: the seed data is
+// reordered often enough that an index would silently sign in the wrong client.
+if (!portalClient) {
+  throw new Error(
+    `Portal client ${PORTAL_CLIENT_NUMBER} is missing from CLIENTS`,
+  );
+}
+
+export const PORTAL_CLIENT: Client = portalClient;
 
 export function portalCases() {
   return casesForClient(PORTAL_CLIENT.id);

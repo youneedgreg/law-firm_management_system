@@ -10,7 +10,7 @@ export function HearingDetail({
   legalCase,
 }: {
   hearing: Hearing;
-  legalCase?: Case;
+  legalCase?: Case | undefined;
 }) {
   return (
     <>

@@ -96,7 +96,8 @@ const WEEKDAY_LABELS = ["Tue", "Wed", "Thu", "Fri", "Sat", "Mon"];
 export function courtWeek(hearings: readonly Hearing[] = HEARINGS): CourtDay[] {
   return hearings.slice(0, 6).map((hearing, index) => ({
     label: WEEKDAY_LABELS[index] ?? "",
-    date: hearing.date.split(" ")[0],
+    // "19 Aug 2026" → "19". Falls back to the whole string if unspaced.
+    date: hearing.date.split(" ")[0] ?? hearing.date,
     count: hearings.filter((other) => other.date === hearing.date).length,
     isToday: index === 0,
   }));

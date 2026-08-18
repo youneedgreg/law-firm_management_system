@@ -182,7 +182,7 @@ to features; every hour here saves five later.
 - [x] GitHub Actions: format, typecheck, lint, test, build on every push to `main`; integration job stubbed behind `if: false` until Phase 12
 - [x] ADRs 0001–0008 covering every decision in §5
 - [x] Testcontainers installed and configured — verification against a real container deferred to Phase 12
-- [ ] Strict TS: `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`; `target` to `ES2022`. Staged in `tsconfig.strict.json` — currently 18 errors; run `npx tsc --noEmit -p tsconfig.strict.json`, fix, then fold into `tsconfig.json` and delete the file
+- [x] Strict TS beyond `strict`: `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noFallthroughCasesInSwitch`, `noImplicitReturns`; `target` raised to `ES2022`. All 18 errors fixed and the staging config removed
 - [x] Deployed to Vercel — <https://law-firmmanagementsystem.vercel.app> serving all routes
 - [x] Trunk-based workflow adopted: `main` only, no feature branches, no PRs (D-9)
 - [x] Pre-push hook running the full local suite — the only gate left once PRs are gone

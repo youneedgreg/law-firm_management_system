@@ -22,12 +22,18 @@ function optionLabel(option: Option): string {
   return typeof option === "string" ? option : option.label;
 }
 
+/**
+ * Optional props are written `?: T | undefined` rather than `?: T` throughout
+ * this file. Under `exactOptionalPropertyTypes` those mean different things:
+ * the short form forbids passing an explicit `undefined`, which is exactly what
+ * forwarding an optional prop down does.
+ */
 interface FieldProps {
   label: string;
   /** Guidance under the control, e.g. how a value will be used. */
-  hint?: string;
+  hint?: string | undefined;
   /** Spans both columns of a `.form-grid`. */
-  wide?: boolean;
+  wide?: boolean | undefined;
 }
 
 /** Label, control and hint — the shell every field shares. */
@@ -115,7 +121,7 @@ export function SelectControl({
 }: {
   options: readonly Option[];
   /** Leading empty option, e.g. "Select a case". */
-  placeholder?: string;
+  placeholder?: string | undefined;
 } & React.ComponentProps<"select">) {
   return (
     <span className={className ? `select ${className}` : "select"}>
@@ -140,7 +146,7 @@ export function SelectField({
   ...select
 }: FieldProps & {
   options: readonly Option[];
-  placeholder?: string;
+  placeholder?: string | undefined;
 } & React.ComponentProps<"select">) {
   const generatedId = useId();
   const id = select.id ?? generatedId;
