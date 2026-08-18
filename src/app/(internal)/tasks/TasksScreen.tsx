@@ -40,7 +40,9 @@ export function TasksTable() {
               <td>{task.case}</td>
               <td>{task.assignee}</td>
               <td>
-                <span className={priorityTag(task.priority)}>{task.priority}</span>
+                <span className={priorityTag(task.priority)}>
+                  {task.priority}
+                </span>
               </td>
               <td>{task.due}</td>
               <td>{task.status}</td>

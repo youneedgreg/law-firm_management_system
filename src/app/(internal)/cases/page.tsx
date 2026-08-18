@@ -5,7 +5,9 @@ import { CASE_STATUSES, type CaseStatus } from "@/lib/types";
 
 export default async function CasesPage({ searchParams }: PageProps<"/cases">) {
   const { status } = await searchParams;
-  const active: CaseStatus | "all" = CASE_STATUSES.includes(status as CaseStatus)
+  const active: CaseStatus | "all" = CASE_STATUSES.includes(
+    status as CaseStatus,
+  )
     ? (status as CaseStatus)
     : "all";
 

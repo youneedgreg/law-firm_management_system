@@ -7,10 +7,7 @@ import { CLIENTS } from "@/lib/data/clients";
 import { CHANNEL_ICONS, COMMUNICATIONS } from "@/lib/data/firm";
 import { displayDate } from "@/lib/format";
 import { nextId, text } from "@/lib/forms";
-import {
-  COMMUNICATION_CHANNELS,
-  type CommunicationChannel,
-} from "@/lib/types";
+import { COMMUNICATION_CHANNELS, type CommunicationChannel } from "@/lib/types";
 
 export function CommunicationLog() {
   const { records } = useAppState();

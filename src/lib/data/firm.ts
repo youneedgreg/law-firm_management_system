@@ -185,16 +185,40 @@ export const NOTIFICATIONS: AppNotification[] = [
 ];
 
 export const STAFF: StaffMember[] = [
-  { name: "Adv. Sarah Wanjiru", role: "Managing Partner", cases: 3, leave: "14 days" },
+  {
+    name: "Adv. Sarah Wanjiru",
+    role: "Managing Partner",
+    cases: 3,
+    leave: "14 days",
+  },
   { name: "Adv. Brian Kiptoo", role: "Advocate", cases: 4, leave: "9 days" },
   { name: "Adv. Faith Achieng", role: "Advocate", cases: 2, leave: "18 days" },
-  { name: "Legal Assistant - Mercy", role: "Paralegal", cases: 5, leave: "12 days" },
-  { name: "Finance - Peter", role: "Finance Officer", cases: 0, leave: "20 days" },
-  { name: "Receptionist - Ann", role: "Receptionist", cases: 0, leave: "16 days" },
+  {
+    name: "Legal Assistant - Mercy",
+    role: "Paralegal",
+    cases: 5,
+    leave: "12 days",
+  },
+  {
+    name: "Finance - Peter",
+    role: "Finance Officer",
+    cases: 0,
+    leave: "20 days",
+  },
+  {
+    name: "Receptionist - Ann",
+    role: "Receptionist",
+    cases: 0,
+    leave: "16 days",
+  },
 ];
 
 export const USER_ACCOUNTS: UserAccount[] = [
-  { name: "System Admin - Kevin", role: "System Administrator", status: "Active" },
+  {
+    name: "System Admin - Kevin",
+    role: "System Administrator",
+    status: "Active",
+  },
   { name: "Adv. Sarah Wanjiru", role: "Managing Partner", status: "Active" },
   { name: "Adv. Brian Kiptoo", role: "Advocate/Lawyer", status: "Active" },
   {

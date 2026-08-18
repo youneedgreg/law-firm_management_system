@@ -32,7 +32,9 @@ export default async function ClientsPage({
           <Link
             key={tab.key}
             href={tab.key === "all" ? "/clients" : `/clients?type=${tab.key}`}
-            className={active === tab.key ? "tag tag-accent" : "tag tag-outline"}
+            className={
+              active === tab.key ? "tag tag-accent" : "tag tag-outline"
+            }
             aria-current={active === tab.key ? "page" : undefined}
           >
             {tab.label}

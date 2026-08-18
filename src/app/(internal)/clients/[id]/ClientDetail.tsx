@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { BackLink, SectionTitle } from "@/components/ui";
-import { clientContacts, clientTypeLabel, engagementHistory } from "@/lib/data/clients";
+import {
+  clientContacts,
+  clientTypeLabel,
+  engagementHistory,
+} from "@/lib/data/clients";
 import { caseStatusTag } from "@/lib/format";
 import type { Case, Client, FirmDocument } from "@/lib/types";
 

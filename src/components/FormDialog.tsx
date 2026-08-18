@@ -63,7 +63,8 @@ export function FormDialog({
         <div
           className="dialog-backdrop"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) dialogRef.current?.close();
+            if (event.target === event.currentTarget)
+              dialogRef.current?.close();
           }}
         >
           <form ref={formRef} className="dialog" onSubmit={handleSubmit}>

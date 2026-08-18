@@ -4,7 +4,11 @@ import { useAppState } from "@/components/AppState";
 import { Stat } from "@/components/ui";
 import { CASES, SIGNED_IN_ADVOCATE } from "@/lib/data/cases";
 import { HEARINGS } from "@/lib/data/hearings";
-import { INVOICES, REVENUE_THIS_MONTH, TRUST_ON_HAND } from "@/lib/data/billing";
+import {
+  INVOICES,
+  REVENUE_THIS_MONTH,
+  TRUST_ON_HAND,
+} from "@/lib/data/billing";
 import { PENDING_TASK_COUNT } from "@/lib/data/work";
 import { kes } from "@/lib/format";
 

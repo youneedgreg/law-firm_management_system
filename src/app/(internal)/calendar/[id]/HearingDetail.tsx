@@ -32,7 +32,8 @@ export function HearingDetail({
         {legalCase && (
           <>
             <br />
-            Matter: <Link href={`/cases/${legalCase.id}`}>{legalCase.number}</Link>
+            Matter:{" "}
+            <Link href={`/cases/${legalCase.id}`}>{legalCase.number}</Link>
           </>
         )}
       </div>

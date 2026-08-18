@@ -28,7 +28,9 @@ export default async function DocumentsPage({
                 ? "/documents"
                 : `/documents?category=${encodeURIComponent(category)}`
             }
-            className={active === category ? "tag tag-accent" : "tag tag-outline"}
+            className={
+              active === category ? "tag tag-accent" : "tag tag-outline"
+            }
             aria-current={active === category ? "page" : undefined}
           >
             {category === "all" ? "All" : category}

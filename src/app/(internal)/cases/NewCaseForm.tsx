@@ -99,7 +99,11 @@ export function NewCaseForm() {
         placeholder="Select a court"
         options={courts()}
       />
-      <TextField label="Presiding judge" name="judge" placeholder="Hon. J. Kimani" />
+      <TextField
+        label="Presiding judge"
+        name="judge"
+        placeholder="Hon. J. Kimani"
+      />
       <TextField
         label="Opposing counsel"
         name="opposingCounsel"

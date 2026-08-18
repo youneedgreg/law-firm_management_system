@@ -31,7 +31,11 @@ export function SectionTitle({
   spaced?: boolean;
 }) {
   return (
-    <h2 className={spaced ? "section-title section-title-spaced" : "section-title"}>
+    <h2
+      className={
+        spaced ? "section-title section-title-spaced" : "section-title"
+      }
+    >
       {children}
     </h2>
   );
@@ -63,7 +67,11 @@ export function Stat({
   small?: boolean;
 }) {
   const toneClass =
-    tone === "accent" ? " ink-accent" : tone === "accent-2" ? " ink-accent-2" : "";
+    tone === "accent"
+      ? " ink-accent"
+      : tone === "accent-2"
+        ? " ink-accent-2"
+        : "";
   return (
     <div>
       <div className="stat-label">{label}</div>

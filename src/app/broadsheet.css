@@ -171,7 +171,11 @@ figcaption {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background-image: radial-gradient(circle, rgba(0, 0, 0, 0.22) 30%, transparent 32%);
+  background-image: radial-gradient(
+    circle,
+    rgba(0, 0, 0, 0.22) 30%,
+    transparent 32%
+  );
   background-size: 3px 3px;
   mix-blend-mode: multiply;
 }

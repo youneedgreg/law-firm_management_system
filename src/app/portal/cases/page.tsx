@@ -20,7 +20,10 @@ export default function PortalCasesPage() {
           </div>
           <div className="tag-row">
             {legalCase.timeline.map((event) => (
-              <span className="tag tag-outline" key={`${event.date}-${event.text}`}>
+              <span
+                className="tag tag-outline"
+                key={`${event.date}-${event.text}`}
+              >
                 {event.date} — {event.text}
               </span>
             ))}

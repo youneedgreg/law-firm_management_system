@@ -27,10 +27,18 @@ export function Topbar({ onToggleNav }: { onToggleNav: () => void }) {
         onClick={onToggleNav}
         aria-label="Toggle navigation"
       >
-        <i className="ph-duotone ph-list" style={{ fontSize: 26 }} aria-hidden />
+        <i
+          className="ph-duotone ph-list"
+          style={{ fontSize: 26 }}
+          aria-hidden
+        />
       </button>
 
-      <Link href="/dashboard" className="topbar-brand" style={{ color: "inherit", textDecoration: "none" }}>
+      <Link
+        href="/dashboard"
+        className="topbar-brand"
+        style={{ color: "inherit", textDecoration: "none" }}
+      >
         OKLaw
       </Link>
       <span className="topbar-tagline">Nairobi · General Practice</span>
@@ -57,7 +65,11 @@ export function Topbar({ onToggleNav }: { onToggleNav: () => void }) {
         className="topbar-icon-btn"
         aria-label={`Notifications (${NOTIFICATIONS.length} unread)`}
       >
-        <i className="ph-duotone ph-bell" style={{ fontSize: 22 }} aria-hidden />
+        <i
+          className="ph-duotone ph-bell"
+          style={{ fontSize: 22 }}
+          aria-hidden
+        />
         <span className="badge" aria-hidden>
           {NOTIFICATIONS.length}
         </span>

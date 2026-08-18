@@ -38,5 +38,7 @@ export function tags(fields: FormData, name: string): string[] {
 
 /** The id a newly created record takes, one past the highest already in use. */
 export function nextId(existing: readonly { id: number }[]): number {
-  return existing.reduce((highest, record) => Math.max(highest, record.id), 0) + 1;
+  return (
+    existing.reduce((highest, record) => Math.max(highest, record.id), 0) + 1
+  );
 }

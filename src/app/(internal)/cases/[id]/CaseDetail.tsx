@@ -27,12 +27,14 @@ export function CaseDetail({
           </div>
           {client && (
             <div className="dek" style={{ marginTop: "var(--space-1)" }}>
-              Client: <Link href={`/clients/${client.id}`}>{client.name}</Link> ·
-              Advocate: {legalCase.advocate}
+              Client: <Link href={`/clients/${client.id}`}>{client.name}</Link>{" "}
+              · Advocate: {legalCase.advocate}
             </div>
           )}
         </div>
-        <span className={caseStatusTag(legalCase.status)}>{legalCase.status}</span>
+        <span className={caseStatusTag(legalCase.status)}>
+          {legalCase.status}
+        </span>
       </div>
 
       <div className="detail-grid">
@@ -67,7 +69,10 @@ export function CaseDetail({
             <p className="dek">No hearings held yet.</p>
           )}
           {legalCase.hearings.map((hearing) => (
-            <div className="row row-tight" key={`${hearing.date}-${hearing.outcome}`}>
+            <div
+              className="row row-tight"
+              key={`${hearing.date}-${hearing.outcome}`}
+            >
               {hearing.date} — {hearing.court} ({hearing.outcome})
             </div>
           ))}

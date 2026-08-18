@@ -22,10 +22,7 @@ export type Role = (typeof ROLES)[number];
 
 /** A Broadsheet tag variant. Statuses map onto these rather than raw colors. */
 export type TagClass =
-  | "tag tag-accent"
-  | "tag tag-accent-2"
-  | "tag tag-neutral"
-  | "tag tag-outline";
+  "tag tag-accent" | "tag tag-accent-2" | "tag tag-neutral" | "tag tag-outline";
 
 // ── Clients ───────────────────────────────────────────────────────────────
 
@@ -157,7 +154,11 @@ export const DOCUMENT_CATEGORIES = [
 
 export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number];
 
-export const SIGNATURE_STATUSES = ["Signed", "Pending signature", "Final"] as const;
+export const SIGNATURE_STATUSES = [
+  "Signed",
+  "Pending signature",
+  "Final",
+] as const;
 
 export type SignatureStatus = (typeof SIGNATURE_STATUSES)[number];
 

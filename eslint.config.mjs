@@ -14,7 +14,14 @@ const layerBoundaries = [
   {
     name: "domain",
     files: ["src/domain/**/*.ts", "src/domain/**/*.tsx"],
-    forbidden: ["@/services/*", "@/infra/*", "@/api/*", "@/app/*", "@/components/*", "@/runtime/*"],
+    forbidden: [
+      "@/services/*",
+      "@/infra/*",
+      "@/api/*",
+      "@/app/*",
+      "@/components/*",
+      "@/runtime/*",
+    ],
     because:
       "domain/ must stay pure: no I/O, no framework, no knowledge of how it is stored or served.",
   },
@@ -29,7 +36,8 @@ const layerBoundaries = [
     name: "infra",
     files: ["src/infra/**/*.ts"],
     forbidden: ["@/app/*", "@/components/*"],
-    because: "infra/ is a leaf: it implements interfaces, it does not call into the UI.",
+    because:
+      "infra/ is a leaf: it implements interfaces, it does not call into the UI.",
   },
 ];
 

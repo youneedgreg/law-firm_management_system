@@ -55,7 +55,9 @@ export function FieldGroup({
   children,
 }: FieldProps & { children: React.ReactNode }) {
   return (
-    <fieldset className={wide ? "field field-set field-wide" : "field field-set"}>
+    <fieldset
+      className={wide ? "field field-set field-wide" : "field field-set"}
+    >
       <legend className="field-legend">{label}</legend>
       {children}
       {hint && <p className="field-hint">{hint}</p>}
