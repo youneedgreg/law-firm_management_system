@@ -178,10 +178,10 @@ to features; every hour here saves five later.
 - [x] Prettier + lint-staged + husky pre-commit hook
 - [x] GitHub Actions: format, typecheck, lint, test, build on every PR
 - [x] ADRs 0001–0008 covering every decision in §5
+- [x] Codebase formatted; `format:check` green and enforced by lint-staged
+- [x] `AppState` reads persisted state via `useSyncExternalStore` — lint is clean
 - [ ] Testcontainers **verified** against a real container — package installed, config written, needs Docker Desktop
-- [ ] `npm run format` once, as a standalone commit (29 files currently unformatted)
-- [ ] Fix `react-hooks/set-state-in-effect` in `AppState.tsx` — the one error keeping CI red
-- [ ] Strict TS flags — measured at 18 errors, staged in `tsconfig.strict.json`; flip once the forms work lands
+- [ ] Strict TS flags — measured at 18 errors, staged in `tsconfig.strict.json`; flip and fix
 - [ ] Vercel project linked, `main` deploying, preview deploys on PRs — needs `vercel login`
 - [ ] Rewrite `README.md`: what it is, screenshots, stack, how to run
 - [ ] Branch protection on `main`; work in PRs from here on
