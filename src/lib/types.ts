@@ -22,14 +22,18 @@ export type Role = (typeof ROLES)[number];
 
 /** A Broadsheet tag variant. Statuses map onto these rather than raw colors. */
 export type TagClass =
-  | "tag tag-accent"
-  | "tag tag-accent-2"
-  | "tag tag-neutral"
-  | "tag tag-outline";
+  "tag tag-accent" | "tag tag-accent-2" | "tag tag-neutral" | "tag tag-outline";
 
 // ── Clients ───────────────────────────────────────────────────────────────
 
 export type ClientType = "individual" | "corporate";
+
+/** The outcome of the conflict-of-interest check run when a client is taken on. */
+export const CONFLICT_STATUSES = [
+  "No conflict found",
+  "Conflict check pending",
+  "Conflict declared",
+] as const;
 
 export interface Client {
   id: number;
@@ -116,7 +120,13 @@ export interface Case {
 
 // ── Court & hearings ──────────────────────────────────────────────────────
 
-export type HearingStatus = "Confirmed" | "Awaiting confirmation" | "Adjourned";
+export const HEARING_STATUSES = [
+  "Confirmed",
+  "Awaiting confirmation",
+  "Adjourned",
+] as const;
+
+export type HearingStatus = (typeof HEARING_STATUSES)[number];
 
 export interface Hearing {
   id: number;
@@ -144,7 +154,13 @@ export const DOCUMENT_CATEGORIES = [
 
 export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number];
 
-export type SignatureStatus = "Signed" | "Pending signature" | "Final";
+export const SIGNATURE_STATUSES = [
+  "Signed",
+  "Pending signature",
+  "Final",
+] as const;
+
+export type SignatureStatus = (typeof SIGNATURE_STATUSES)[number];
 
 export interface DocumentVersion {
   n: number;
@@ -167,14 +183,25 @@ export interface FirmDocument {
 
 // ── Billing ───────────────────────────────────────────────────────────────
 
-export type InvoiceStatus = "Paid" | "Partially Paid" | "Overdue";
+/** "Issued" is where a new invoice starts: raised, sent, nothing received yet. */
+export const INVOICE_STATUSES = [
+  "Issued",
+  "Partially Paid",
+  "Paid",
+  "Overdue",
+] as const;
 
-export type PaymentMethod =
-  | "M-Pesa"
-  | "Bank Transfer"
-  | "Cash"
-  | "Cheque"
-  | "Card";
+export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
+
+export const PAYMENT_METHODS = [
+  "M-Pesa",
+  "Bank Transfer",
+  "Cash",
+  "Cheque",
+  "Card",
+] as const;
+
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 export interface InvoiceLineItem {
   desc: string;
@@ -203,9 +230,18 @@ export interface TrustAccount {
 
 // ── Tasks & time ──────────────────────────────────────────────────────────
 
-export type Priority = "High" | "Medium" | "Low";
+export const PRIORITIES = ["High", "Medium", "Low"] as const;
 
-export type TaskStatus = "Not started" | "In progress" | "Scheduled" | "Done";
+export type Priority = (typeof PRIORITIES)[number];
+
+export const TASK_STATUSES = [
+  "Not started",
+  "In progress",
+  "Scheduled",
+  "Done",
+] as const;
+
+export type TaskStatus = (typeof TASK_STATUSES)[number];
 
 export interface FirmTask {
   id: number;
@@ -217,11 +253,21 @@ export interface FirmTask {
   status: TaskStatus;
 }
 
+export const TIME_ACTIVITIES = [
+  "Research",
+  "Court attendance",
+  "Drafting",
+  "Consultation",
+  "Admin",
+] as const;
+
+export type TimeActivity = (typeof TIME_ACTIVITIES)[number];
+
 export interface TimeEntry {
   id: number;
   case: string;
   lawyer: string;
-  activity: "Research" | "Court attendance" | "Drafting" | "Consultation" | "Admin";
+  activity: TimeActivity;
   start: string;
   end: string;
   hours: number;
@@ -230,18 +276,36 @@ export interface TimeEntry {
 
 // ── Front office ──────────────────────────────────────────────────────────
 
+export const APPOINTMENT_TYPES = [
+  "Client consultation",
+  "Internal meeting",
+  "Court appearance",
+] as const;
+
+export type AppointmentType = (typeof APPOINTMENT_TYPES)[number];
+
 export interface Appointment {
   id: number;
   title: string;
   with: string;
-  type: "Client consultation" | "Internal meeting" | "Court appearance";
+  type: AppointmentType;
   date: string;
   time: string;
 }
 
+export const COMMUNICATION_CHANNELS = [
+  "Email",
+  "WhatsApp",
+  "Call",
+  "Meeting",
+  "SMS",
+] as const;
+
+export type CommunicationChannel = (typeof COMMUNICATION_CHANNELS)[number];
+
 export interface Communication {
   id: number;
-  channel: "Email" | "WhatsApp" | "Call" | "Meeting" | "SMS";
+  channel: CommunicationChannel;
   with: string;
   summary: string;
   date: string;
@@ -250,10 +314,20 @@ export interface Communication {
 
 // ── Knowledge, audit, notifications, people ───────────────────────────────
 
+export const KNOWLEDGE_CATEGORIES = [
+  "Acts",
+  "Legal templates",
+  "Case law",
+  "Precedents",
+  "Regulations",
+] as const;
+
+export type KnowledgeCategory = (typeof KNOWLEDGE_CATEGORIES)[number];
+
 export interface KnowledgeItem {
   id: number;
   title: string;
-  category: "Acts" | "Legal templates" | "Case law" | "Precedents" | "Regulations";
+  category: KnowledgeCategory;
   date: string;
 }
 
@@ -279,10 +353,50 @@ export interface StaffMember {
   leave: string;
 }
 
+export const ACCOUNT_STATUSES = ["Active", "Suspended"] as const;
+
+export type AccountStatus = (typeof ACCOUNT_STATUSES)[number];
+
 export interface UserAccount {
   name: string;
   role: Role;
-  status: "Active" | "Suspended";
+  status: AccountStatus;
+}
+
+// ── Firm settings ─────────────────────────────────────────────────────────
+
+export const CURRENCIES = ["KES", "USD", "EUR", "GBP", "TZS", "UGX"] as const;
+
+export const TIMEZONES = [
+  "Africa/Nairobi",
+  "Africa/Dar_es_Salaam",
+  "Africa/Kampala",
+  "Europe/London",
+  "UTC",
+] as const;
+
+export const DATE_FORMATS = [
+  "DD MMM YYYY",
+  "DD/MM/YYYY",
+  "MM/DD/YYYY",
+  "YYYY-MM-DD",
+] as const;
+
+export const NOTIFICATION_CHANNELS = [
+  "In-app",
+  "Email",
+  "SMS",
+  "WhatsApp",
+] as const;
+
+/** Section 5 of the spec — the firm-wide preferences an administrator sets. */
+export interface FirmSettings {
+  firmName: string;
+  currency: (typeof CURRENCIES)[number];
+  timezone: (typeof TIMEZONES)[number];
+  dateFormat: (typeof DATE_FORMATS)[number];
+  /** Channels reminders and alerts go out on. */
+  channels: string[];
 }
 
 // ── Portal ────────────────────────────────────────────────────────────────

@@ -31,7 +31,11 @@ export function SectionTitle({
   spaced?: boolean;
 }) {
   return (
-    <h2 className={spaced ? "section-title section-title-spaced" : "section-title"}>
+    <h2
+      className={
+        spaced ? "section-title section-title-spaced" : "section-title"
+      }
+    >
       {children}
     </h2>
   );
@@ -63,7 +67,11 @@ export function Stat({
   small?: boolean;
 }) {
   const toneClass =
-    tone === "accent" ? " ink-accent" : tone === "accent-2" ? " ink-accent-2" : "";
+    tone === "accent"
+      ? " ink-accent"
+      : tone === "accent-2"
+        ? " ink-accent-2"
+        : "";
   return (
     <div>
       <div className="stat-label">{label}</div>
@@ -81,4 +89,26 @@ export function TableWrap({ children }: { children: React.ReactNode }) {
 
 export function Empty({ children }: { children: React.ReactNode }) {
   return <p className="dek">{children}</p>;
+}
+
+/** Shown when a detail route is asked for a record the firm has no file on. */
+export function NotOnFile({
+  backHref,
+  backLabel,
+  children,
+}: {
+  backHref: string;
+  backLabel: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <>
+      <BackLink href={backHref}>{backLabel}</BackLink>
+      <div className="no-access">
+        <i className="ph-duotone ph-file-x" aria-hidden />
+        <h1 className="detail-title">Not on file</h1>
+        <p className="dek">{children}</p>
+      </div>
+    </>
+  );
 }

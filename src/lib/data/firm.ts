@@ -7,6 +7,15 @@ import type {
   UserAccount,
 } from "../types";
 
+/** The glyph each channel is logged under, so a new entry looks like the rest. */
+export const CHANNEL_ICONS: Record<Communication["channel"], string> = {
+  Email: "ph-duotone ph-envelope",
+  WhatsApp: "ph-duotone ph-whatsapp-logo",
+  Call: "ph-duotone ph-phone",
+  Meeting: "ph-duotone ph-users-three",
+  SMS: "ph-duotone ph-chat-circle-text",
+};
+
 export const COMMUNICATIONS: Communication[] = [
   {
     id: 1,
@@ -176,16 +185,40 @@ export const NOTIFICATIONS: AppNotification[] = [
 ];
 
 export const STAFF: StaffMember[] = [
-  { name: "Adv. Sarah Wanjiru", role: "Managing Partner", cases: 3, leave: "14 days" },
+  {
+    name: "Adv. Sarah Wanjiru",
+    role: "Managing Partner",
+    cases: 3,
+    leave: "14 days",
+  },
   { name: "Adv. Brian Kiptoo", role: "Advocate", cases: 4, leave: "9 days" },
   { name: "Adv. Faith Achieng", role: "Advocate", cases: 2, leave: "18 days" },
-  { name: "Legal Assistant - Mercy", role: "Paralegal", cases: 5, leave: "12 days" },
-  { name: "Finance - Peter", role: "Finance Officer", cases: 0, leave: "20 days" },
-  { name: "Receptionist - Ann", role: "Receptionist", cases: 0, leave: "16 days" },
+  {
+    name: "Legal Assistant - Mercy",
+    role: "Paralegal",
+    cases: 5,
+    leave: "12 days",
+  },
+  {
+    name: "Finance - Peter",
+    role: "Finance Officer",
+    cases: 0,
+    leave: "20 days",
+  },
+  {
+    name: "Receptionist - Ann",
+    role: "Receptionist",
+    cases: 0,
+    leave: "16 days",
+  },
 ];
 
 export const USER_ACCOUNTS: UserAccount[] = [
-  { name: "System Admin - Kevin", role: "System Administrator", status: "Active" },
+  {
+    name: "System Admin - Kevin",
+    role: "System Administrator",
+    status: "Active",
+  },
   { name: "Adv. Sarah Wanjiru", role: "Managing Partner", status: "Active" },
   { name: "Adv. Brian Kiptoo", role: "Advocate/Lawyer", status: "Active" },
   {

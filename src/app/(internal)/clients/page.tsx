@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { PageHead, TableWrap } from "@/components/ui";
-import { CLIENTS, clientTypeLabel } from "@/lib/data/clients";
+import { ClientsTable, NewClientForm } from "./ClientsScreen";
+import { PageHead } from "@/components/ui";
 import type { ClientType } from "@/lib/types";
 
 const TABS: { key: "all" | ClientType; label: string }[] = [
@@ -21,16 +21,10 @@ export default async function ClientsPage({
     ? (type as "all" | ClientType)
     : "all";
 
-  const clients = CLIENTS.filter(
-    (client) => active === "all" || client.type === active,
-  );
-
   return (
     <>
       <PageHead title="Clients">
-        <span className="btn btn-primary">
-          <i className="ph-duotone ph-plus" aria-hidden /> New client
-        </span>
+        <NewClientForm />
       </PageHead>
 
       <div className="filter-row">
@@ -38,7 +32,9 @@ export default async function ClientsPage({
           <Link
             key={tab.key}
             href={tab.key === "all" ? "/clients" : `/clients?type=${tab.key}`}
-            className={active === tab.key ? "tag tag-accent" : "tag tag-outline"}
+            className={
+              active === tab.key ? "tag tag-accent" : "tag tag-outline"
+            }
             aria-current={active === tab.key ? "page" : undefined}
           >
             {tab.label}
@@ -46,46 +42,7 @@ export default async function ClientsPage({
         ))}
       </div>
 
-      <TableWrap>
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Client #</th>
-              <th>Name</th>
-              <th>Type</th>
-              <th>Contact</th>
-              <th>Active cases</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {clients.map((client) => (
-              <tr key={client.id}>
-                <td>{client.number}</td>
-                <td>{client.name}</td>
-                <td>
-                  <span
-                    className={
-                      client.type === "individual"
-                        ? "tag tag-outline"
-                        : "tag tag-accent"
-                    }
-                  >
-                    {clientTypeLabel(client)}
-                  </span>
-                </td>
-                <td>{client.contact}</td>
-                <td>{client.activeCases}</td>
-                <td className="cell-action">
-                  <Link href={`/clients/${client.id}`} className="btn btn-ghost">
-                    View
-                  </Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </TableWrap>
+      <ClientsTable type={active} />
     </>
   );
 }

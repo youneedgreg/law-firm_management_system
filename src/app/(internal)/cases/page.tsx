@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { CasesTable, CasesTitle } from "./CasesTable";
+import { NewCaseForm } from "./NewCaseForm";
 import { CASE_STATUSES, type CaseStatus } from "@/lib/types";
 
 export default async function CasesPage({ searchParams }: PageProps<"/cases">) {
   const { status } = await searchParams;
-  const active: CaseStatus | "all" = CASE_STATUSES.includes(status as CaseStatus)
+  const active: CaseStatus | "all" = CASE_STATUSES.includes(
+    status as CaseStatus,
+  )
     ? (status as CaseStatus)
     : "all";
 
@@ -12,9 +15,7 @@ export default async function CasesPage({ searchParams }: PageProps<"/cases">) {
     <>
       <div className="page-head">
         <CasesTitle />
-        <span className="btn btn-primary">
-          <i className="ph-duotone ph-plus" aria-hidden /> New case
-        </span>
+        <NewCaseForm />
       </div>
 
       <div className="filter-row">

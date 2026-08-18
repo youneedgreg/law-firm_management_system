@@ -11,12 +11,13 @@ import { invoiceStatusTag, kes } from "@/lib/format";
  * both move the moment a payment is recorded anywhere in the app.
  */
 export function BillingStats() {
-  const { statusOf } = useAppState();
+  const { statusOf, records } = useAppState();
 
-  const billed = INVOICES.reduce((total, invoice) => total + invoice.amount, 0);
-  const collected = INVOICES.filter(
-    (invoice) => statusOf(invoice) === "Paid",
-  ).reduce((total, invoice) => total + invoice.amount, 0);
+  const invoices = [...records.invoices, ...INVOICES];
+  const billed = invoices.reduce((total, invoice) => total + invoice.amount, 0);
+  const collected = invoices
+    .filter((invoice) => statusOf(invoice) === "Paid")
+    .reduce((total, invoice) => total + invoice.amount, 0);
 
   return (
     <div className="stat-grid" style={{ marginBottom: "var(--space-6)" }}>
@@ -34,7 +35,8 @@ export function BillingStats() {
 }
 
 export function InvoiceTable() {
-  const { statusOf } = useAppState();
+  const { statusOf, records } = useAppState();
+  const invoices = [...records.invoices, ...INVOICES];
 
   return (
     <TableWrap>
@@ -51,7 +53,7 @@ export function InvoiceTable() {
           </tr>
         </thead>
         <tbody>
-          {INVOICES.map((invoice) => {
+          {invoices.map((invoice) => {
             const status = statusOf(invoice);
             return (
               <tr key={invoice.id}>

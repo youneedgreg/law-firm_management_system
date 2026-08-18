@@ -31,7 +31,9 @@ export default function DashboardPage() {
               <div className="bar-track">
                 <div
                   className="bar-fill"
-                  style={{ width: `${Math.round((row.count / busiestStatus) * 100)}%` }}
+                  style={{
+                    width: `${Math.round((row.count / busiestStatus) * 100)}%`,
+                  }}
                 />
               </div>
             </div>
@@ -43,7 +45,9 @@ export default function DashboardPage() {
               <div className="chart-col" key={month.label}>
                 <div
                   className="chart-bar"
-                  style={{ height: `${Math.round((month.value / peakRevenue) * 100)}%` }}
+                  style={{
+                    height: `${Math.round((month.value / peakRevenue) * 100)}%`,
+                  }}
                   title={`${month.label}: KES ${month.value.toLocaleString("en-KE")}`}
                 />
                 <span className="chart-label">{month.label}</span>

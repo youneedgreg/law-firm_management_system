@@ -12,12 +12,13 @@ import type { CaseStatus } from "@/lib/types";
  * only the matters assigned to them, and the current role lives in client state.
  */
 export function CasesTable({ status }: { status: CaseStatus | "all" }) {
-  const { role } = useAppState();
+  const { role, records } = useAppState();
 
+  const all = [...records.cases, ...CASES];
   const scoped =
     role === "Advocate/Lawyer"
-      ? CASES.filter((legalCase) => legalCase.advocate === SIGNED_IN_ADVOCATE)
-      : CASES;
+      ? all.filter((legalCase) => legalCase.advocate === SIGNED_IN_ADVOCATE)
+      : all;
 
   const cases = scoped.filter(
     (legalCase) => status === "all" || legalCase.status === status,

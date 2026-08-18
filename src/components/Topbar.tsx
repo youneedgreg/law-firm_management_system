@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAppState } from "@/components/AppState";
+import { SelectControl } from "@/components/form";
 import { NOTIFICATIONS } from "@/lib/data/firm";
 import { initials } from "@/lib/format";
 import { ROLES, type Role } from "@/lib/types";
@@ -26,10 +27,18 @@ export function Topbar({ onToggleNav }: { onToggleNav: () => void }) {
         onClick={onToggleNav}
         aria-label="Toggle navigation"
       >
-        <i className="ph-duotone ph-list" style={{ fontSize: 26 }} aria-hidden />
+        <i
+          className="ph-duotone ph-list"
+          style={{ fontSize: 26 }}
+          aria-hidden
+        />
       </button>
 
-      <Link href="/dashboard" className="topbar-brand" style={{ color: "inherit", textDecoration: "none" }}>
+      <Link
+        href="/dashboard"
+        className="topbar-brand"
+        style={{ color: "inherit", textDecoration: "none" }}
+      >
         OKLaw
       </Link>
       <span className="topbar-tagline">Nairobi · General Practice</span>
@@ -43,25 +52,24 @@ export function Topbar({ onToggleNav }: { onToggleNav: () => void }) {
         aria-label="Search cases, clients and documents"
       />
 
-      <select
-        className="input role-select"
+      <SelectControl
+        className="role-select"
         value={role}
         onChange={(event) => changeRole(event.target.value as Role)}
         aria-label="Switch role"
-      >
-        {ROLES.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
+        options={ROLES}
+      />
 
       <Link
         href="/notifications"
         className="topbar-icon-btn"
         aria-label={`Notifications (${NOTIFICATIONS.length} unread)`}
       >
-        <i className="ph-duotone ph-bell" style={{ fontSize: 22 }} aria-hidden />
+        <i
+          className="ph-duotone ph-bell"
+          style={{ fontSize: 22 }}
+          aria-hidden
+        />
         <span className="badge" aria-hidden>
           {NOTIFICATIONS.length}
         </span>
