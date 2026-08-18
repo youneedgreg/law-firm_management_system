@@ -2,11 +2,10 @@
 
 import {
   createContext,
-  useCallback,
   useContext,
   useEffect,
   useMemo,
-  useState,
+  useSyncExternalStore,
 } from "react";
 import {
   ROLES,
@@ -111,8 +110,9 @@ function isRole(value: unknown): value is Role {
 
 /** Keeps only the lists that survived a round trip through storage. */
 function readRecords(value: unknown): CreatedRecords {
-  const stored = (typeof value === "object" && value !== null ? value : {}) as
-    Record<string, unknown>;
+  const stored = (
+    typeof value === "object" && value !== null ? value : {}
+  ) as Record<string, unknown>;
   const records = { ...EMPTY_RECORDS };
   // Written through an index signature: a per-key assignment would have to
   // satisfy every list type at once.
@@ -148,57 +148,91 @@ function readStored(): PersistedState | null {
   }
 }
 
-export function AppStateProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<PersistedState>(INITIAL);
-  const [hydrated, setHydrated] = useState(false);
+/**
+ * localStorage is an external system, not React state, so the provider
+ * subscribes to it rather than seeding state inside an effect. That keeps the
+ * server render and the first client render identical — `getServerSnapshot`
+ * returns the same defaults the server used — while avoiding the cascading
+ * re-render that a synchronous `setState` in an effect body causes.
+ *
+ * Phase 5 of the roadmap replaces this module with effect-rx atoms.
+ */
+let snapshot: PersistedState = INITIAL;
+let hydratedSnapshot = false;
+const listeners = new Set<() => void>();
 
-  // Read after mount rather than during render: the server has no localStorage,
-  // and seeding state from it inline would desync the hydration pass.
-  useEffect(() => {
-    const stored = readStored();
-    if (stored) setState(stored);
-    setHydrated(true);
-  }, []);
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
 
-  useEffect(() => {
-    if (!hydrated) return;
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch {
-      // Private-mode quota errors are non-fatal; the session just won't persist.
-    }
-  }, [state, hydrated]);
+function emit(): void {
+  for (const listener of listeners) listener();
+}
 
-  const setRole = useCallback((role: Role) => {
-    setState((previous) => ({ ...previous, role }));
-  }, []);
+const getSnapshot = (): PersistedState => snapshot;
+const getServerSnapshot = (): PersistedState => INITIAL;
+const getHydrated = (): boolean => hydratedSnapshot;
+const getServerHydrated = (): boolean => false;
 
-  const markPaid = useCallback((invoiceId: number) => {
-    setState((previous) => ({
-      ...previous,
-      invoiceOverrides: { ...previous.invoiceOverrides, [invoiceId]: "Paid" },
-    }));
-  }, []);
+/** Applies a change and persists it. The only way state ever moves. */
+function update(change: (previous: PersistedState) => PersistedState): void {
+  snapshot = change(snapshot);
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+  } catch {
+    // Private-mode quota errors are non-fatal; the session just won't persist.
+  }
+  emit();
+}
 
-  const add = useCallback(
-    <K extends keyof CreatedRecords>(
-      kind: K,
-      record: CreatedRecords[K][number],
-    ) => {
-      setState((previous) => ({
-        ...previous,
-        records: {
-          ...previous.records,
-          [kind]: [record, ...previous.records[kind]] as CreatedRecords[K],
-        },
-      }));
+/** Seeds from the store once, after mount. Does not write back. */
+function hydrate(): void {
+  if (hydratedSnapshot) return;
+  hydratedSnapshot = true;
+  snapshot = readStored() ?? snapshot;
+  emit();
+}
+
+function setRole(role: Role): void {
+  update((previous) => ({ ...previous, role }));
+}
+
+function markPaid(invoiceId: number): void {
+  update((previous) => ({
+    ...previous,
+    invoiceOverrides: { ...previous.invoiceOverrides, [invoiceId]: "Paid" },
+  }));
+}
+
+function add<K extends keyof CreatedRecords>(
+  kind: K,
+  record: CreatedRecords[K][number],
+): void {
+  update((previous) => ({
+    ...previous,
+    records: {
+      ...previous.records,
+      [kind]: [record, ...previous.records[kind]] as CreatedRecords[K],
     },
-    [],
+  }));
+}
+
+function saveSettings(settings: FirmSettings): void {
+  update((previous) => ({ ...previous, settings }));
+}
+
+export function AppStateProvider({ children }: { children: React.ReactNode }) {
+  const state = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const hydrated = useSyncExternalStore(
+    subscribe,
+    getHydrated,
+    getServerHydrated,
   );
 
-  const saveSettings = useCallback((settings: FirmSettings) => {
-    setState((previous) => ({ ...previous, settings }));
-  }, []);
+  useEffect(hydrate, []);
 
   const value = useMemo<AppState>(() => {
     const { invoiceOverrides } = state;
@@ -211,10 +245,13 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       statusOf: (invoice) => invoiceOverrides[invoice.id] ?? invoice.status,
       hydrated,
     };
-  }, [state, setRole, markPaid, add, saveSettings, hydrated]);
+    // The mutators are module-level and stable, so they are not dependencies.
+  }, [state, hydrated]);
 
   return (
-    <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>
+    <AppStateContext.Provider value={value}>
+      {children}
+    </AppStateContext.Provider>
   );
 }
 
