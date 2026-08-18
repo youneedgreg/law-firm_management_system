@@ -156,13 +156,44 @@ shape; do not infer the network operator from the prefix.
 
 ---
 
-## 5. Open questions
+## 5. Conflicts of interest ⚠️
 
-Carry these into Phase 1 rather than guessing:
+The Law Society of Kenya Code of Standards of Professional Practice and Ethical
+Conduct defines a conflict as an interest giving rise to a **substantial risk**
+that the advocate's representation of a client "will be materially and adversely
+affected" by the advocate's own interests, or by duties owed to another current
+client, a former client, or a third person.
+
+The general rule: an advocate should not knowingly assume or remain in a
+position where a client's interests conflict with those of the advocate, the
+firm, or another client. The code covers both the "materially limited
+representation" case and the risk of using information obtained from a current
+or former client to that person's disadvantage.
+
+Read from secondary summaries of the code, not the gazetted text — marked ⚠️
+until the LSK PDF is checked directly.
+
+> **Modelling consequence, and it is the important one.** The test is
+> "substantial risk" of representation being "materially and adversely
+> affected". That is a judgement, and judgement is not a thing software gets to
+> make. So the model **screens**, it does not **decide**.
+>
+> `screen()` returns a list of findings, each naming what was matched and why it
+> might matter. It never returns a boolean, and it never returns "clear" —
+> an empty result means _nothing was found in the records searched_, which is a
+> statement about the records, not about the conflict. The distinction is
+> encoded in the return type so a caller cannot collapse it into a green tick.
+
+Source: [LSK Code of Conduct](https://lsk.or.ke/wp-content/uploads/2023/11/LSK-Code-of-Conduct-1.pdf)
+
+---
+
+## 6. Open questions
+
+Carry these forward rather than guessing:
 
 1. Civil Procedure Rules 2010 — filing, service, and appeal timelines (§3.2).
 2. Court vacation and public holidays, and whether they extend reckoning.
 3. High Court divisions — organisational or statutory? (§1.2)
-4. Whether conflict-of-interest checking has a codified standard in the
-   Advocates Act or the LSK code of conduct, or is professional judgement.
+4. The gazetted LSK code text, to replace the secondary sources behind §5.
 5. VAT treatment of legal fees and disbursements, for invoice modelling.

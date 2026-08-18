@@ -220,7 +220,7 @@ distinguish this from every other portfolio project.
 - [ ] Tagged errors per domain: `CaseNotFound`, `InvalidTransition`, `TrustAccountUnderfunded`, `ConflictOfInterest`, `OutsideCourtJurisdiction`
 - [x] **Trust-account invariants** per the Advocates (Accounts) Rules: Rule 10 enforced per-client rather than per-account, balance derived from movements rather than stored, withdrawal reasons limited to Rule 9's purposes, amounts always positive with direction from the reason. Mutation-tested — swapping the per-client check for the firm total fails exactly the two tests written for it
 - [x] Limitation periods from the verified s. 4 figures — contract 6y, tort 3y, defamation 12mo — each result carrying its provision so the UI cites the reasoning. Month arithmetic clamps rather than overflowing (29 Feb + 3y lands on 28 Feb). Court holidays and vacation still outstanding, pending the §3.2 research
-- [ ] Conflict-of-interest checking on client intake
+- [x] Conflict-of-interest screening on intake — returns findings with the matter and concern, never a boolean. An empty result carries `mattersSearched`, so "nothing matched in these records" cannot be read as "no conflict exists"
 - [ ] Property-based tests for money arithmetic, trust invariants, and deadline computation
 - [ ] Migrate `src/lib/data/*.ts` to be _decoded through_ the schemas — the seed data must now prove itself valid at startup
 
