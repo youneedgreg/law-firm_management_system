@@ -180,15 +180,16 @@ to features; every hour here saves five later.
 - [x] `AppState` reads persisted state via `useSyncExternalStore` — clears the one `react-hooks/set-state-in-effect` error that kept lint red
 - [x] GitHub Actions: format, typecheck, lint, test, build on every PR; integration job stubbed behind `if: false` until Phase 2
 - [x] ADRs 0001–0008 covering every decision in §5
-- [ ] Testcontainers **verified** against a real container — installed and configured, needs Docker Desktop running
+- [x] Testcontainers installed and configured — verification against a real container deferred to Phase 12
 - [ ] Strict TS: `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`; `target` to `ES2022`. Staged in `tsconfig.strict.json` — currently 18 errors; run `npx tsc --noEmit -p tsconfig.strict.json`, fix, then fold into `tsconfig.json` and delete the file
 - [x] Deployed to Vercel — <https://law-firmmanagementsystem.vercel.app> serving all routes
 - [ ] Confirm preview deployments fire on pull requests (production is live; per-PR previews unverified)
 - [x] Rewrite `README.md` — problem framing, screenshots, enforced architecture, stack, and an honest built-vs-planned section
 - [ ] Branch protection on `main`; work in PRs from here on
 
-**Status:** `format`, `typecheck`, `lint`, `test`, and `build` all pass locally.
-What remains is the three items needing credentials or Docker, plus the README.
+**Status:** the full CI sequence passes from a wiped tree (`npm run verify:clean`).
+Two items remain: confirming preview deploys on the next PR, and branch
+protection. Docker verification moved to Phase 12 — it blocks nothing here.
 
 **Done when:** a PR runs green CI, produces a preview URL, and cannot merge red.
 **Demonstrates:** I set up projects the way a team needs them, not the way a
@@ -238,7 +239,7 @@ errors as typed values.
 - [ ] Repository interfaces in `services/`, Postgres implementations in `infra/sql/`
 - [ ] Transaction support, with one real multi-statement use case (invoice payment → trust ledger entry)
 - [ ] Seed script importing the existing mock data into a real database
-- [ ] Integration tests against a real Postgres via Testcontainers (D-7), running in CI
+- [ ] Integration tests against a real Postgres via Testcontainers (D-7), running in CI — written here, but only executable once Phase 12 installs Docker
 
 **Done when:** the seed data lives in Postgres and repository tests pass against
 a real database in CI.
@@ -411,6 +412,30 @@ a genuinely rare and valuable thing to be able to point at.
 
 ---
 
+### Phase 12 — Docker and Testcontainers verification · 2–3 days
+
+Deferred deliberately: installing Docker Desktop is not on the critical path,
+and nothing before this point is blocked by leaving it until the end.
+
+- [ ] Install Docker Desktop
+- [ ] Run `npm run test:integration` against a real Postgres container
+- [ ] Flip the `if: false` guard on the `integration` job in `.github/workflows/ci.yml`
+- [ ] Confirm the job passes on GitHub's runners, where Docker is already available
+- [ ] Record the container startup cost, and set `fileParallelism` accordingly
+
+**Done when:** integration tests run green locally and in CI.
+**Demonstrates:** hermetic testing against real infrastructure — no shared
+database, no fixtures that drift from the schema.
+
+> **Dependency worth knowing about.** Phase 2 writes integration tests against
+> Postgres, and Phase 6 tests row-level authorization adversarially. Both are
+> far more convincing when they run against a real database. Until this phase
+> lands, those tests can be written but not executed locally — CI is where they
+> first run for real, which is a slower feedback loop than it sounds. If Phase 2
+> starts to feel like guesswork, pull this phase forward; it is two days.
+
+---
+
 ## 7. Quality bar
 
 Applies to every PR from Phase 0 onward. Non-negotiable.
@@ -442,6 +467,7 @@ the most interesting thing an interviewer can read.
 | 2026-08-18 | D-5 Seeded accounts + role switcher | Zero friction to a full dashboard; doubles as an RBAC showcase                                                                |
 | 2026-08-18 | D-6 Keep hand-written CSS           | Distinctive beats default shadcn; rewriting working CSS buys nothing                                                          |
 | 2026-08-18 | D-7 Testcontainers                  | Hermetic and identical locally and in CI; no quota, no CI secrets                                                             |
+| 2026-08-19 | Docker verification → Phase 12      | Installing Docker blocks nothing early; deferring keeps Phase 0 shippable. Pull forward if Phase 2 needs the feedback loop    |
 | 2026-08-18 | D-8 Public repo from day one        | Forces commit hygiene now; the wireframe → system progression is the story                                                    |
 
 ---
