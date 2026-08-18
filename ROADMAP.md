@@ -214,18 +214,19 @@ distinguish this from every other portfolio project.
 - [x] **Court hierarchy as a tagged union**, not a string: Supreme, Court of Appeal, High Court (+ division), Magistrates (+ rank and pecuniary limit), ELRC, ELC. `canHear` returns the statutory reason on refusal, and honours the s. 7(3) customary-law exemption
 - [x] ESLint boundary gap closed: `domain/` could still import `@/lib/*`, and every rule was bypassable with a relative path. Both now blocked, verified with probe files
 - [x] Branded ids and formatted identifiers: `CaseId`/`ClientId`/`InvoiceId`/`AdvocateId`/`DocumentId`/`HearingId`/`TrustMovementId` as branded UUIDs (not integers — portal urls should not be enumerable), plus `CaseNumber`, `KraPin`, `KenyanPhone`
-- [ ] Port each entity to `Schema.Struct` with real constraints, not just shapes
-- [ ] Replace stringly-typed dates with `Schema.Date` / `DateTime`
+- [x] `Case` and `Invoice` as `Schema.Struct` with real constraints — `Case` keeps the firm's reference and the court's cause number as separate fields, and `canFileIn` refuses a magistrates' court when no claim value is recorded rather than assuming it is within the limit. `Invoice` derives total and status instead of storing them, and represents `Overpaid` rather than hiding it
+- [ ] Remaining entities: `Client`, `Advocate`, `Hearing`, `Document`, `TimeEntry`
+- [x] Dates are `Date` throughout the new schemas, never strings; every date-dependent function takes `asAt` as a parameter rather than reading the clock
 - [x] Case status as a **state machine**: `TRANSITIONS` declares the legal moves once, `transition` returns `Either`, and self-transitions are refused rather than treated as no-ops. Tests assert every status stays reachable from `New`, so the table and the union cannot drift apart
-- [ ] Tagged errors per domain: `CaseNotFound`, `InvalidTransition`, `TrustAccountUnderfunded`, `ConflictOfInterest`, `OutsideCourtJurisdiction`
+- [x] Tagged errors carrying their own explanation: `InvalidTransition`, `TrustAccountUnderfunded`, `OutsideCourtJurisdiction`, `CannotFileWithoutValue`, `PaymentExceedsBalance`, `NotAWithdrawal`, `FractionalCents`. Each exposes a `reason` citing the rule, so a refusal explains itself instead of surfacing as a bare failure. (`ConflictOfInterest` deliberately does not exist — see the screening item below)
 - [x] **Trust-account invariants** per the Advocates (Accounts) Rules: Rule 10 enforced per-client rather than per-account, balance derived from movements rather than stored, withdrawal reasons limited to Rule 9's purposes, amounts always positive with direction from the reason. Mutation-tested — swapping the per-client check for the firm total fails exactly the two tests written for it
 - [x] Limitation periods from the verified s. 4 figures — contract 6y, tort 3y, defamation 12mo — each result carrying its provision so the UI cites the reasoning. Month arithmetic clamps rather than overflowing (29 Feb + 3y lands on 28 Feb). Court holidays and vacation still outstanding, pending the §3.2 research
 - [x] Conflict-of-interest screening on intake — returns findings with the matter and concern, never a boolean. An empty result carries `mattersSearched`, so "nothing matched in these records" cannot be read as "no conflict exists"
-- [ ] Property-based tests for money arithmetic, trust invariants, and deadline computation
-- [ ] Migrate `src/lib/data/*.ts` to be _decoded through_ the schemas — the seed data must now prove itself valid at startup
+- [x] Exhaustive rather than sampled property tests where the space is small enough to enumerate: `allocate` over 1,400 amount/part combinations, the trust invariant over 40 interleaved withdrawals, every status pair through the transition table. Two mutation tests confirm the suite fails when the rule is broken
+- [ ] **Moved to Phase 2.** Decoding `src/lib/data/*.ts` through the schemas cannot happen here: the seed fixtures key on small integers and the domain keys on UUIDs, so the migration is the seed script's job, where real ids are minted. Attempting it now would mean writing a legacy-id adapter that Phase 2 immediately deletes
 
-**Done when:** `src/domain/` has no imports from the rest of the project, tests
-cover every business rule, and invalid seed data fails loudly.
+**Done when:** `src/domain/` has no imports from the rest of the project, and
+tests cover every business rule.
 **Demonstrates:** domain modelling, making illegal states unrepresentable,
 errors as typed values.
 
@@ -240,7 +241,8 @@ errors as typed values.
 - [ ] `@effect/sql` `Model` classes bridging DB rows ↔ domain schemas
 - [ ] Repository interfaces in `services/`, Postgres implementations in `infra/sql/`
 - [ ] Transaction support, with one real multi-statement use case (invoice payment → trust ledger entry)
-- [ ] Seed script importing the existing mock data into a real database
+- [ ] Seed script importing the existing mock data into a real database, **decoding every fixture through the domain schemas** and minting UUIDs for the integer-keyed records (carried over from Phase 1). Invalid seed data must fail the script loudly rather than reaching the database
+- [ ] Run `Ledger.overdrawnClients` after the import — a seeded trust ledger that breaches Rule 10 should stop the migration
 - [ ] Integration tests against a real Postgres via Testcontainers (D-7), running in CI — written here, but only executable once Phase 12 installs Docker
 
 **Done when:** the seed data lives in Postgres and repository tests pass against
