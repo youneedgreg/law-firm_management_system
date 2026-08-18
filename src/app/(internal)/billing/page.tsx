@@ -1,4 +1,5 @@
 import { BillingStats, InvoiceTable } from "./BillingTables";
+import { NewInvoiceForm } from "./NewInvoiceForm";
 import { PageHead, SectionTitle, TableWrap } from "@/components/ui";
 import { FEE_STRUCTURES, TRUST_ACCOUNTS } from "@/lib/data/billing";
 import { kes } from "@/lib/format";
@@ -7,9 +8,7 @@ export default function BillingPage() {
   return (
     <>
       <PageHead title="Billing &amp; Accounting">
-        <span className="btn btn-primary">
-          <i className="ph-duotone ph-file-plus" aria-hidden /> New invoice
-        </span>
+        <NewInvoiceForm />
       </PageHead>
 
       <BillingStats />
