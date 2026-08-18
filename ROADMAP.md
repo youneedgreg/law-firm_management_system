@@ -1,0 +1,429 @@
+# OKLaw — Engineering Roadmap
+
+> A law-firm management system built as a portfolio-grade demonstration of
+> production TypeScript: Effect end to end, Postgres, full test coverage, CI/CD,
+> and documented architectural reasoning.
+
+**Started:** 2026-08-18 · **Target:** portfolio-ready in 6–12 months · **Status:** Phase 0
+
+---
+
+## How to use this document
+
+This is the single source of truth for what gets built and in what order. Rules:
+
+1. **Work top-down.** Phases are ordered by dependency, not by interest. Skipping
+   ahead creates rework.
+2. **Check boxes as you go.** `- [ ]` → `- [x]`. The diff is your progress log.
+3. **Never leave `main` broken.** Every phase is built as vertical slices; the app
+   must run and deploy at the end of every session.
+4. **When reality diverges from this plan, edit this file** and note why in the
+   Decision Log. A roadmap that lies is worse than none.
+5. **Each phase has a "Demonstrates" line.** That is the sentence a reviewer should
+   be able to say after reading that code. If the code does not earn the sentence,
+   the phase is not done.
+
+---
+
+## 1. North star
+
+When a senior engineer opens this repo, they should conclude, within ten minutes:
+
+- **This person models domains properly.** Illegal states are unrepresentable.
+  Errors are values, enumerated in type signatures, not thrown strings.
+- **This person tests seriously.** Deterministic tests, no sleeps, no flakes,
+  business rules covered — not just "renders without crashing".
+- **This person can reason about architecture.** Layers are real and enforced.
+  ADRs explain *why*, including the roads not taken.
+- **This person ships.** There is a live URL. It is fast, accessible, and
+  actually works.
+
+The anti-goal: a tutorial CRUD app with a nice CSS theme. The wireframe is
+already better than that; everything below is about earning the backend and the
+rigor to match.
+
+---
+
+## 2. Where the project stands (2026-08-18)
+
+**What exists:**
+
+| Area | State |
+| --- | --- |
+| UI | Next.js 16.3.1 App Router, React 19.2.8, ~26 routes |
+| Routes | 21 internal (`src/app/(internal)/`), 5 client portal (`src/app/portal/`) |
+| Domain types | `src/lib/types.ts` — 294 lines, hand-written interfaces + const unions |
+| Data | `src/lib/data/*.ts` — hardcoded seed arrays, imported directly by pages |
+| State | `src/components/AppState.tsx` — React Context + localStorage |
+| Styling | `globals.css` + `broadsheet.css`, Phosphor icons |
+| Design source | `design/OKLaw.dc.html` — original wireframe |
+
+**What does not exist yet:** database, API, auth, authorization, validation,
+tests, CI, error handling, logging, deployment, and any Effect at all.
+
+**The honest framing:** you have a high-fidelity, well-typed prototype. It is a
+good starting point precisely because the domain modelling and route structure
+are already thought through. The work ahead is turning a prototype into a system.
+
+---
+
+## 3. Locked stack decisions
+
+Versions verified on npm 2026-08-18. Pin exact versions; upgrade deliberately.
+
+| Package | Version | Notes |
+| --- | --- | --- |
+| `effect` | 3.22.1 | Core. **Schema lives here now** — `import { Schema } from "effect"` |
+| `@effect/platform` | 0.97.1 | `HttpApi`, `HttpApiClient`, platform abstractions |
+| `@effect/platform-node` | 0.108.1 | Node runtime layer (scripts, migrations, tests) |
+| `@effect/sql` + `@effect/sql-pg` | 0.52.1 / 0.53.0 | SQL client, `Model`, migrations |
+| `@effect/vitest` | 0.30.0 | `it.effect`, `TestClock` integration |
+| `@effect-rx/rx-react` | 0.42.4 | Client-side Effect state |
+| `next` / `react` | 16.3.1 / 19.2.8 | Already installed |
+| Database | Neon Postgres | Provision via Vercel Marketplace (`vercel integration`) |
+| Hosting | Vercel | Preview deploy per PR, production on `main` |
+
+### Three version facts that will bite you if you forget them
+
+1. **`@effect/schema` is deprecated.** npm literally says *"this package has been
+   merged into the main effect package"*. Most tutorials, blog posts, and LLM
+   answers predate this. Use `effect/Schema`. If you see `@effect/schema` in an
+   import, the source is stale — distrust the rest of it too.
+
+2. **Effect 4.0 is in release candidate** (`4.0.0-rc.110` as of today) and is a
+   substantial rewrite. **Do not start on it.** `@effect-rx/rx-react` peer-depends
+   on `effect@^3.17` and publishes no v4 track — choosing Effect 4 today means
+   giving up the client-side Effect layer you specifically asked for. Build on
+   3.22.x. See Phase 11: the migration later is an *asset*, not a liability.
+
+3. **Next.js 16 renamed Middleware to Proxy.** The file is `proxy.ts`, not
+   `middleware.ts`. Confirmed in `node_modules/next/dist/docs/01-app/01-getting-started/16-proxy.md`.
+   Also: use it for optimistic redirects only — real authorization belongs in the
+   data layer, checked on every read.
+
+> **Standing rule:** Effect's API surface moves fast and your training-data
+> instincts about it are probably stale. Before writing Effect code, check the
+> installed version's types in `node_modules/effect/dist/dts/`. Before writing
+> Next code, check `node_modules/next/dist/docs/`.
+
+---
+
+## 4. Target architecture
+
+```
+src/
+  domain/          Pure. Schemas, branded IDs, tagged errors, business rules.
+    case/          No imports from services/ or infra/. No I/O. Fully testable
+    client/        with zero setup. This is the layer that proves you can model.
+    billing/
+    shared/        Branded primitives: CaseId, Money, KRAPin, PhoneNumber…
+
+  services/        Effect services (interface + Layer). Application use-cases.
+    CaseService    Depends on repository *interfaces*, never concrete SQL.
+    BillingService Orchestrates domain rules, transactions, authorization.
+    AuthService
+
+  infra/           The dirty edges. Implements interfaces defined above.
+    sql/           @effect/sql-pg repositories, migrations, Model definitions
+    blob/          File storage
+    telemetry/     Tracing, logging, metrics
+
+  api/             HttpApi definition (shared contract) + server implementation
+  runtime/         ManagedRuntime — one per process, wires Layers together
+
+  app/             Next.js routes. Thin. Server Components call the runtime.
+  components/      React. Presentational + rx-connected containers.
+  lib/             Formatting, nav config — genuinely shared leaf utilities.
+```
+
+**The one rule that makes this architecture real:** dependencies point inward.
+`domain/` imports nothing from the project. `services/` imports `domain/`.
+`infra/` imports both. `app/` imports `services/` and `runtime/`.
+
+Enforce it mechanically in Phase 0 with an ESLint import boundary rule — an
+architecture only documented in a README is an architecture that will erode by
+month three.
+
+---
+
+## 5. Open decisions
+
+Answer each before starting the phase that depends on it. Record the answer and
+reasoning as an ADR.
+
+| ID | Decision | Blocks | Recommendation |
+| --- | --- | --- | --- |
+| D-1 | Single firm, or multi-tenant SaaS? | Phase 2 (schema design) | **Single firm.** Multi-tenancy adds `firm_id` to every query and RLS complexity for little portfolio payoff. Note it in the README as a deliberate scope boundary — showing you know where the line is scores better than half-built tenancy. |
+| D-2 | Auth: Clerk, Better Auth, or hand-rolled? | Phase 6 | **Better Auth.** Self-hosted in your Postgres, so sessions and users are real rows you own and can model in Effect. Clerk is faster but outsources the interesting part. Hand-rolling password hashing for a system holding client funds is a bad look, not an impressive one. |
+| D-3 | Jurisdiction and currency | Phase 1 | The seed data implies Kenya (M-Pesa, advocates, KES). **Commit to it explicitly** — real jurisdictional detail (Advocates Act compliance, KRA PINs, court hierarchy) is far more impressive than generic "legal app". |
+| D-4 | Document storage backend | Phase 7 | **Vercel Blob**, private access. Real uploads, versioning, signed URLs. |
+| D-5 | How does a recruiter log in to the demo? | Phase 10 | Seeded demo accounts, one per role, with a role-switcher on the login page and nightly data reset. Remove all friction between "sees link" and "sees dashboard". |
+
+---
+
+## 6. Phases
+
+Time estimates assume a few hours per week. They are ranges, not commitments.
+
+---
+
+### Phase 0 — Foundations and guardrails · 2–3 weeks
+
+Set up everything that makes later work fast and safe. Resist the urge to skip
+to features; every hour here saves five later.
+
+- [ ] Install Effect stack at pinned versions
+- [ ] `vitest` + `@effect/vitest` configured, one trivial `it.effect` test passing
+- [ ] Strict TS: `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`; raise `target` to `ES2022`
+- [ ] ESLint import-boundary rule enforcing the layering in §4
+- [ ] Prettier + lint-staged + husky pre-commit hook
+- [ ] GitHub Actions: typecheck, lint, test, build — required on every PR
+- [ ] `docs/adr/0001-record-architecture-decisions.md` and `0002-why-effect.md`
+- [ ] Vercel project linked, `main` deploying, preview deploys on PRs
+- [ ] Rewrite `README.md`: what it is, screenshots, stack, how to run
+- [ ] Branch protection on `main`; work in PRs from here on
+
+**Done when:** a PR runs green CI, produces a preview URL, and cannot merge red.
+**Demonstrates:** you set up projects the way a team needs them, not the way a
+solo hacker gets away with.
+
+---
+
+### Phase 1 — The domain in Effect Schema · 3–5 weeks
+
+Rebuild `src/lib/types.ts` as a real domain model. Pure, dependency-free, and
+exhaustively tested. This is the highest-leverage phase in the roadmap — it is
+where "good engineer" is most visible per line of code.
+
+- [ ] Branded primitives: `CaseId`, `ClientId`, `InvoiceId`, `Money`, `CaseNumber`, `KRAPin`, `PhoneNumber`
+- [ ] `Money` as integer minor units — never floats for currency, and say so in a comment
+- [ ] Port each entity to `Schema.Struct` with real constraints, not just shapes
+- [ ] Replace stringly-typed dates with `Schema.Date` / `DateTime`
+- [ ] Model case status as a **state machine**: legal transitions only, `New → Active → …`, with an explicit transition function returning `Either`
+- [ ] Tagged errors per domain: `CaseNotFound`, `InvalidTransition`, `TrustAccountUnderfunded`, `ConflictOfInterest`
+- [ ] Encode real business rules as pure functions: invoice totals, trust-account invariants (client funds can never go negative), conflict-of-interest checks, statutory deadline calculation
+- [ ] Property-based tests for the money and invoice arithmetic
+- [ ] Migrate `src/lib/data/*.ts` to be *decoded through* the schemas — the seed data must now prove itself valid at startup
+
+**Done when:** `src/domain/` has no imports from the rest of the project, tests
+cover every business rule, and invalid seed data fails loudly.
+**Demonstrates:** domain modelling, making illegal states unrepresentable,
+errors as typed values.
+
+---
+
+### Phase 2 — Persistence · 3–4 weeks
+
+- [ ] Provision Neon via Vercel Marketplace; `DATABASE_URL` in all three environments
+- [ ] `PgClient` layer + `ManagedRuntime` in `src/runtime/`
+- [ ] Schema design: tables, FKs, indexes, constraints. Push invariants into the DB (`CHECK`, `NOT NULL`, unique) — do not rely on application code alone
+- [ ] Migration setup with `@effect/sql` migrator, committed and ordered
+- [ ] `@effect/sql` `Model` classes bridging DB rows ↔ domain schemas
+- [ ] Repository interfaces in `services/`, Postgres implementations in `infra/sql/`
+- [ ] Transaction support, with one real multi-statement use case (invoice payment → trust ledger entry)
+- [ ] Seed script importing the existing mock data into a real database
+- [ ] Integration tests against a real Postgres (Testcontainers or a Neon branch per CI run)
+
+**Done when:** the seed data lives in Postgres and repository tests pass against
+a real database in CI.
+**Demonstrates:** you treat the database as part of the design, not a dumb store.
+
+---
+
+### Phase 3 — Services and the first vertical slice · 3–4 weeks
+
+Take **Cases** all the way through the new stack while every other module still
+runs on mock data. Prove the architecture on one slice before committing to it
+across twenty.
+
+- [ ] `CaseService` as an `Effect.Service` with a Layer
+- [ ] Wire `/cases` and `/cases/[id]` to real data via Server Components
+- [ ] Create and edit cases through Server Actions with `Schema` validation at the boundary
+- [ ] Error handling: typed failures mapped to UI states, `error.tsx` boundaries
+- [ ] Optimistic UI on status transitions
+- [ ] Service-level tests with in-memory repository Layers (no DB needed)
+
+**Done when:** cases are fully real — read, create, edit, transition — and the
+test suite covers the service with mock Layers.
+**Demonstrates:** dependency injection that pays off, testability without mocking
+frameworks.
+
+---
+
+### Phase 4 — Typed HTTP API · 2–3 weeks
+
+- [ ] `HttpApi` definition in `src/api/` — the shared contract
+- [ ] Endpoint groups: cases, clients, billing, documents
+- [ ] Server implementation mounted at a Next route handler
+- [ ] `HttpApiClient` derived from the same definition — no hand-written fetch calls, no duplicated types
+- [ ] OpenAPI spec generated from the definition, served at `/api/docs`
+- [ ] API-level integration tests
+
+**Done when:** the client is generated from the contract and a type error appears
+if server and client drift.
+**Demonstrates:** end-to-end type safety across the network boundary.
+
+---
+
+### Phase 5 — Effect on the client · 3–4 weeks
+
+The part you specifically asked for. Retire `AppState.tsx`.
+
+- [ ] `@effect-rx/rx-react` installed and a runtime provided to the tree
+- [ ] Rx atoms for server data with loading and error states as first-class values
+- [ ] Rewrite role switching and invoice state as Rx
+- [ ] Mutation atoms with optimistic updates and rollback on failure
+- [ ] Persist selected state to localStorage via an Rx-integrated `KeyValueStore`
+- [ ] Component tests covering loading, success, and failure paths
+- [ ] ADR: why Rx over TanStack Query / Zustand, honestly weighed
+
+**Done when:** no `useState`-based data fetching remains; every async client
+state has explicit loading and error handling.
+**Demonstrates:** Effect fluency beyond the server, and a considered take on
+client state.
+
+---
+
+### Phase 6 — Identity, authorization, audit · 4–5 weeks
+
+The legal domain makes this genuinely interesting: seven roles, and a client
+portal that must *never* leak another client's data.
+
+- [ ] Better Auth (per D-2) with sessions in Postgres
+- [ ] Login, logout, password reset, session refresh
+- [ ] `CurrentUser` as an Effect service, provided per request
+- [ ] RBAC as a typed policy layer — permissions checked in services, not in components
+- [ ] **Row-level authorization:** portal users see only their own cases. Test this adversarially: write tests that *attempt* the leak and assert failure
+- [ ] `proxy.ts` for optimistic route protection (not the real gate)
+- [ ] Audit log: every mutation records actor, action, entity, timestamp, before/after
+- [ ] Wire the existing `/compliance` and audit UI to real audit data
+
+**Done when:** a portal user cannot reach another client's data by any route,
+proven by tests, and every mutation is audited.
+**Demonstrates:** security thinking, and that you test the negative cases —
+which is what separates senior from mid-level.
+
+---
+
+### Phase 7 — Breadth: the remaining modules · 8–12 weeks
+
+Now grind out the rest, module by module, each a full vertical slice with tests.
+Order chosen by domain value: money and deadlines first.
+
+- [ ] **Billing** — invoices, line items, payments, M-Pesa-style reconciliation, trust accounts with enforced invariants
+- [ ] **Time tracking** — timers, billable/non-billable, feeding invoice generation
+- [ ] **Clients** — CRUD, contacts, conflict-of-interest checking on intake
+- [ ] **Hearings & calendar** — scheduling, adjournments, statutory deadline computation, reminders
+- [ ] **Documents** — real uploads to Blob (D-4), versioning, categories, access control
+- [ ] **Tasks** — assignment, priorities, due dates
+- [ ] **Client portal** — case visibility, invoices, secure messaging
+- [ ] **Communications, notifications, knowledge base, HR, users** — lighter slices
+- [ ] **Reports** — aggregate queries, financial summaries, exports
+- [ ] **Global search** across cases, clients, and documents
+
+**Done when:** no `src/lib/data/*.ts` mock imports remain in `src/app/`.
+**Demonstrates:** sustained delivery and consistency at scale — twenty modules
+built to the same standard is itself the signal.
+
+---
+
+### Phase 8 — Observability and resilience · 2–3 weeks
+
+- [ ] OpenTelemetry tracing via `@effect/opentelemetry`, exported to a free-tier backend
+- [ ] Structured logging with request correlation IDs
+- [ ] Retry policies with exponential backoff on transient DB failures
+- [ ] Timeouts on every external call
+- [ ] Rate limiting on auth endpoints
+- [ ] Health check endpoint and error tracking (Sentry)
+- [ ] `TestClock`-based tests for retry and timeout behaviour — deterministic, no sleeps
+
+**Done when:** you can trace a slow request end to end, and resilience policies
+are proven by tests that run in milliseconds.
+**Demonstrates:** production thinking, and the deterministic-testing superpower
+that is Effect's best sales pitch.
+
+---
+
+### Phase 9 — Product polish · 3–4 weeks
+
+- [ ] Accessibility audit: keyboard navigation, focus management, ARIA, contrast. Target WCAG 2.2 AA
+- [ ] Responsive pass — the wireframe is desktop-first; fix mobile
+- [ ] Loading skeletons and empty states everywhere
+- [ ] Form validation UX driven by the same schemas as the server
+- [ ] Lighthouse ≥ 95 across the board; Core Web Vitals green
+- [ ] Playwright E2E covering the critical paths: login, create case, log time, invoice, pay
+- [ ] Dark mode, if the design supports it cleanly
+
+**Done when:** the app is genuinely pleasant to use on a phone and a screen reader.
+**Demonstrates:** you finish things, and you consider users who are not you.
+
+---
+
+### Phase 10 — Portfolio packaging · 2–3 weeks
+
+The phase most people skip, and the one with the highest return per hour.
+
+- [ ] **README rewrite**: problem, screenshots/GIF, architecture diagram, stack rationale, how to run, what you learned
+- [ ] Demo accounts per role + seeded data + nightly reset (D-5)
+- [ ] ADR set complete and readable as a narrative
+- [ ] Architecture diagram: system context, layers, request lifecycle
+- [ ] Database ER diagram, generated
+- [ ] Test coverage badge, CI badge, live demo link at the top
+- [ ] A written case study — 1,500 words on the hardest problem you solved. Trust-account invariants or row-level authorization are strong candidates
+- [ ] Commit history readable: meaningful messages, no `wip` noise
+- [ ] Ask two engineers for honest review; fix what they trip on
+
+**Done when:** a recruiter reaches a working demo in one click, and an engineer
+understands the architecture without running anything.
+**Demonstrates:** communication — the skill most portfolios fail on.
+
+---
+
+### Phase 11 — Effect 4 migration *(optional, high value)* · 3–4 weeks
+
+Only once Effect 4 is stable **and** `@effect-rx` ships a v4-compatible release.
+
+- [ ] Read the migration guide; inventory breaking changes
+- [ ] Migrate on a branch with CI green at each step
+- [ ] ADR documenting the migration and what broke
+- [ ] Blog post or README section on the experience
+
+**Demonstrates:** you can carry a real codebase through a major version bump —
+a genuinely rare and valuable thing to be able to point at.
+
+---
+
+## 7. Quality bar
+
+Applies to every PR from Phase 0 onward. Non-negotiable.
+
+- No `any`. No `as` casts outside parsing boundaries. No `@ts-ignore`.
+- Every fallible operation returns a typed error. No thrown strings.
+- Every business rule has a test. Every bug fix starts with a failing test.
+- No `console.log` in committed code — structured logging only.
+- No secrets in the repo. All config through validated env schemas.
+- Tests are deterministic. No `sleep`, no wall-clock dependence, no flakes.
+- Every PR: green CI, meaningful description, reviewable size.
+
+---
+
+## 8. Decision log
+
+Append as decisions are made. This becomes the raw material for your ADRs and
+the most interesting thing an interviewer can read.
+
+| Date | Decision | Reasoning |
+| --- | --- | --- |
+| 2026-08-18 | Effect 3.22.x, not 4.0-rc | `@effect-rx/rx-react` peer-deps on `effect@^3.17` with no v4 track; choosing v4 today would cost the client-side Effect layer |
+| 2026-08-18 | Effect end to end, including React | Deliberate: the client-side story is the differentiator vs. typical Effect backends |
+| 2026-08-18 | Neon Postgres + Vercel | Free at portfolio scale, clean `@effect/sql-pg` fit, one-click live demo |
+
+---
+
+## 9. Progress log
+
+One line per session. Keeps momentum visible across a long project.
+
+| Date | Phase | What moved |
+| --- | --- | --- |
+| 2026-08-18 | — | Wireframe committed; roadmap written |
