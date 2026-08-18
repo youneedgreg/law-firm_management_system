@@ -242,7 +242,10 @@ errors as typed values.
 - [x] Schema design: 12 tables, FKs, partial indexes, and constraints mirroring the domain — magistrate rank iff magistrates' court, adjournment iff a date to adjourn to, KRA PIN prefix matching client kind, no cause number without a filing date. **Rule 10 is enforced by a trigger** with `SELECT … FOR UPDATE`, since a `CHECK` sees one row and the rule needs the client's whole balance
 - [x] Migration setup with `@effect/sql` migrator, listed explicitly via `fromRecord` rather than a glob, and run by `npm run db:migrate` as a standalone script — migrating from a serverless function means instances racing to alter the same schema
 - [ ] `@effect/sql` `Model` classes bridging DB rows ↔ domain schemas
-- [ ] Repository interfaces in `services/`, Postgres implementations in `infra/sql/`
+- [x] Repository interfaces declared in `services/` (`CaseRepository`, `ClientRepository`, `TrustRepository`) — a service depends on the interface it needs and never on Postgres; the boundary rule makes that structural
+- [x] `TrustRepositoryLive` in `infra/sql/`, which **translates the Rule 10 trigger refusal into the domain's `TrustAccountUnderfunded`**, reading the balance back only after Postgres has refused so the trigger stays the arbiter and the `FOR UPDATE` race stays closed
+- [x] Integration tests against real Neon — 7 tests covering the driver, `@effect/sql`, and the error translation. Gated on `DATABASE_URL`, so a fresh checkout still runs `npm test` clean
+- [ ] `CaseRepository` and `ClientRepository` implementations
 - [ ] Transaction support, with one real multi-statement use case (invoice payment → trust ledger entry)
 - [ ] Seed script importing the existing mock data into a real database, **decoding every fixture through the domain schemas** and minting UUIDs for the integer-keyed records (carried over from Phase 1). Invalid seed data must fail the script loudly rather than reaching the database
 - [ ] Run `Ledger.overdrawnClients` after the import — a seeded trust ledger that breaches Rule 10 should stop the migration
