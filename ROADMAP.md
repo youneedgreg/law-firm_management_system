@@ -234,7 +234,10 @@ errors as typed values.
 
 ### Phase 2 — Persistence · 3–4 weeks
 
-- [ ] Provision Neon via Vercel Marketplace; `DATABASE_URL` in all three environments — **blocked on `vercel login`**
+- [x] Neon provisioned through the Vercel Marketplace (`neon-coffee-compass`), connected to the project, env vars pulled to `.env.local`. `DATABASE_URL` present in development
+- [x] Migrations applied to real Neon via `npm run db:migrate`. Verified against the live database: 12 tables, the `trust_movements_rule_10` trigger present, zero non-bigint money columns, and an overdraw refused with `Advocates (Accounts) Rules r.10: cannot withdraw 30000000 cents against a balance of 20000000 cents`
+- [ ] Add `DATABASE_URL` to preview and production environments (development only so far)
+- [ ] Revisit the `sslmode` deprecation: `pg` currently treats `require` as `verify-full`, but v9 will adopt weaker libpq semantics. Pin `sslmode=verify-full` before that upgrade rather than after
 - [x] `PgClient` layer in `src/infra/sql/client.ts`, with `DATABASE_URL` validated once at startup through a `Config` service and held `Redacted` so it cannot be logged by accident
 - [x] Schema design: 12 tables, FKs, partial indexes, and constraints mirroring the domain — magistrate rank iff magistrates' court, adjournment iff a date to adjourn to, KRA PIN prefix matching client kind, no cause number without a filing date. **Rule 10 is enforced by a trigger** with `SELECT … FOR UPDATE`, since a `CHECK` sees one row and the rule needs the client's whole balance
 - [x] Migration setup with `@effect/sql` migrator, listed explicitly via `fromRecord` rather than a glob, and run by `npm run db:migrate` as a standalone script — migrating from a serverless function means instances racing to alter the same schema
