@@ -166,28 +166,31 @@ Time estimates assume a few hours per day. They are ranges, not commitments.
 
 ---
 
-### Phase 0 — Foundations and guardrails · 2–3 weeks
+### Phase 0 — Foundations and guardrails · 2–3 days
 
 Set up everything that makes later work fast and safe. Resist the urge to skip
 to features; every hour here saves five later.
 
 - [x] Push to GitHub, **repo public** (D-8) — `youneedgreg/law-firm_management_system`
-- [x] Install Effect stack at pinned versions
-- [x] `vitest` + `@effect/vitest` configured — `test/harness.test.ts`, 5 tests green
-- [x] ESLint import-boundary rules enforcing the layering in §4
+- [x] Install Effect stack at pinned versions — resolved two peer conflicts without `--legacy-peer-deps`: `@vitejs/plugin-react@5.2.0` spans vite 7 and 8, and `@vitest/coverage-v8` had to stay on the v3 line to match `@effect/vitest`
+- [x] `vitest` + `@effect/vitest` configured — `test/harness.test.ts`, 5 tests covering Effect execution, errors as values, `TestClock`, and `effect/Schema` decoding
+- [x] ESLint import-boundary rules enforcing the layering in §4, plus a warning on every `@/lib/data/*` import as a Phase 7 burn-down list (59 today)
 - [x] Prettier + lint-staged + husky pre-commit hook
-- [x] GitHub Actions: format, typecheck, lint, test, build on every PR
+- [x] Codebase formatted; `format:check` green and kept that way by the hook
+- [x] `AppState` reads persisted state via `useSyncExternalStore` — clears the one `react-hooks/set-state-in-effect` error that kept lint red
+- [x] GitHub Actions: format, typecheck, lint, test, build on every PR; integration job stubbed behind `if: false` until Phase 2
 - [x] ADRs 0001–0008 covering every decision in §5
-- [x] Codebase formatted; `format:check` green and enforced by lint-staged
-- [x] `AppState` reads persisted state via `useSyncExternalStore` — lint is clean
-- [ ] Testcontainers **verified** against a real container — package installed, config written, needs Docker Desktop
-- [ ] Strict TS flags — measured at 18 errors, staged in `tsconfig.strict.json`; flip and fix
-- [ ] Vercel project linked, `main` deploying, preview deploys on PRs — needs `vercel login`
+- [ ] Testcontainers **verified** against a real container — installed and configured, needs Docker Desktop running
+- [ ] Strict TS: `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`; `target` to `ES2022`. Staged in `tsconfig.strict.json` — currently 18 errors; run `npx tsc --noEmit -p tsconfig.strict.json`, fix, then fold into `tsconfig.json` and delete the file
+- [ ] Vercel project linked, `main` deploying, preview deploys on PRs — blocked on `vercel login`
 - [ ] Rewrite `README.md`: what it is, screenshots, stack, how to run
 - [ ] Branch protection on `main`; work in PRs from here on
 
+**Status:** `format`, `typecheck`, `lint`, `test`, and `build` all pass locally.
+What remains is the three items needing credentials or Docker, plus the README.
+
 **Done when:** a PR runs green CI, produces a preview URL, and cannot merge red.
-**Demonstrates:** you set up projects the way a team needs them, not the way a
+**Demonstrates:** I set up projects the way a team needs them, not the way a
 solo hacker gets away with.
 
 ---
