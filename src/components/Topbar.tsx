@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAppState } from "@/components/AppState";
+import { SelectControl } from "@/components/form";
 import { NOTIFICATIONS } from "@/lib/data/firm";
 import { initials } from "@/lib/format";
 import { ROLES, type Role } from "@/lib/types";
@@ -43,18 +44,13 @@ export function Topbar({ onToggleNav }: { onToggleNav: () => void }) {
         aria-label="Search cases, clients and documents"
       />
 
-      <select
-        className="input role-select"
+      <SelectControl
+        className="role-select"
         value={role}
         onChange={(event) => changeRole(event.target.value as Role)}
         aria-label="Switch role"
-      >
-        {ROLES.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
+        options={ROLES}
+      />
 
       <Link
         href="/notifications"
