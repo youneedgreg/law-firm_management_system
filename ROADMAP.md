@@ -4,7 +4,7 @@
 > production TypeScript: Effect end to end, Postgres, full test coverage, CI/CD,
 > and documented architectural reasoning.
 
-**Started:** 2026-08-18 · **Target:** portfolio-ready in 6–12 months · **Status:** Phase 0
+**Target:** portfolio-ready in 6–12 weeks · **Status:** Phase 0
 
 ---
 
@@ -34,7 +34,7 @@ When a senior engineer opens this repo, they should conclude, within ten minutes
 - **This person tests seriously.** Deterministic tests, no sleeps, no flakes,
   business rules covered — not just "renders without crashing".
 - **This person can reason about architecture.** Layers are real and enforced.
-  ADRs explain *why*, including the roads not taken.
+  ADRs explain _why_, including the roads not taken.
 - **This person ships.** There is a live URL. It is fast, accessible, and
   actually works.
 
@@ -48,22 +48,18 @@ rigor to match.
 
 **What exists:**
 
-| Area | State |
-| --- | --- |
-| UI | Next.js 16.3.1 App Router, React 19.2.8, ~26 routes |
-| Routes | 21 internal (`src/app/(internal)/`), 5 client portal (`src/app/portal/`) |
-| Domain types | `src/lib/types.ts` — 294 lines, hand-written interfaces + const unions |
-| Data | `src/lib/data/*.ts` — hardcoded seed arrays, imported directly by pages |
-| State | `src/components/AppState.tsx` — React Context + localStorage |
-| Styling | `globals.css` + `broadsheet.css`, Phosphor icons |
-| Design source | `design/OKLaw.dc.html` — original wireframe |
+| Area          | State                                                                    |
+| ------------- | ------------------------------------------------------------------------ |
+| UI            | Next.js 16.3.1 App Router, React 19.2.8, ~26 routes                      |
+| Routes        | 21 internal (`src/app/(internal)/`), 5 client portal (`src/app/portal/`) |
+| Domain types  | `src/lib/types.ts` — 294 lines, hand-written interfaces + const unions   |
+| Data          | `src/lib/data/*.ts` — hardcoded seed arrays, imported directly by pages  |
+| State         | `src/components/AppState.tsx` — React Context + localStorage             |
+| Styling       | `globals.css` + `broadsheet.css`, Phosphor icons                         |
+| Design source | `design/OKLaw.dc.html` — original wireframe                              |
 
 **What does not exist yet:** database, API, auth, authorization, validation,
 tests, CI, error handling, logging, deployment, and any Effect at all.
-
-**The honest framing:** you have a high-fidelity, well-typed prototype. It is a
-good starting point precisely because the domain modelling and route structure
-are already thought through. The work ahead is turning a prototype into a system.
 
 ---
 
@@ -71,22 +67,22 @@ are already thought through. The work ahead is turning a prototype into a system
 
 Versions verified on npm 2026-08-18. Pin exact versions; upgrade deliberately.
 
-| Package | Version | Notes |
-| --- | --- | --- |
-| `effect` | 3.22.1 | Core. **Schema lives here now** — `import { Schema } from "effect"` |
-| `@effect/platform` | 0.97.1 | `HttpApi`, `HttpApiClient`, platform abstractions |
-| `@effect/platform-node` | 0.108.1 | Node runtime layer (scripts, migrations, tests) |
-| `@effect/sql` + `@effect/sql-pg` | 0.52.1 / 0.53.0 | SQL client, `Model`, migrations |
-| `@effect/vitest` | 0.30.0 | `it.effect`, `TestClock` integration |
-| `@effect-rx/rx-react` | 0.42.4 | Client-side Effect state |
-| `next` / `react` | 16.3.1 / 19.2.8 | Already installed |
-| Database | Neon Postgres | Provision via Vercel Marketplace (`vercel integration`) |
-| Hosting | Vercel | Preview deploy per PR, production on `main` |
+| Package                          | Version         | Notes                                                               |
+| -------------------------------- | --------------- | ------------------------------------------------------------------- |
+| `effect`                         | 3.22.1          | Core. **Schema lives here now** — `import { Schema } from "effect"` |
+| `@effect/platform`               | 0.97.1          | `HttpApi`, `HttpApiClient`, platform abstractions                   |
+| `@effect/platform-node`          | 0.108.1         | Node runtime layer (scripts, migrations, tests)                     |
+| `@effect/sql` + `@effect/sql-pg` | 0.52.1 / 0.53.0 | SQL client, `Model`, migrations                                     |
+| `@effect/vitest`                 | 0.30.0          | `it.effect`, `TestClock` integration                                |
+| `@effect-rx/rx-react`            | 0.42.4          | Client-side Effect state                                            |
+| `next` / `react`                 | 16.3.1 / 19.2.8 | Already installed                                                   |
+| Database                         | Neon Postgres   | Provision via Vercel Marketplace (`vercel integration`)             |
+| Hosting                          | Vercel          | Preview deploy per PR, production on `main`                         |
 
 ### Three version facts that will bite you if you forget them
 
-1. **`@effect/schema` is deprecated.** npm literally says *"this package has been
-   merged into the main effect package"*. Most tutorials, blog posts, and LLM
+1. **`@effect/schema` is deprecated.** npm literally says _"this package has been
+   merged into the main effect package"_. Most tutorials, blog posts, and LLM
    answers predate this. Use `effect/Schema`. If you see `@effect/schema` in an
    import, the source is stale — distrust the rest of it too.
 
@@ -94,7 +90,7 @@ Versions verified on npm 2026-08-18. Pin exact versions; upgrade deliberately.
    substantial rewrite. **Do not start on it.** `@effect-rx/rx-react` peer-depends
    on `effect@^3.17` and publishes no v4 track — choosing Effect 4 today means
    giving up the client-side Effect layer you specifically asked for. Build on
-   3.22.x. See Phase 11: the migration later is an *asset*, not a liability.
+   3.22.x. See Phase 11: the migration later is an _asset_, not a liability.
 
 3. **Next.js 16 renamed Middleware to Proxy.** The file is `proxy.ts`, not
    `middleware.ts`. Confirmed in `node_modules/next/dist/docs/01-app/01-getting-started/16-proxy.md`.
@@ -151,22 +147,22 @@ month three.
 All resolved 2026-08-18. Each gets an ADR in Phase 0. Revisit only with a
 recorded reason — churn on settled ground is how long projects die.
 
-| ID | Decision | Consequence |
-| --- | --- | --- |
-| D-1 | **Single firm**, not multi-tenant | No `firm_id`, no RLS. Documented in the README as a deliberate scope boundary. Knowing where to stop is the signal. |
-| D-2 | **Better Auth**, self-hosted | Users and sessions are real rows in your Postgres, modelled in Effect. You own session lifecycle and role assignment without hand-rolling password hashing. |
-| D-3 | **Deep Kenyan legal domain** | Real court hierarchy, KRA PIN validation, Advocates Act trust rules, statutory deadlines from civil procedure rules, M-Pesa reconciliation. Requires actual research — budget for it in Phase 1. |
-| D-4 | **Vercel Blob**, private access | Signed URLs, real versioning, identical in preview and production. |
-| D-5 | **Seeded accounts + role switcher** | One-click login per role, rich demo data, nightly reset via cron. Doubles as a live showcase of the RBAC work. |
-| D-6 | **Keep the hand-written CSS**, formalize it | Extract tokens, document the design system. The editorial look is an asset — most portfolios are default shadcn. No rewrite. |
-| D-7 | **Testcontainers** for integration tests | Throwaway Postgres in Docker, identical locally and in CI. Hermetic, no external quota, no CI secrets. Docker required locally. |
-| D-8 | **Public repo from day one** | Commit hygiene matters starting now. The visible wireframe → system progression is itself part of the portfolio. |
+| ID  | Decision                                    | Consequence                                                                                                                                                                                      |
+| --- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| D-1 | **Single firm**, not multi-tenant           | No `firm_id`, no RLS. Documented in the README as a deliberate scope boundary. Knowing where to stop is the signal.                                                                              |
+| D-2 | **Better Auth**, self-hosted                | Users and sessions are real rows in your Postgres, modelled in Effect. You own session lifecycle and role assignment without hand-rolling password hashing.                                      |
+| D-3 | **Deep Kenyan legal domain**                | Real court hierarchy, KRA PIN validation, Advocates Act trust rules, statutory deadlines from civil procedure rules, M-Pesa reconciliation. Requires actual research — budget for it in Phase 1. |
+| D-4 | **Vercel Blob**, private access             | Signed URLs, real versioning, identical in preview and production.                                                                                                                               |
+| D-5 | **Seeded accounts + role switcher**         | One-click login per role, rich demo data, nightly reset via cron. Doubles as a live showcase of the RBAC work.                                                                                   |
+| D-6 | **Keep the hand-written CSS**, formalize it | Extract tokens, document the design system. The editorial look is an asset — most portfolios are default shadcn. No rewrite.                                                                     |
+| D-7 | **Testcontainers** for integration tests    | Throwaway Postgres in Docker, identical locally and in CI. Hermetic, no external quota, no CI secrets. Docker required locally.                                                                  |
+| D-8 | **Public repo from day one**                | Commit hygiene matters starting now. The visible wireframe → system progression is itself part of the portfolio.                                                                                 |
 
 ---
 
 ## 6. Phases
 
-Time estimates assume a few hours per week. They are ranges, not commitments.
+Time estimates assume a few hours per day. They are ranges, not commitments.
 
 ---
 
@@ -175,16 +171,18 @@ Time estimates assume a few hours per week. They are ranges, not commitments.
 Set up everything that makes later work fast and safe. Resist the urge to skip
 to features; every hour here saves five later.
 
-- [ ] Push to GitHub, **repo public** (D-8)
-- [ ] Install Effect stack at pinned versions
-- [ ] `vitest` + `@effect/vitest` configured, one trivial `it.effect` test passing
-- [ ] Testcontainers wired up (D-7) with a throwaway Postgres proving connectivity
-- [ ] Strict TS: `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`; raise `target` to `ES2022`
-- [ ] ESLint import-boundary rule enforcing the layering in §4
-- [ ] Prettier + lint-staged + husky pre-commit hook
-- [ ] GitHub Actions: typecheck, lint, test, build — required on every PR
-- [ ] ADRs for every decision in §5, plus `0001-record-architecture-decisions.md` and `0002-why-effect.md`
-- [ ] Vercel project linked, `main` deploying, preview deploys on PRs
+- [x] Push to GitHub, **repo public** (D-8) — `youneedgreg/law-firm_management_system`
+- [x] Install Effect stack at pinned versions
+- [x] `vitest` + `@effect/vitest` configured — `test/harness.test.ts`, 5 tests green
+- [x] ESLint import-boundary rules enforcing the layering in §4
+- [x] Prettier + lint-staged + husky pre-commit hook
+- [x] GitHub Actions: format, typecheck, lint, test, build on every PR
+- [x] ADRs 0001–0008 covering every decision in §5
+- [ ] Testcontainers **verified** against a real container — package installed, config written, needs Docker Desktop
+- [ ] `npm run format` once, as a standalone commit (29 files currently unformatted)
+- [ ] Fix `react-hooks/set-state-in-effect` in `AppState.tsx` — the one error keeping CI red
+- [ ] Strict TS flags — measured at 18 errors, staged in `tsconfig.strict.json`; flip once the forms work lands
+- [ ] Vercel project linked, `main` deploying, preview deploys on PRs — needs `vercel login`
 - [ ] Rewrite `README.md`: what it is, screenshots, stack, how to run
 - [ ] Branch protection on `main`; work in PRs from here on
 
@@ -217,7 +215,7 @@ distinguish this from every other portfolio project.
 - [ ] Statutory deadline calculation from filing dates, excluding court holidays and vacation
 - [ ] Conflict-of-interest checking on client intake
 - [ ] Property-based tests for money arithmetic, trust invariants, and deadline computation
-- [ ] Migrate `src/lib/data/*.ts` to be *decoded through* the schemas — the seed data must now prove itself valid at startup
+- [ ] Migrate `src/lib/data/*.ts` to be _decoded through_ the schemas — the seed data must now prove itself valid at startup
 
 **Done when:** `src/domain/` has no imports from the rest of the project, tests
 cover every business rule, and invalid seed data fails loudly.
@@ -301,13 +299,13 @@ client state.
 ### Phase 6 — Identity, authorization, audit · 4–5 weeks
 
 The legal domain makes this genuinely interesting: seven roles, and a client
-portal that must *never* leak another client's data.
+portal that must _never_ leak another client's data.
 
 - [ ] Better Auth with sessions in Postgres (D-2)
 - [ ] Login, logout, password reset, session refresh
 - [ ] `CurrentUser` as an Effect service, provided per request
 - [ ] RBAC as a typed policy layer — permissions checked in services, not in components
-- [ ] **Row-level authorization:** portal users see only their own cases. Test this adversarially: write tests that *attempt* the leak and assert failure
+- [ ] **Row-level authorization:** portal users see only their own cases. Test this adversarially: write tests that _attempt_ the leak and assert failure
 - [ ] `proxy.ts` for optimistic route protection (not the real gate)
 - [ ] Audit log: every mutation records actor, action, entity, timestamp, before/after
 - [ ] Wire the existing `/compliance` and audit UI to real audit data
@@ -395,7 +393,7 @@ understands the architecture without running anything.
 
 ---
 
-### Phase 11 — Effect 4 migration *(optional, high value)* · 3–4 weeks
+### Phase 11 — Effect 4 migration _(optional, high value)_ · 3–4 weeks
 
 Only once Effect 4 is stable **and** `@effect-rx` ships a v4-compatible release.
 
@@ -428,19 +426,19 @@ Applies to every PR from Phase 0 onward. Non-negotiable.
 Append as decisions are made. This becomes the raw material for your ADRs and
 the most interesting thing an interviewer can read.
 
-| Date | Decision | Reasoning |
-| --- | --- | --- |
-| 2026-08-18 | Effect 3.22.x, not 4.0-rc | `@effect-rx/rx-react` peer-deps on `effect@^3.17` with no v4 track; choosing v4 today would cost the client-side Effect layer |
-| 2026-08-18 | Effect end to end, including React | Deliberate: the client-side story is the differentiator vs. typical Effect backends |
-| 2026-08-18 | Neon Postgres + Vercel | Free at portfolio scale, clean `@effect/sql-pg` fit, one-click live demo |
-| 2026-08-18 | D-1 Single firm | Multi-tenancy is plumbing, not signal; a stated scope boundary reads as judgment |
-| 2026-08-18 | D-2 Better Auth, self-hosted | Own the interesting parts (sessions, roles, audit) without hand-rolling crypto |
-| 2026-08-18 | D-3 Deep Kenyan domain | Researched jurisdictional detail is the cheapest way to look senior |
-| 2026-08-18 | D-4 Vercel Blob, private | Private-by-default matters for legal documents; no infra overhead |
-| 2026-08-18 | D-5 Seeded accounts + role switcher | Zero friction to a full dashboard; doubles as an RBAC showcase |
-| 2026-08-18 | D-6 Keep hand-written CSS | Distinctive beats default shadcn; rewriting working CSS buys nothing |
-| 2026-08-18 | D-7 Testcontainers | Hermetic and identical locally and in CI; no quota, no CI secrets |
-| 2026-08-18 | D-8 Public repo from day one | Forces commit hygiene now; the wireframe → system progression is the story |
+| Date       | Decision                            | Reasoning                                                                                                                     |
+| ---------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-18 | Effect 3.22.x, not 4.0-rc           | `@effect-rx/rx-react` peer-deps on `effect@^3.17` with no v4 track; choosing v4 today would cost the client-side Effect layer |
+| 2026-08-18 | Effect end to end, including React  | Deliberate: the client-side story is the differentiator vs. typical Effect backends                                           |
+| 2026-08-18 | Neon Postgres + Vercel              | Free at portfolio scale, clean `@effect/sql-pg` fit, one-click live demo                                                      |
+| 2026-08-18 | D-1 Single firm                     | Multi-tenancy is plumbing, not signal; a stated scope boundary reads as judgment                                              |
+| 2026-08-18 | D-2 Better Auth, self-hosted        | Own the interesting parts (sessions, roles, audit) without hand-rolling crypto                                                |
+| 2026-08-18 | D-3 Deep Kenyan domain              | Researched jurisdictional detail is the cheapest way to look senior                                                           |
+| 2026-08-18 | D-4 Vercel Blob, private            | Private-by-default matters for legal documents; no infra overhead                                                             |
+| 2026-08-18 | D-5 Seeded accounts + role switcher | Zero friction to a full dashboard; doubles as an RBAC showcase                                                                |
+| 2026-08-18 | D-6 Keep hand-written CSS           | Distinctive beats default shadcn; rewriting working CSS buys nothing                                                          |
+| 2026-08-18 | D-7 Testcontainers                  | Hermetic and identical locally and in CI; no quota, no CI secrets                                                             |
+| 2026-08-18 | D-8 Public repo from day one        | Forces commit hygiene now; the wireframe → system progression is the story                                                    |
 
 ---
 
@@ -448,6 +446,6 @@ the most interesting thing an interviewer can read.
 
 One line per session. Keeps momentum visible across a long project.
 
-| Date | Phase | What moved |
-| --- | --- | --- |
-| 2026-08-18 | — | Wireframe committed; roadmap written; all eight architectural decisions settled |
+| Date       | Phase | What moved                                                                      |
+| ---------- | ----- | ------------------------------------------------------------------------------- |
+| 2026-08-18 | —     | Wireframe committed; roadmap written; all eight architectural decisions settled |
