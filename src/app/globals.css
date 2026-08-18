@@ -106,8 +106,9 @@ body {
   flex-shrink: 0;
 }
 
-.role-select {
+.role-select > select.input {
   width: auto;
+  max-width: 200px;
   font-family: var(--font-body);
 }
 
@@ -671,6 +672,267 @@ body {
   margin-top: var(--space-4);
 }
 
+/* ── forms, dropdowns & dialogs ────────────────────────────────────────── */
+
+/* Broadsheet ships `.field`, `.input`, `.radio` and `.seg`. These rules extend
+   that family to the controls the sheet does not cover — the select, the
+   checkbox, the native date/time pickers and the file field — and add the
+   layout furniture the screens need around them. Every value comes from a
+   token; nothing here introduces a new colour, font or measure. */
+
+:root {
+  /* The palette is a light one. Telling the UA so keeps the native date, time
+     and select popups in step with the page instead of inverting them. */
+  color-scheme: light;
+}
+
+/* The dropdown. `appearance: none` removes the platform arrow, and the caret is
+   redrawn as a rotated corner in ink so it matches the rest of the system at
+   any zoom. Only wrapped selects are stripped, so a bare <select> keeps a
+   usable native control. */
+.select {
+  position: relative;
+  display: block;
+}
+
+.select > select.input {
+  appearance: none;
+  padding-right: var(--space-6);
+  cursor: pointer;
+}
+
+.select::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: var(--space-3);
+  width: 7px;
+  height: 7px;
+  border: solid var(--color-neutral-700);
+  border-width: 0 1.5px 1.5px 0;
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
+}
+
+.select:hover::after {
+  border-color: var(--color-accent-700);
+}
+
+.select > select.input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Native pickers sit a little differently from a text input; pin the height so
+   a date and a text field on the same row line up. */
+.input[type="date"],
+.input[type="time"],
+.input[type="datetime-local"] {
+  min-height: 36px;
+  line-height: 1.2;
+}
+
+.input[type="file"] {
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.input[type="file"]::file-selector-button {
+  font: inherit;
+  font-size: 13px;
+  margin-right: var(--space-2);
+  padding: 2px 10px;
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.input[type="file"]:hover::file-selector-button {
+  border-color: var(--color-accent);
+  color: var(--color-accent-700);
+}
+
+/* Broadsheet hides the native radio behind its drawn dot by collapsing it to
+   zero size with no pointer events, which can drop the control out of the
+   accessibility tree. Clipping it instead looks identical and keeps it
+   focusable and announced. The same treatment covers the checkbox below. */
+.radio input,
+.seg-opt input,
+.check input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* The checkbox, drawn to match Broadsheet's `.radio` dot. */
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.check .box {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--color-divider);
+  border-radius: var(--radius-sm);
+}
+
+.check .box::after {
+  content: "";
+  width: 4px;
+  height: 8px;
+  border: solid var(--color-bg);
+  border-width: 0 2px 2px 0;
+  transform: translateY(-1px) rotate(45deg);
+  opacity: 0;
+}
+
+.check:hover .box {
+  border-color: var(--color-accent);
+}
+
+.check input:checked + .box {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+
+.check input:checked + .box::after {
+  opacity: 1;
+}
+
+.check input:focus-visible + .box {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Field layout. Forms run two columns on anything wider than a phone, and a
+   field marked wide spans the pair. */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.form-grid .field-wide {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 599px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.field-set {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.field-legend {
+  padding: 0;
+  font-size: 12px;
+  margin-bottom: 5px;
+  color: color-mix(in srgb, var(--color-text) 70%, transparent);
+}
+
+.field-hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--color-neutral-600);
+}
+
+.check-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-4);
+  min-height: 36px;
+  align-items: center;
+}
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+/* A search box with the dropdown that narrows it, above a list. */
+.search-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.search-row > .input {
+  flex: 1 1 260px;
+  max-width: 480px;
+}
+
+.search-filter > select.input {
+  width: auto;
+  min-width: 190px;
+}
+
+.form-status {
+  font-size: 13px;
+  color: var(--color-accent-700);
+}
+
+/* An inline panel form — settings and the like — rather than a dialog. */
+.form-panel {
+  max-width: 640px;
+}
+
+/* Dialog. The <dialog> element supplies the modal semantics (focus trap, Esc,
+   inert background); the design system's own `.dialog-backdrop` and `.dialog`
+   supply the look, so the element itself is stripped to a transparent frame. */
+.dialog-shell {
+  width: 100vw;
+  max-width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: hidden;
+}
+
+.dialog-shell::backdrop {
+  background: transparent;
+}
+
+.dialog-shell .dialog {
+  width: min(600px, 100%);
+  max-height: calc(100vh - var(--space-8));
+  overflow-y: auto;
+}
+
+.dialog-lede {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-neutral-700);
+}
+
 /* ── utilities ─────────────────────────────────────────────────────────── */
 
 .tag-row {
@@ -698,12 +960,6 @@ body {
   flex-direction: column;
   gap: var(--space-3);
   max-width: 420px;
-}
-
-.search-field {
-  width: 100%;
-  max-width: 480px;
-  margin-bottom: var(--space-4);
 }
 
 .ink-accent {
