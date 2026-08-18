@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+
+<helmet>
+  <link rel="stylesheet" href="_ds/broadsheet-d5386bf4-5150-4940-aef0-7d0006059e7f/styles.css">
+  <script src="_ds/broadsheet-d5386bf4-5150-4940-aef0-7d0006059e7f/_ds_bundle.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/duotone/style.css">
+  <style>
+    body{margin:0;background:var(--color-bg);}
+    ::-webkit-scrollbar{width:8px;height:8px;}
+    ::-webkit-scrollbar-thumb{background:var(--color-neutral-300);border-radius:4px;}
+  </style>
+</helmet>
+
+<sc-if value="{{ isPortal }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;min-height:100vh;background:var(--color-bg);font-family:var(--font-body);color:var(--color-text);">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:var(--space-4) var(--space-6);border-bottom:2px solid var(--color-text);">
+    <div style="display:flex;align-items:baseline;gap:var(--space-3);">
+      <span style="font-family:var(--font-heading);font-size:28px;font-weight:700;">OKLaw</span>
+      <span style="font-size:13px;color:var(--color-neutral-700);letter-spacing:0.04em;">CLIENT PORTAL</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:var(--space-4);">
+      <span style="font-size:14px;color:var(--color-neutral-700);">{{ portalClient.name }}</span>
+      <button style="all:unset;cursor:pointer;" onClick="{{ exitPortal }}"><span class="btn btn-ghost">Exit portal view</span></button>
+    </div>
+  </div>
+  <div style="display:flex;gap:var(--space-6);padding:var(--space-4) var(--space-6);border-bottom:1px solid var(--color-neutral-300);flex-wrap:wrap;">
+    <sc-for list="{{ portalNav }}" as="item" hint-placeholder-count="5">
+      <button style="all:unset;cursor:pointer;padding-bottom:var(--space-2);" onClick="{{ item.go }}">
+        <span style="font-size:16px;font-family:var(--font-heading);color: {{ item.active }};border-bottom: {{ item.underline }};padding-bottom:4px;">{{ item.label }}</span>
+      </button>
+    </sc-for>
+  </div>
+  <div style="flex:1;padding:var(--space-6) {{ portalPad }};max-width:1100px;margin:0 auto;width:100%;box-sizing:border-box;">
+
+    <sc-if value="{{ portalView_home }}" hint-placeholder-val="{{ true }}">
+      <h1 style="font-family:var(--font-heading);font-size:34px;margin:0 0 var(--space-2);">Welcome back, {{ portalClient.contact }}</h1>
+      <p style="color:var(--color-neutral-700);margin:0 0 var(--space-6);font-size:16px;">Here's what's happening with your matters at OKLaw.</p>
+      <div style="display:grid;grid-template-columns:{{ portalGridCols }};gap:var(--space-4);">
+        <sc-for list="{{ portalCases }}" as="c" hint-placeholder-count="2">
+          <div class="card elev-sm">
+            <div class="card-kicker">{{ c.type }} · {{ c.court }}</div>
+            <div class="card-title">{{ c.title }}</div>
+            <div class="card-body">Status: <span class="{{ c.statusTagClass }}">{{ c.status }}</span></div>
+            <div class="card-meta">Next hearing: {{ c.nextHearing }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ portalView_case }}" hint-placeholder-val="{{ false }}">
+      <h2 style="font-family:var(--font-heading);font-size:28px;margin:0 0 var(--space-4);">Case progress</h2>
+      <sc-for list="{{ portalCases }}" as="c" hint-placeholder-count="2">
+        <div style="margin-bottom:var(--space-6);">
+          <div style="font-family:var(--font-heading);font-size:20px;">{{ c.title }}</div>
+          <div style="color:var(--color-neutral-700);font-size:14px;margin:var(--space-1) 0 var(--space-3);">{{ c.court }} · {{ c.judge }} · Filed {{ c.filed }}</div>
+          <div style="display:flex;gap:var(--space-2);flex-wrap:wrap;">
+            <sc-for list="{{ c.timeline }}" as="t" hint-placeholder-count="3">
+              <span class="tag tag-outline">{{ t }}</span>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </sc-if>
+
+    <sc-if value="{{ portalView_docs }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:var(--space-4);">
+        <h2 style="font-family:var(--font-heading);font-size:28px;margin:0;">Documents</h2>
+        <button style="all:unset;cursor:pointer;"><span class="btn btn-primary"><i class="ph-duotone ph-upload-simple"></i> Upload</span></button>
+      </div>
+      <table class="table">
+        <thead><tr><th>Document</th><th>Case</th><th>Category</th><th>Uploaded</th><th></th></tr></thead>
+        <tbody>
+          <sc-for list="{{ portalDocs }}" as="d" hint-placeholder-count="4">
+            <tr><td>{{ d.name }}</td><td>{{ d.case }}</td><td>{{ d.category }}</td><td>{{ d.date }}</td><td><span class="btn btn-ghost btn-icon"><i class="ph-duotone ph-download-simple"></i></span></td></tr>
+          </sc-for>
+        </tbody>
+      </table>
+    </sc-if>
+
+    <sc-if value="{{ portalView_invoices }}" hint-placeholder-val="{{ false }}">
+      <h2 style="font-family:var(--font-heading);font-size:28px;margin:0 0 var(--space-4);">Invoices</h2>
+      <table class="table">
+        <thead><tr><th>Invoice #</th><th>Case</th><th>Amount</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          <sc-for list="{{ portalInvoices }}" as="inv" hint-placeholder-count="3">
+            <tr><td>{{ inv.number }}</td><td>{{ inv.case }}</td><td>{{ inv.amountFmt }}</td><td><span class="{{ inv.tagClass }}">{{ inv.status }}</span></td><td><button style="all:unset;cursor:pointer;" onClick="{{ inv.pay }}"><span class="btn btn-secondary">Pay now</span></button></td></tr>
+          </sc-for>
+        </tbody>
+      </table>
+    </sc-if>
+
+    <sc-if value="{{ portalView_messages }}" hint-placeholder-val="{{ false }}">
+      <h2 style="font-family:var(--font-heading);font-size:28px;margin:0 0 var(--space-4);">Messages</h2>
+      <div style="display:flex;flex-direction:column;gap:var(--space-4);max-width:640px;">
+        <sc-for list="{{ portalMessages }}" as="m" hint-placeholder-count="4">
+          <div>
+            <div style="font-size:13px;color:var(--color-neutral-700);">{{ m.from }} · {{ m.date }}</div>
+            <div style="font-size:15px;margin-top:2px;">{{ m.text }}</div>
+          </div>
+        </sc-for>
+        <div style="display:flex;gap:var(--space-2);margin-top:var(--space-4);">
+          <input class="input" placeholder="Type a message to your advocate…" style="flex:1;"/>
+          <span class="btn btn-primary">Send</span>
+        </div>
+      </div>
+    </sc-if>
+
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ showInternal }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;min-height:100vh;background:var(--color-bg);font-family:var(--font-body);color:var(--color-text);">
+
+  <div class="nav" style="display:flex;align-items:center;gap:var(--space-4);padding:0 var(--space-4);border-bottom:2px solid var(--color-text);height:64px;">
+    <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+      <button style="all:unset;cursor:pointer;" onClick="{{ toggleMobileNav }}"><i class="ph-duotone ph-list" style="font-size:26px;"></i></button>
+    </sc-if>
+    <span class="nav-brand" style="font-family:var(--font-heading);font-size:24px;font-weight:700;">OKLaw</span>
+    <span style="font-size:12px;color:var(--color-neutral-700);letter-spacing:0.05em;">Nairobi · General Practice</span>
+    <div style="flex:1;"></div>
+    <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+    </sc-if>
+    <sc-if value="{{ notMobile }}" hint-placeholder-val="{{ true }}">
+      <input class="input" placeholder="Search cases, clients, documents…" style="width:280px;"/>
+    </sc-if>
+    <select class="input" style="width:auto;font-family:var(--font-body);" value="{{ role }}" onChange="{{ onRoleChange }}">
+      <sc-for list="{{ roleOptions }}" as="r" hint-placeholder-count="7">
+        <option value="{{ r }}">{{ r }}</option>
+      </sc-for>
+    </select>
+    <button style="all:unset;cursor:pointer;position:relative;" onClick="{{ goNotifications }}">
+      <i class="ph-duotone ph-bell" style="font-size:22px;"></i>
+      <span style="position:absolute;top:-4px;right:-6px;background:var(--color-accent-2);color:white;font-size:10px;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;">{{ unreadCount }}</span>
+    </button>
+    <div style="width:32px;height:32px;border-radius:50%;background:var(--color-accent-100);display:flex;align-items:center;justify-content:center;font-size:13px;font-family:var(--font-heading);color:var(--color-accent-700);">{{ userInitials }}</div>
+  </div>
+
+  <div style="display:flex;flex:1;position:relative;">
+
+    <sc-if value="{{ sidebarVisible }}" hint-placeholder-val="{{ true }}">
+    <div style="{{ sidebarStyle }}">
+      <sc-for list="{{ navSections }}" as="sec" hint-placeholder-count="6">
+        <div style="margin-bottom:var(--space-6);">
+          <div style="font-size:11px;letter-spacing:0.08em;color:var(--color-neutral-600);margin-bottom:var(--space-3);text-transform:uppercase;">{{ sec.label }}</div>
+          <sc-for list="{{ sec.items }}" as="item" hint-placeholder-count="3">
+            <button style="all:unset;cursor:pointer;display:flex;align-items:center;gap:var(--space-3);width:100%;padding:var(--space-3) 0;" onClick="{{ item.go }}">
+              <i class="{{ item.icon }}" style="font-size:18px;color: {{ item.color }};"></i>
+              <span style="font-size:15px;color: {{ item.color }};font-weight: {{ item.weight }};">{{ item.label }}</span>
+            </button>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+    </sc-if>
+
+    <div style="flex:1;padding: {{ contentPad }};min-width:0;">
+
+      <sc-if value="{{ view_dashboard }}" hint-placeholder-val="{{ true }}" data-screen-label="Dashboard">
+        <h1 style="font-family:var(--font-heading);font-size:32px;margin:0 0 var(--space-2);">{{ dashboardTitle }}</h1>
+        <p style="color:var(--color-neutral-700);margin:0 0 var(--space-8);">{{ dashboardSubtitle }}</p>
+        <div style="display:grid;grid-template-columns:{{ statGridCols }};gap:var(--space-6) var(--space-6);margin-bottom:var(--space-8);padding-bottom:var(--space-8);border-bottom:1px solid var(--color-neutral-200);">
+          <sc-for list="{{ dashStats }}" as="s" hint-placeholder-count="6">
+            <div>
+              <div style="font-size:12px;color:var(--color-neutral-600);text-transform:uppercase;letter-spacing:0.05em;">{{ s.label }}</div>
+              <div style="font-family:var(--font-heading);font-size:30px;margin-top:var(--space-1);color: {{ s.color }};">{{ s.value }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:grid;grid-template-columns:{{ widgetGridCols }};gap:var(--space-8);">
+          <div>
+            <h3 style="font-family:var(--font-heading);font-size:18px;margin:0 0 var(--space-4);">Cases by status</h3>
+            <sc-for list="{{ casesByStatus }}" as="b" hint-placeholder-count="6">
+              <div style="margin-bottom:var(--space-4);">
+                <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;"><span>{{ b.label }}</span><span>{{ b.count }}</span></div>
+                <div style="background:var(--color-neutral-200);height:8px;border-radius:2px;"><div style="background:var(--color-accent);height:8px;border-radius:2px;width: {{ b.pct }};"></div></div>
+              </div>
+            </sc-for>
+            <h3 style="font-family:var(--font-heading);font-size:18px;margin:var(--space-8) 0 var(--space-4);">Monthly revenue</h3>
+            <div style="display:flex;align-items:flex-end;gap:var(--space-3);height:120px;">
+              <sc-for list="{{ revenueBars }}" as="rb" hint-placeholder-count="6">
+                <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;">
+                  <div style="background:var(--color-accent-2);width:100%;border-radius:2px 2px 0 0;height: {{ rb.h }};"></div>
+                  <span style="font-size:11px;color:var(--color-neutral-600);">{{ rb.label }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div>
+            <h3 style="font-family:var(--font-heading);font-size:18px;margin:0 0 var(--space-4);">Court dates this week</h3>
+            <sc-for list="{{ courtDatesWeek }}" as="h" hint-placeholder-count="4">
+              <div style="padding:var(--space-3) 0;border-bottom:1px solid var(--color-neutral-200);">
+                <div style="font-size:14px;font-weight:600;">{{ h.caseTitle }}</div>
+                <div style="font-size:13px;color:var(--color-neutral-700);margin-top:3px;">{{ h.date }} · {{ h.court }} · {{ h.advocate }}</div>
+              </div>
+            </sc-for>
+            <h3 style="font-family:var(--font-heading);font-size:18px;margin:var(--space-8) 0 var(--space-4);">Advocate workload</h3>
+            <sc-for list="{{ advocateWorkload }}" as="w" hint-placeholder-count="4">
+              <div style="display:flex;justify-content:space-between;padding:var(--space-3) 0;border-bottom:1px solid var(--color-neutral-200);font-size:14px;">
+                <span>{{ w.name }}</span><span style="color:var(--color-neutral-700);">{{ w.count }} active cases</span>
+              </div>
+            </sc-for>
+            <h3 style="font-family:var(--font-heading);font-size:18px;margin:var(--space-8) 0 var(--space-4);">Recent activity</h3>
+            <sc-for list="{{ recentActivity }}" as="a" hint-placeholder-count="5">
+              <div style="font-size:13px;color:var(--color-neutral-700);padding:4px 0;">{{ a }}</div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ view_clients }}" hint-placeholder-val="{{ false }}" data-screen-label="Clients">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:var(--space-4);">
+          <h1 style="font-family:var(--font-heading);font-size:32px;margin:0;">Clients</h1>
+          <span class="btn btn-primary"><i class="ph-duotone ph-plus"></i> New client</span>
+        </div>
+        <div style="display:flex;gap:var(--space-2);margin-bottom:var(--space-4);">
+          <button style="all:unset;cursor:pointer;" onClick="{{ setClientTabAll }}"><span class="{{ clientTabAllClass }}">All</span></button>
+          <button style="all:unset;cursor:pointer;" onClick="{{ setClientTabIndividual }}"><span class="{{ clientTabIndClass }}">Individual</span></button>
+          <button style="all:unset;cursor:pointer;" onClick="{{ setClientTabCorporate }}"><span class="{{ clientTabCorpClass }}">Corporate</span></button>
+        </div>
+        <table class="table">
+          <thead><tr><th>Client #</th><th>Name</th><th>Type</th><th>Contact</th><th>Active cases</th><th></th></tr></thead>
+          <tbody>
+            <sc-for list="{{ filteredClients }}" as="c" hint-placeholder-count="6">
+              <tr>
+                <td>{{ c.number }}</td><td>{{ c.name }}</td><td><span class="{{ c.typeTagClass }}">{{ c.typeLabel }}</span></td><td>{{ c.contact }}</td><td>{{ c.activeCases }}</td>
+                <td><button style="all:unset;cursor:pointer;" onClick="{{ c.open }}"><span class="btn btn-ghost">View</span></button></td>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+      </sc-if>
+
+      <sc-if value="{{ view_clientDetail }}" hint-placeholder-val="{{ false }}" data-screen-label="Client detail">
+        <button style="all:unset;cursor:pointer;margin-bottom:var(--space-3);" onClick="{{ backToClients }}"><span style="color:var(--color-accent-700);font-size:14px;">&larr; Back to clients</span></button>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div style="font-size:13px;color:var(--color-neutral-600);">{{ selectedClient.typeLabel }} · #{{ selectedClient.number }}</div>
+            <h1 style="font-family:var(--font-heading);font-size:32px;margin:2px 0 var(--space-1);">{{ selectedClient.name }}</h1>
+            <div style="color:var(--color-neutral-700);font-size:14px;">{{ selectedClient.contact }} · {{ selectedClient.email }} · {{ selectedClient.phone }}</div>
+          </div>
+          <span class="tag tag-accent-2">{{ selectedClient.conflictStatus }}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:{{ detailGridCols }};gap:var(--space-6);margin-top:var(--space-6);">
+          <div>
+            <h3 style="font-family:var(--font-heading);font-size:18px;">Cases</h3>
+            <sc-for list="{{ selectedClient.cases }}" as="cc" hint-placeholder-count="2">
+              <div style="padding:var(--space-2) 0;border-bottom:1px solid var(--color-neutral-200);display:flex;justify-content:space-between;">
+                <span style="font-size:14px;">{{ cc.title }}</span><span class="{{ cc.statusTagClass }}">{{ cc.status }}</span>
+              </div>
+            </sc-for>
+            <h3 style="font-family:var(--font-heading);font-size:18px;margin-top:var(--space-6);">Documents</h3>
+            <sc-for list="{{ selectedClient.documents }}" as="d" hint-placeholder-count="2">
+              <div style="font-size:14px;padding:4px 0;color:var(--color-neutral-700);">{{ d }}</div>
+            </sc-for>
+          </div>
+          <div>
+            <h3 style="font-family:var(--font-heading);font-size:18px;">Engagement history</h3>
+            <sc-for list="{{ selectedClient.engagements }}" as="e" hint-placeholder-count="3">
+              <div style="font-size:13px;padding:6px 0;border-bottom:1px solid var(--color-neutral-200);"><span style="color:var(--color-neutral-600);">{{ e.date }}</span> — {{ e.text }}</div>
+            </sc-for>
+            <h3 style="font-family:var(--font-heading);font-size:18px;margin-top:var(--space-6);">Contacts</h3>
+            <sc-for list="{{ selectedClient.contacts }}" as="ct" hint-placeholder-count="2">
+              <div style="font-size:14px;padding:4px 0;">{{ ct.name }} — {{ ct.role }}</div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ view_cases }}" hint-placeholder-val="{{ false }}" data-screen-label="Cases">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:var(--space-4);flex-wrap:wrap;gap:var(--space-3);">
+          <h1 style="font-family:var(--font-heading);font-size:32px;margin:0;">{{ casesTitle }}</h1>
+          <span class="btn btn-primary"><i class="ph-duotone ph-plus"></i> New case</span>
+        </div>
+        <div style="display:flex;gap:var(--space-2);margin-bottom:var(--space-4);flex-wrap:wrap;">
+          <sc-for list="{{ caseStatusFilters }}" as="f" hint-placeholder-count="7">
+            <button style="all:unset;cursor:pointer;" onClick="{{ f.go }}"><span class="{{ f.tagClass }}">{{ f.label }}</span></button>
+          </sc-for>
+        </div>
+        <table class="table">
+          <thead><tr><th>Case #</th><th>Title</th><th>Type</th><th>Court</th><th>Advocate</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            <sc-for list="{{ filteredCases }}" as="c" hint-placeholder-count="6">
+              <tr>
+                <td>{{ c.number }}</td><td>{{ c.title }}</td><td>{{ c.type }}</td><td>{{ c.court }}</td><td>{{ c.advocate }}</td>
+                <td><span class="{{ c.statusTagClass }}">{{ c.status }}</span></td>
+                <td><button style="all:unset;cursor:pointer;" onClick="{{ c.open }}"><span class="btn btn-ghost">Open</span></button></td>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+      </sc-if>
+
+      <sc-if value="{{ view_caseDetail }}" hint-placeholder-val="{{ false }}" data-screen-label="Case detail">
+        <button style="all:unset;cursor:pointer;margin-bottom:var(--space-3);" onClick="{{ backToCases }}"><span style="color:var(--color-accent-700);font-size:14px;">&larr; Back to cases</span></button>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:var(--space-3);">
+          <div>
+            <div style="font-size:13px;color:var(--color-neutral-600);">#{{ selectedCase.number }} · {{ selectedCase.type }} · {{ selectedCase.practiceArea }}</div>
+            <h1 style="font-family:var(--font-heading);font-size:30px;margin:2px 0 var(--space-1);">{{ selectedCase.title }}</h1>
+            <div style="color:var(--color-neutral-700);font-size:14px;">{{ selectedCase.court }} · {{ selectedCase.judge }} · Opposing: {{ selectedCase.opposingCounsel }} · Filed {{ selectedCase.filed }}</div>
+          </div>
+          <span class="{{ selectedCase.statusTagClass }}">{{ selectedCase.status }}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:{{ detailGridCols }};gap:var(--space-6);margin-top:var(--space-6);">
+          <div>
+            <h3 style="font-family:var(--font-heading);font-size:18px;">Case timeline</h3>
+            <sc-for list="{{ selectedCase.timeline }}" as="t" hint-placeholder-count="4">
+              <div style="display:flex;gap:var(--space-3);padding:var(--space-2) 0;border-bottom:1px solid var(--color-neutral-200);">
+                <span style="font-size:13px;color:var(--color-neutral-600);width:90px;flex-shrink:0;">{{ t.date }}</span>
+                <span style="font-size:14px;">{{ t.text }}</span>
+              </div>
+            </sc-for>
+            <h3 style="font-family:var(--font-heading);font-size:18px;margin-top:var(--space-6);">Internal notes</h3>
+            <sc-for list="{{ selectedCase.notes }}" as="n" hint-placeholder-count="2">
+              <div style="font-size:13px;padding:6px 0;color:var(--color-neutral-700);">{{ n }}</div>
+            </sc-for>
+          </div>
+          <div>
+            <h3 style="font-family:var(--font-heading);font-size:18px;">Hearing history</h3>
+            <sc-for list="{{ selectedCase.hearings }}" as="h" hint-placeholder-count="2">
+              <div style="font-size:13px;padding:6px 0;border-bottom:1px solid var(--color-neutral-200);">{{ h.date }} — {{ h.court }} ({{ h.outcome }})</div>
+            </sc-for>
+            <h3 style="font-family:var(--font-heading);font-size:18px;margin-top:var(--space-6);">Related documents</h3>
+            <sc-for list="{{ selectedCase.documents }}" as="d" hint-placeholder-count="2">
+              <div style="font-size:13px;padding:4px 0;color:var(--color-neutral-700);">{{ d }}</div>
+            </sc-for>
+            <h3 style="font-family:var(--font-heading);font-size:18px;margin-top:var(--space-6);">Related invoices</h3>
+            <sc-for list="{{ selectedCase.invoices }}" as="inv" hint-placeholder-count="2">
+              <div style="font-size:13px;padding:4px 0;color:var(--color-neutral-700);">{{ inv }}</div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ view_documents }}" hint-placeholder-val="{{ false }}" data-screen-label="Documents">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:var(--space-4);flex-wrap:wrap;gap:var(--space-3);">
+          <h1 style="font-family:var(--font-heading);font-size:32px;margin:0;">Documents</h1>
+          <span class="btn btn-primary"><i class="ph-duotone ph-upload-simple"></i> Upload</span>
+        </div>
+        <div style="display:flex;gap:var(--space-2);margin-bottom:var(--space-4);flex-wrap:wrap;">
+          <sc-for list="{{ docCategoryFilters }}" as="f" hint-placeholder-count="7">
+            <button style="all:unset;cursor:pointer;" onClick="{{ f.go }}"><span class="{{ f.tagClass }}">{{ f.label }}</span></button>
+          </sc-for>
+        </div>
+        <div style="display:grid;grid-template-columns:{{ docGridCols }};gap:var(--space-4);">
+          <sc-for list="{{ filteredDocuments }}" as="d" hint-placeholder-count="6">
+            <div class="card elev-sm" style="cursor:pointer;" onClick="{{ d.open }}">
+              <div class="card-kicker">{{ d.category }}</div>
+              <div class="card-title" style="font-size:16px;">{{ d.name }}</div>
+              <div class="card-meta">{{ d.case }} · v{{ d.version }} · {{ d.date }}</div>
+              <div style="margin-top:var(--space-2);"><span class="{{ d.sigTagClass }}">{{ d.sigStatus }}</span></div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ view_docDetail }}" hint-placeholder-val="{{ false }}" data-screen-label="Document detail">
+        <button style="all:unset;cursor:pointer;margin-bottom:var(--space-3);" onClick="{{ backToDocs }}"><span style="color:var(--color-accent-700);font-size:14px;">&larr; Back to documents</span></button>
+        <h1 style="font-family:var(--font-heading);font-size:28px;margin:0 0 var(--space-2);">{{ selectedDoc.name }}</h1>
+        <div style="color:var(--color-neutral-700);font-size:14px;margin-bottom:var(--space-4);">{{ selectedDoc.category }} · {{ selectedDoc.case }} · uploaded {{ selectedDoc.date }}</div>
+        <div style="display:flex;gap:var(--space-2);margin-bottom:var(--space-4);">
+          <span class="btn btn-secondary"><i class="ph-duotone ph-download-simple"></i> Download</span>
+          <span class="btn btn-ghost"><i class="ph-duotone ph-signature"></i> Request e-signature</span>
+        </div>
+        <h3 style="font-family:var(--font-heading);font-size:18px;">Version history</h3>
+        <sc-for list="{{ selectedDoc.versions }}" as="v" hint-placeholder-count="3">
+          <div style="font-size:14px;padding:6px 0;border-bottom:1px solid var(--color-neutral-200);">v{{ v.n }} — {{ v.date }} by {{ v.by }}</div>
+        </sc-for>
+        <h3 style="font-family:var(--font-heading);font-size:18px;margin-top:var(--space-4);">Tags</h3>
+        <div style="display:flex;gap:var(--space-2);"><sc-for list="{{ selectedDoc.tags }}" as="t" hint-placeholder-count="3"><span class="tag tag-neutral">{{ t }}</span></sc-for></div>
+      </sc-if>
+
+      <sc-if value="{{ view_billing }}" hint-placeholder-val="{{ false }}" data-screen-label="Billing">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:var(--space-4);flex-wrap:wrap;gap:var(--space-3);">
+          <h1 style="font-family:var(--font-heading);font-size:32px;margin:0;">Billing &amp; Accounting</h1>
+          <span class="btn btn-primary"><i class="ph-duotone ph-file-plus"></i> New invoice</span>
+        </div>
+        <div style="display:grid;grid-template-columns:{{ statGridCols }};gap:var(--space-4);margin-bottom:var(--space-6);">
+          <sc-for list="{{ billingStats }}" as="s" hint-placeholder-count="4">
+            <div>
+              <div style="font-size:12px;color:var(--color-neutral-600);text-transform:uppercase;letter-spacing:0.05em;">{{ s.label }}</div>
+              <div style="font-family:var(--font-heading);font-size:26px;margin-top:var(--space-1);color: {{ s.color }};">{{ s.value }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <h3 style="font-family:var(--font-heading);font-size:18px;">Invoices</h3>
+        <table class="table">
+          <thead><tr><th>Invoice #</th><th>Client</th><th>Case</th><th>Amount</th><th>Method</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            <sc-for list="{{ invoices }}" as="inv" hint-placeholder-count="6">
+              <tr>
+                <td>{{ inv.number }}</td><td>{{ inv.client }}</td><td>{{ inv.case }}</td><td>{{ inv.amountFmt }}</td><td>{{ inv.method }}</td>
+                <td><span class="{{ inv.tagClass }}">{{ inv.status }}</span></td>
+                <td><button style="all:unset;cursor:pointer;" onClick="{{ inv.open }}"><span class="btn btn-ghost">Open</span></button></td>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+        <h3 style="font-family:var(--font-heading);font-size:18px;margin-top:var(--space-6);">Trust accounts</h3>
+        <table class="table">
+          <thead><tr><th>Client</th><th>Deposits</th><th>Withdrawals</th><th>Balance</th></tr></thead>
+          <tbody>
+            <sc-for list="{{ trustBalances }}" as="t" hint-placeholder-count="3">
+              <tr><td>{{ t.client }}</td><td>{{ t.depositsFmt }}</td><td>{{ t.withdrawalsFmt }}</td><td style="font-weight:600;">{{ t.balanceFmt }}</td></tr>
+            </sc-for>
+          </tbody>
+        </table>
+        <h3 style="font-family:var(--font-heading);font-size:18px;margin-top:var(--space-6);">Fee structures on file</h3>
+        <div style="display:flex;gap:var(--space-2);flex-wrap:wrap;"><span class="tag tag-outline">Hourly billing</span><span class="tag tag-outline">Fixed fee</span><span class="tag tag-outline">Retainer</span><span class="tag tag-outline">Contingency fee</span></div>
+      </sc-if>
+
+      <sc-if value="{{ view_invoiceDetail }}" hint-placeholder-val="{{ false }}" data-screen-label="Invoice detail">
+        <button style="all:unset;cursor:pointer;margin-bottom:var(--space-3);" onClick="{{ backToBilling }}"><span style="color:var(--color-accent-700);font-size:14px;">&larr; Back to billing</span></button>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <h1 style="font-family:var(--font-heading);font-size:28px;margin:0 0 var(--space-1);">Invoice {{ selectedInvoice.number }}</h1>
+            <div style="color:var(--color-neutral-700);font-size:14px;">{{ selectedInvoice.client }} · {{ selectedInvoice.case }}</div>
+          </div>
+          <span class="{{ selectedInvoice.tagClass }}">{{ selectedInvoice.status }}</span>
+        </div>
+        <table class="table" style="margin-top:var(--space-4);">
+          <thead><tr><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead>
+          <tbody>
+            <sc-for list="{{ selectedInvoice.lineItems }}" as="li" hint-placeholder-count="3">
+              <tr><td>{{ li.desc }}</td><td>{{ li.qty }}</td><td>{{ li.rateFmt }}</td><td>{{ li.amountFmt }}</td></tr>
+            </sc-for>
+          </tbody>
+        </table>
+        <div style="text-align:right;font-family:var(--font-heading);font-size:22px;margin:var(--space-4) 0;">Total: {{ selectedInvoice.amountFmt }}</div>
+        <sc-if value="{{ canMarkPaid }}" hint-placeholder-val="{{ true }}">
+          <button style="all:unset;cursor:pointer;" onClick="{{ selectedInvoice.markPaid }}"><span class="btn btn-primary">Mark as paid</span></button>
+        </sc-if>
+      </sc-if>
+
+      <sc-if value="{{ view_calendar }}" hint-placeholder-val="{{ false }}" data-screen-label="Calendar">
+        <h1 style="font-family:var(--font-heading);font-size:32px;margin:0 0 var(--space-4);">Court &amp; Hearing Calendar</h1>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:var(--space-2);margin-bottom:var(--space-6);">
+          <sc-for list="{{ weekDays }}" as="d" hint-placeholder-count="7">
+            <div style="text-align:center;padding:var(--space-3) var(--space-1);background: {{ d.bg }};border-radius:var(--radius-md);">
+              <div style="font-size:11px;color:var(--color-neutral-600);text-transform:uppercase;">{{ d.label }}</div>
+              <div style="font-family:var(--font-heading);font-size:20px;margin:4px 0;">{{ d.date }}</div>
+              <div style="font-size:11px;color:var(--color-accent-700);">{{ d.count }} hearings</div>
+            </div>
+          </sc-for>
+        </div>
+        <h3 style="font-family:var(--font-heading);font-size:18px;">Court diary</h3>
+        <sc-for list="{{ hearings }}" as="h" hint-placeholder-count="6">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:var(--space-3) 0;border-bottom:1px solid var(--color-neutral-200);cursor:pointer;" onClick="{{ h.open }}">
+            <div>
+              <div style="font-size:15px;font-weight:600;">{{ h.caseTitle }}</div>
+              <div style="font-size:13px;color:var(--color-neutral-700);">{{ h.court }} · Room {{ h.room }} · {{ h.judge }} · {{ h.advocate }}</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-size:14px;">{{ h.date }} {{ h.time }}</div>
+              <span class="tag tag-outline">{{ h.status }}</span>
+            </div>
+          </div>
+        </sc-for>
+      </sc-if>
+
+      <sc-if value="{{ view_hearingDetail }}" hint-placeholder-val="{{ false }}" data-screen-label="Hearing detail">
+        <button style="all:unset;cursor:pointer;margin-bottom:var(--space-3);" onClick="{{ backToCalendar }}"><span style="color:var(--color-accent-700);font-size:14px;">&larr; Back to calendar</span></button>
+        <h1 style="font-family:var(--font-heading);font-size:28px;margin:0 0 var(--space-2);">{{ selectedHearing.caseTitle }}</h1>
+        <div style="color:var(--color-neutral-700);font-size:14px;line-height:1.8;">
+          {{ selectedHearing.court }}, Room {{ selectedHearing.room }}<br/>
+          {{ selectedHearing.date }} at {{ selectedHearing.time }}<br/>
+          Presiding: {{ selectedHearing.judge }}<br/>
+          Assigned advocate: {{ selectedHearing.advocate }}
+        </div>
+        <h3 style="font-family:var(--font-heading);font-size:18px;margin-top:var(--space-6);">Smart reminders</h3>
+        <div style="display:flex;gap:var(--space-2);flex-wrap:wrap;"><span class="tag tag-accent">Advocate — Email</span><span class="tag tag-accent">Client — SMS</span><span class="tag tag-accent">Assistant — WhatsApp</span></div>
+      </sc-if>
+
+      <sc-if value="{{ view_tasks }}" hint-placeholder-val="{{ false }}" data-screen-label="Tasks">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:var(--space-4);">
+          <h1 style="font-family:var(--font-heading);font-size:32px;margin:0;">Tasks &amp; Workflow</h1>
+          <span class="btn btn-primary"><i class="ph-duotone ph-plus"></i> New task</span>
+        </div>
+        <table class="table">
+          <thead><tr><th>Task</th><th>Case</th><th>Assignee</th><th>Priority</th><th>Due</th><th>Status</th></tr></thead>
+          <tbody>
+            <sc-for list="{{ tasks }}" as="t" hint-placeholder-count="8">
+              <tr><td>{{ t.title }}</td><td>{{ t.case }}</td><td>{{ t.assignee }}</td><td><span class="{{ t.priorityTagClass }}">{{ t.priority }}</span></td><td>{{ t.due }}</td><td>{{ t.status }}</td></tr>
+            </sc-for>
+          </tbody>
+        </table>
+      </sc-if>
+
+      <sc-if value="{{ view_time }}" hint-placeholder-val="{{ false }}" data-screen-label="Time tracking">
+        <h1 style="font-family:var(--font-heading);font-size:32px;margin:0 0 var(--space-4);">Time Tracking</h1>
+        <table class="table">
+          <thead><tr><th>Case</th><th>Lawyer</th><th>Activity</th><th>Start</th><th>End</th><th>Hours</th><th>Billable</th></tr></thead>
+          <tbody>
+            <sc-for list="{{ timeEntries }}" as="t" hint-placeholder-count="6">
+              <tr><td>{{ t.case }}</td><td>{{ t.lawyer }}</td><td>{{ t.activity }}</td><td>{{ t.start }}</td><td>{{ t.end }}</td><td>{{ t.hours }}</td><td><span class="{{ t.billableTagClass }}">{{ t.billableLabel }}</span></td></tr>
+            </sc-for>
+          </tbody>
+        </table>
+        <div style="margin-top:var(--space-4);font-size:15px;">Total billable hours this month: <strong>{{ totalBillableHours }}</strong></div>
+      </sc-if>
+
+      <sc-if value="{{ view_appointments }}" hint-placeholder-val="{{ false }}" data-screen-label="Appointments">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:var(--space-4);">
+          <h1 style="font-family:var(--font-heading);font-size:32px;margin:0;">Appointments</h1>
+          <span class="btn btn-primary"><i class="ph-duotone ph-calendar-plus"></i> Schedule</span>
+        </div>
+        <sc-for list="{{ appointments }}" as="a" hint-placeholder-count="5">
+          <div style="display:flex;justify-content:space-between;padding:var(--space-3) 0;border-bottom:1px solid var(--color-neutral-200);">
+            <div><div style="font-size:15px;font-weight:600;">{{ a.title }}</div><div style="font-size:13px;color:var(--color-neutral-700);">{{ a.with }} · {{ a.type }}</div></div>
+            <div style="font-size:14px;">{{ a.date }} {{ a.time }}</div>
+          </div>
+        </sc-for>
+      </sc-if>
+
+      <sc-if value="{{ view_communications }}" hint-placeholder-val="{{ false }}" data-screen-label="Communications">
+        <h1 style="font-family:var(--font-heading);font-size:32px;margin:0 0 var(--space-4);">Communications</h1>
+        <sc-for list="{{ communications }}" as="c" hint-placeholder-count="6">
+          <div style="display:flex;gap:var(--space-3);padding:var(--space-3) 0;border-bottom:1px solid var(--color-neutral-200);">
+            <i class="{{ c.icon }}" style="font-size:20px;color:var(--color-accent-700);margin-top:2px;"></i>
+            <div><div style="font-size:14px;"><strong>{{ c.channel }}</strong> — {{ c.with }}</div><div style="font-size:13px;color:var(--color-neutral-700);">{{ c.summary }} · {{ c.date }}</div></div>
+          </div>
+        </sc-for>
+      </sc-if>
+
+      <sc-if value="{{ view_reports }}" hint-placeholder-val="{{ false }}" data-screen-label="Reports">
+        <h1 style="font-family:var(--font-heading);font-size:32px;margin:0 0 var(--space-4);">Reporting &amp; Analytics</h1>
+        <div style="display:grid;grid-template-columns:{{ reportGridCols }};gap:var(--space-6);">
+          <div>
+            <h3 style="font-family:var(--font-heading);font-size:18px;">Case reports</h3>
+            <sc-for list="{{ caseReportLines }}" as="l" hint-placeholder-count="3"><div style="font-size:14px;padding:5px 0;color:var(--color-neutral-700);">{{ l }}</div></sc-for>
+          </div>
+          <div>
+            <h3 style="font-family:var(--font-heading);font-size:18px;">Financial reports</h3>
+            <sc-for list="{{ financialReportLines }}" as="l" hint-placeholder-count="3"><div style="font-size:14px;padding:5px 0;color:var(--color-neutral-700);">{{ l }}</div></sc-for>
+          </div>
+          <div>
+            <h3 style="font-family:var(--font-heading);font-size:18px;">Productivity reports</h3>
+            <sc-for list="{{ productivityReportLines }}" as="l" hint-placeholder-count="3"><div style="font-size:14px;padding:5px 0;color:var(--color-neutral-700);">{{ l }}</div></sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ view_knowledge }}" hint-placeholder-val="{{ false }}" data-screen-label="Knowledge base">
+        <h1 style="font-family:var(--font-heading);font-size:32px;margin:0 0 var(--space-4);">Legal Research &amp; Knowledge Base</h1>
+        <input class="input" placeholder="Search Acts, case law, templates, precedents…" style="width:100%;max-width:480px;margin-bottom:var(--space-4);"/>
+        <sc-for list="{{ knowledgeBase }}" as="k" hint-placeholder-count="5">
+          <div style="padding:var(--space-3) 0;border-bottom:1px solid var(--color-neutral-200);">
+            <div style="font-size:15px;font-weight:600;">{{ k.title }}</div>
+            <div style="font-size:13px;color:var(--color-neutral-700);">{{ k.category }} · {{ k.date }}</div>
+          </div>
+        </sc-for>
+      </sc-if>
+
+      <sc-if value="{{ view_compliance }}" hint-placeholder-val="{{ false }}" data-screen-label="Compliance">
+        <h1 style="font-family:var(--font-heading);font-size:32px;margin:0 0 var(--space-4);">Compliance &amp; Audit</h1>
+        <table class="table">
+          <thead><tr><th>Timestamp</th><th>User</th><th>Action</th><th>Detail</th></tr></thead>
+          <tbody>
+            <sc-for list="{{ auditLogs }}" as="a" hint-placeholder-count="6">
+              <tr><td>{{ a.time }}</td><td>{{ a.user }}</td><td>{{ a.action }}</td><td>{{ a.detail }}</td></tr>
+            </sc-for>
+          </tbody>
+        </table>
+      </sc-if>
+
+      <sc-if value="{{ view_notifications }}" hint-placeholder-val="{{ false }}" data-screen-label="Notifications">
+        <h1 style="font-family:var(--font-heading);font-size:32px;margin:0 0 var(--space-4);">Notifications</h1>
+        <sc-for list="{{ notifications }}" as="n" hint-placeholder-count="6">
+          <div style="display:flex;gap:var(--space-3);padding:var(--space-3) 0;border-bottom:1px solid var(--color-neutral-200);">
+            <i class="{{ n.icon }}" style="font-size:20px;color:var(--color-accent-2-700);margin-top:2px;"></i>
+            <div><div style="font-size:14px;">{{ n.text }}</div><div style="font-size:12px;color:var(--color-neutral-600);">{{ n.time }} · {{ n.channel }}</div></div>
+          </div>
+        </sc-for>
+      </sc-if>
+
+      <sc-if value="{{ view_hr }}" hint-placeholder-val="{{ false }}" data-screen-label="HR">
+        <h1 style="font-family:var(--font-heading);font-size:32px;margin:0 0 var(--space-4);">HR &amp; Staff Management</h1>
+        <table class="table">
+          <thead><tr><th>Name</th><th>Role</th><th>Active cases</th><th>Leave balance</th></tr></thead>
+          <tbody>
+            <sc-for list="{{ staff }}" as="s" hint-placeholder-count="6">
+              <tr><td>{{ s.name }}</td><td>{{ s.role }}</td><td>{{ s.cases }}</td><td>{{ s.leave }}</td></tr>
+            </sc-for>
+          </tbody>
+        </table>
+      </sc-if>
+
+      <sc-if value="{{ view_users }}" hint-placeholder-val="{{ false }}" data-screen-label="Users and settings">
+        <h1 style="font-family:var(--font-heading);font-size:32px;margin:0 0 var(--space-4);">Users &amp; Permissions</h1>
+        <table class="table">
+          <thead><tr><th>Name</th><th>Role</th><th>Access</th><th>Status</th></tr></thead>
+          <tbody>
+            <sc-for list="{{ userAccounts }}" as="u" hint-placeholder-count="7">
+              <tr><td>{{ u.name }}</td><td>{{ u.role }}</td><td>{{ u.access }}</td><td><span class="tag tag-accent">{{ u.status }}</span></td></tr>
+            </sc-for>
+          </tbody>
+        </table>
+        <h3 style="font-family:var(--font-heading);font-size:18px;margin-top:var(--space-6);">System settings</h3>
+        <div style="display:flex;flex-direction:column;gap:var(--space-3);max-width:420px;">
+          <div class="field"><label>Firm name</label><input class="input" value="OKLaw Advocates"/></div>
+          <div class="field"><label>Default currency</label><input class="input" value="KES"/></div>
+          <div class="field"><label>Notification channels</label><div class="seg"><span class="seg-opt">Email</span><span class="seg-opt">SMS</span><span class="seg-opt">WhatsApp</span></div></div>
+        </div>
+      </sc-if>
+
+    </div>
+  </div>
+</div>
+</sc-if>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+
+const KES = n => 'KES ' + n.toLocaleString();
+const ROLES = ["System Administrator","Managing Partner","Advocate/Lawyer","Legal Assistant/Paralegal","Finance Officer","Receptionist","Client Portal User"];
+
+const CLIENTS = [
+  {id:1,number:"CLT-1001",name:"Wanjiku Mwangi",type:"individual",contact:"Wanjiku Mwangi",email:"wanjiku.m@gmail.com",phone:"+254 722 445 109",activeCases:1,conflictStatus:"No conflict found"},
+  {id:2,number:"CLT-1002",name:"David Odhiambo",type:"individual",contact:"David Odhiambo",email:"d.odhiambo@yahoo.com",phone:"+254 733 208 771",activeCases:1,conflictStatus:"No conflict found"},
+  {id:3,number:"CLT-1003",name:"Grace Njeri",type:"individual",contact:"Grace Njeri",email:"grace.njeri@outlook.com",phone:"+254 711 990 232",activeCases:0,conflictStatus:"No conflict found"},
+  {id:4,number:"CLT-2001",name:"General Innovations Ltd",type:"corporate",contact:"Peter Kamau (CFO)",email:"pkamau@geninnovations.co.ke",phone:"+254 20 445 3021",activeCases:2,conflictStatus:"Cleared 12 Jun 2026"},
+  {id:5,number:"CLT-2002",name:"Rift Valley Logistics Ltd",type:"corporate",contact:"Amina Yusuf (Legal Officer)",email:"amina@riftlogistics.co.ke",phone:"+254 20 221 8890",activeCases:1,conflictStatus:"No conflict found"},
+  {id:6,number:"CLT-2003",name:"Coastal Agro Exports Ltd",type:"corporate",contact:"John Mwakio (MD)",email:"jmwakio@coastalagro.co.ke",phone:"+254 41 220 7743",activeCases:1,conflictStatus:"No conflict found"}
+];
+
+const CASES = [
+  {id:1,number:"OKL-2026-014",title:"Wanjiku Mwangi v. Nairobi Metro SACCO",type:"Civil",practiceArea:"Contract dispute",court:"Milimani Law Courts",judge:"Hon. J. Kimani",opposingCounsel:"Achieng & Partners",filed:"14 Feb 2026",status:"Hearing Scheduled",clientId:1,advocate:"Adv. Sarah Wanjiru"},
+  {id:2,number:"OKL-2026-021",title:"Republic v. David Odhiambo",type:"Criminal",practiceArea:"Criminal defence",court:"Milimani Law Courts - Criminal Div.",judge:"Hon. P. Otieno",opposingCounsel:"ODPP",filed:"3 Mar 2026",status:"Active",clientId:2,advocate:"Adv. Brian Kiptoo"},
+  {id:3,number:"OKL-2025-098",title:"In re Estate of Njeri Kamau",type:"Probate",practiceArea:"Succession",court:"Milimani High Court - Family Div.",judge:"Hon. L. Chebet",opposingCounsel:"N/A",filed:"20 Oct 2025",status:"Under Review",clientId:3,advocate:"Adv. Sarah Wanjiru"},
+  {id:4,number:"OKL-2026-005",title:"General Innovations Ltd v. Zenith Distributors Ltd",type:"Commercial",practiceArea:"Commercial litigation",court:"Milimani Commercial Court",judge:"Hon. M. Wafula",opposingCounsel:"Waweru & Co Advocates",filed:"9 Jan 2026",status:"Active",clientId:4,advocate:"Adv. Brian Kiptoo"},
+  {id:5,number:"OKL-2026-032",title:"General Innovations Ltd — KRA Tax Objection",type:"Tax",practiceArea:"Tax dispute",court:"Tax Appeals Tribunal",judge:"N/A",opposingCounsel:"KRA Legal",filed:"2 Apr 2026",status:"New",clientId:4,advocate:"Adv. Faith Achieng"},
+  {id:6,number:"OKL-2026-011",title:"Rift Valley Logistics Ltd — Labour Claim",type:"Labour",practiceArea:"Employment",court:"Employment & Labour Relations Court",judge:"Hon. R. Mutua",opposingCounsel:"Njoroge Advocates",filed:"28 Jan 2026",status:"Judgment Pending",clientId:5,advocate:"Adv. Faith Achieng"},
+  {id:7,number:"OKL-2026-040",title:"Coastal Agro Exports Ltd — Land Boundary Dispute",type:"Land",practiceArea:"Land law",court:"Environment & Land Court, Mombasa",judge:"Hon. S. Wafula",opposingCounsel:"Coastal Chambers",filed:"11 May 2026",status:"Hearing Scheduled",clientId:6,advocate:"Adv. Brian Kiptoo"},
+  {id:8,number:"OKL-2025-076",title:"Grace Njeri — Divorce & Custody",type:"Family",practiceArea:"Family law",court:"Milimani High Court - Family Div.",judge:"Hon. L. Chebet",opposingCounsel:"Kariuki & Associates",filed:"5 Sep 2025",status:"Closed",clientId:3,advocate:"Adv. Sarah Wanjiru"}
+];
+
+CASES.forEach(c=>{
+  c.timeline=[
+    {date:c.filed,text:"Case opened and assigned to "+c.advocate},
+    {date:"18 "+c.filed.split(' ').slice(1).join(' '),text:"Initial pleadings filed"},
+    {date:"—",text:"Discovery / document exchange in progress"}
+  ];
+  c.notes=["Client prefers email updates over calls.","Awaiting counter-affidavit from opposing counsel."];
+  c.hearings=[{date:"22 Jun 2026",court:c.court,outcome:"Adjourned"},{date:"10 May 2026",court:c.court,outcome:"Directions given"}];
+  c.documents=["Plaint / Statement of claim.pdf","Client instructions.docx","Bundle of documents.pdf"];
+  c.invoices=["INV-"+(3000+c.id)+" — "+KES(120000+c.id*15000)];
+});
+
+const HEARINGS = [
+  {id:1,caseId:1,caseTitle:"Wanjiku Mwangi v. Nairobi Metro SACCO",court:"Milimani Law Courts",room:"14",date:"19 Aug 2026",time:"9:00 AM",judge:"Hon. J. Kimani",advocate:"Adv. Sarah Wanjiru",status:"Confirmed"},
+  {id:2,caseId:4,caseTitle:"General Innovations Ltd v. Zenith Distributors Ltd",court:"Milimani Commercial Court",room:"6",date:"20 Aug 2026",time:"11:30 AM",judge:"Hon. M. Wafula",advocate:"Adv. Brian Kiptoo",status:"Confirmed"},
+  {id:3,caseId:7,caseTitle:"Coastal Agro Exports Ltd — Land Boundary Dispute",court:"Environment & Land Court, Mombasa",room:"2",date:"21 Aug 2026",time:"10:00 AM",judge:"Hon. S. Wafula",advocate:"Adv. Brian Kiptoo",status:"Confirmed"},
+  {id:4,caseId:6,caseTitle:"Rift Valley Logistics Ltd — Labour Claim",court:"Employment & Labour Relations Court",room:"3",date:"22 Aug 2026",time:"2:00 PM",judge:"Hon. R. Mutua",advocate:"Adv. Faith Achieng",status:"Awaiting confirmation"},
+  {id:5,caseId:2,caseTitle:"Republic v. David Odhiambo",court:"Milimani Law Courts - Criminal Div.",room:"9",date:"24 Aug 2026",time:"9:30 AM",judge:"Hon. P. Otieno",advocate:"Adv. Brian Kiptoo",status:"Confirmed"},
+  {id:6,caseId:3,caseTitle:"In re Estate of Njeri Kamau",court:"Milimani High Court - Family Div.",room:"11",date:"25 Aug 2026",time:"10:30 AM",judge:"Hon. L. Chebet",advocate:"Adv. Sarah Wanjiru",status:"Confirmed"}
+];
+
+const DOCUMENTS = [
+  {id:1,name:"Plaint - Wanjiku v Nairobi Metro SACCO.pdf",category:"Pleadings",case:"OKL-2026-014",version:2,date:"16 Feb 2026",sigStatus:"Signed",sigTagClass:"tag tag-accent"},
+  {id:2,name:"Master Services Agreement - Zenith.docx",category:"Contracts",case:"OKL-2026-005",version:3,date:"12 Jan 2026",sigStatus:"Pending signature",sigTagClass:"tag tag-outline"},
+  {id:3,name:"Affidavit of Service - Odhiambo.pdf",category:"Affidavits",case:"OKL-2026-021",version:1,date:"6 Mar 2026",sigStatus:"Signed",sigTagClass:"tag tag-accent"},
+  {id:4,name:"Witness Statement - J. Mwangi.pdf",category:"Witness Statements",case:"OKL-2026-014",version:1,date:"2 Mar 2026",sigStatus:"Signed",sigTagClass:"tag tag-accent"},
+  {id:5,name:"Judgment - Estate of Njeri Kamau.pdf",category:"Judgments",case:"OKL-2025-098",version:1,date:"1 Jun 2026",sigStatus:"Final",sigTagClass:"tag tag-accent"},
+  {id:6,name:"Correspondence - KRA Objection Letter.pdf",category:"Correspondence",case:"OKL-2026-032",version:1,date:"4 Apr 2026",sigStatus:"Signed",sigTagClass:"tag tag-accent"},
+  {id:7,name:"Boundary Survey Report.pdf",category:"Correspondence",case:"OKL-2026-040",version:1,date:"14 May 2026",sigStatus:"Signed",sigTagClass:"tag tag-accent"},
+  {id:8,name:"Employment Contract - Rift Valley.pdf",category:"Contracts",case:"OKL-2026-011",version:2,date:"30 Jan 2026",sigStatus:"Pending signature",sigTagClass:"tag tag-outline"}
+];
+DOCUMENTS.forEach(d=>{d.versions=[{n:d.version,date:d.date,by:"Adv. Sarah Wanjiru"},{n:1,date:"earlier draft",by:"Legal Assistant"}];d.tags=[d.category,"Client-facing"];});
+
+const INVOICES = [
+  {id:1,number:"INV-3001",client:"Wanjiku Mwangi",case:"OKL-2026-014",amount:120000,method:"M-Pesa",status:"Paid"},
+  {id:2,number:"INV-3002",client:"General Innovations Ltd",case:"OKL-2026-005",amount:480000,method:"Bank Transfer",status:"Partially Paid"},
+  {id:3,number:"INV-3003",client:"David Odhiambo",case:"OKL-2026-021",amount:95000,method:"Cash",status:"Overdue"},
+  {id:4,number:"INV-3004",client:"Rift Valley Logistics Ltd",case:"OKL-2026-011",amount:265000,method:"Bank Transfer",status:"Paid"},
+  {id:5,number:"INV-3005",client:"Coastal Agro Exports Ltd",case:"OKL-2026-040",amount:340000,method:"Cheque",status:"Partially Paid"},
+  {id:6,number:"INV-3006",client:"General Innovations Ltd",case:"OKL-2026-032",amount:150000,method:"Card",status:"Overdue"}
+];
+const TAG_BY_STATUS = {Paid:"tag tag-accent",Overdue:"tag tag-accent-2","Partially Paid":"tag tag-outline"};
+INVOICES.forEach(inv=>{
+  inv.tagClass=TAG_BY_STATUS[inv.status]||"tag tag-neutral";
+  inv.lineItems=[{desc:"Professional fees",qty:1,rate:inv.amount*0.8,amount:inv.amount*0.8},{desc:"Filing & disbursements",qty:1,rate:inv.amount*0.2,amount:inv.amount*0.2}];
+  inv.lineItems.forEach(li=>{li.rateFmt=KES(li.rate);li.amountFmt=KES(li.amount);});
+});
+
+const TASKS = [
+  {id:1,title:"Draft affidavit",case:"OKL-2026-014",assignee:"Legal Assistant - Mercy",priority:"High",due:"20 Aug 2026",status:"In progress"},
+  {id:2,title:"File documents at registry",case:"OKL-2026-005",assignee:"Clerk - James",priority:"Medium",due:"21 Aug 2026",status:"Not started"},
+  {id:3,title:"Attend hearing",case:"OKL-2026-040",assignee:"Adv. Brian Kiptoo",priority:"High",due:"21 Aug 2026",status:"Scheduled"},
+  {id:4,title:"Follow up client for documents",case:"OKL-2026-032",assignee:"Legal Assistant - Mercy",priority:"Low",due:"22 Aug 2026",status:"Not started"},
+  {id:5,title:"Prepare bundle of documents",case:"OKL-2026-021",assignee:"Adv. Brian Kiptoo",priority:"High",due:"23 Aug 2026",status:"In progress"},
+  {id:6,title:"Reconcile trust account",case:"—",assignee:"Finance - Peter",priority:"Medium",due:"25 Aug 2026",status:"Not started"},
+  {id:7,title:"Draft settlement letter",case:"OKL-2026-011",assignee:"Adv. Faith Achieng",priority:"High",due:"26 Aug 2026",status:"In progress"},
+  {id:8,title:"Update client on case progress",case:"OKL-2025-098",assignee:"Adv. Sarah Wanjiru",priority:"Low",due:"27 Aug 2026",status:"Not started"}
+];
+const PRIORITY_TAG = {High:"tag tag-accent-2",Medium:"tag tag-outline",Low:"tag tag-neutral"};
+TASKS.forEach(t=>t.priorityTagClass=PRIORITY_TAG[t.priority]);
+
+const TIME_ENTRIES = [
+  {id:1,case:"OKL-2026-014",lawyer:"Adv. Sarah Wanjiru",activity:"Drafting",start:"9:00",end:"11:30",hours:2.5,billable:true},
+  {id:2,case:"OKL-2026-021",lawyer:"Adv. Brian Kiptoo",activity:"Court attendance",start:"9:00",end:"12:00",hours:3,billable:true},
+  {id:3,case:"OKL-2026-005",lawyer:"Adv. Brian Kiptoo",activity:"Research",start:"14:00",end:"16:00",hours:2,billable:true},
+  {id:4,case:"—",lawyer:"Legal Assistant - Mercy",activity:"Admin",start:"10:00",end:"10:30",hours:0.5,billable:false},
+  {id:5,case:"OKL-2026-032",lawyer:"Adv. Faith Achieng",activity:"Consultation",start:"13:00",end:"14:00",hours:1,billable:true},
+  {id:6,case:"OKL-2026-040",lawyer:"Adv. Brian Kiptoo",activity:"Drafting",start:"8:00",end:"10:00",hours:2,billable:true}
+];
+TIME_ENTRIES.forEach(t=>{t.billableTagClass=t.billable?"tag tag-accent":"tag tag-neutral";t.billableLabel=t.billable?"Billable":"Non-billable";});
+
+const TRUST = [
+  {client:"Wanjiku Mwangi",deposits:50000,withdrawals:20000},
+  {client:"General Innovations Ltd",deposits:300000,withdrawals:180000},
+  {client:"Coastal Agro Exports Ltd",deposits:150000,withdrawals:60000}
+];
+TRUST.forEach(t=>{t.balance=t.deposits-t.withdrawals;t.depositsFmt=KES(t.deposits);t.withdrawalsFmt=KES(t.withdrawals);t.balanceFmt=KES(t.balance);});
+
+const APPOINTMENTS = [
+  {id:1,title:"New client consultation",with:"Peter Kamau (Gen. Innovations)",type:"Client consultation",date:"19 Aug 2026",time:"9:00 AM"},
+  {id:2,title:"Internal case strategy meeting",with:"Adv. Sarah Wanjiru, Adv. Brian Kiptoo",type:"Internal meeting",date:"19 Aug 2026",time:"3:00 PM"},
+  {id:3,title:"Court appearance",with:"Milimani Law Courts",type:"Court appearance",date:"20 Aug 2026",time:"11:30 AM"},
+  {id:4,title:"Client consultation - divorce matter",with:"Grace Njeri",type:"Client consultation",date:"21 Aug 2026",time:"1:00 PM"},
+  {id:5,title:"Partner performance review",with:"Managing Partner",type:"Internal meeting",date:"22 Aug 2026",time:"10:00 AM"}
+];
+
+const COMMUNICATIONS = [
+  {id:1,channel:"Email",with:"Wanjiku Mwangi",summary:"Sent hearing date confirmation",date:"17 Aug 2026",icon:"ph-duotone ph-envelope"},
+  {id:2,channel:"WhatsApp",with:"General Innovations Ltd",summary:"Shared invoice INV-3002",date:"16 Aug 2026",icon:"ph-duotone ph-whatsapp-logo"},
+  {id:3,channel:"Call",with:"David Odhiambo",summary:"Discussed plea strategy",date:"15 Aug 2026",icon:"ph-duotone ph-phone"},
+  {id:4,channel:"Meeting",with:"Coastal Agro Exports Ltd",summary:"Site visit debrief",date:"14 Aug 2026",icon:"ph-duotone ph-users-three"},
+  {id:5,channel:"SMS",with:"Rift Valley Logistics Ltd",summary:"Reminder: hearing tomorrow",date:"13 Aug 2026",icon:"ph-duotone ph-chat-circle-text"},
+  {id:6,channel:"Email",with:"Grace Njeri",summary:"Requested updated ID copy",date:"12 Aug 2026",icon:"ph-duotone ph-envelope"}
+];
+
+const KNOWLEDGE = [
+  {id:1,title:"Employment Act, 2007 (annotated)",category:"Acts",date:"Updated Jan 2026"},
+  {id:2,title:"Civil Procedure Rules — pleading templates",category:"Legal templates",date:"Updated Mar 2026"},
+  {id:3,title:"Land Registration Act, 2012",category:"Acts",date:"Updated Feb 2026"},
+  {id:4,title:"Court of Appeal — recent commercial precedents digest",category:"Case law",date:"Updated Jul 2026"},
+  {id:5,title:"KRA tax objection procedure — firm precedent bank",category:"Precedents",date:"Updated Apr 2026"}
+];
+
+const AUDIT = [
+  {time:"18 Aug 2026 08:12",user:"Adv. Sarah Wanjiru",action:"Login",detail:"Successful login from Nairobi office"},
+  {time:"18 Aug 2026 08:40",user:"Legal Assistant - Mercy",action:"Document uploaded",detail:"Plaint - Wanjiku v Nairobi Metro SACCO.pdf"},
+  {time:"17 Aug 2026 16:02",user:"Finance - Peter",action:"Payment recorded",detail:"INV-3001 marked Paid"},
+  {time:"17 Aug 2026 11:20",user:"Adv. Brian Kiptoo",action:"Case updated",detail:"OKL-2026-005 status changed to Active"},
+  {time:"16 Aug 2026 09:55",user:"System Administrator",action:"Permission changed",detail:"Granted Finance Officer billing access"},
+  {time:"15 Aug 2026 14:31",user:"Receptionist - Ann",action:"Client intake",detail:"New client CLT-1003 created"}
+];
+
+const NOTIFICATIONS = [
+  {text:"Hearing tomorrow: Wanjiku Mwangi v. Nairobi Metro SACCO, 9:00 AM",time:"2h ago",channel:"Email",icon:"ph-duotone ph-gavel"},
+  {text:"Invoice INV-3003 is now overdue",time:"5h ago",channel:"In-app",icon:"ph-duotone ph-receipt"},
+  {text:"Task due today: Draft affidavit",time:"6h ago",channel:"In-app",icon:"ph-duotone ph-check-square"},
+  {text:"Court date added: Rift Valley Logistics Ltd, 22 Aug",time:"1d ago",channel:"SMS",icon:"ph-duotone ph-calendar"},
+  {text:"New message from General Innovations Ltd",time:"1d ago",channel:"WhatsApp",icon:"ph-duotone ph-chat-circle-text"},
+  {text:"Document e-signature pending: Master Services Agreement",time:"2d ago",channel:"Email",icon:"ph-duotone ph-signature"}
+];
+
+const STAFF = [
+  {name:"Adv. Sarah Wanjiru",role:"Managing Partner",cases:3,leave:"14 days"},
+  {name:"Adv. Brian Kiptoo",role:"Advocate",cases:4,leave:"9 days"},
+  {name:"Adv. Faith Achieng",role:"Advocate",cases:2,leave:"18 days"},
+  {name:"Legal Assistant - Mercy",role:"Paralegal",cases:5,leave:"12 days"},
+  {name:"Finance - Peter",role:"Finance Officer",cases:0,leave:"20 days"},
+  {name:"Receptionist - Ann",role:"Receptionist",cases:0,leave:"16 days"}
+];
+
+const USERS = [
+  {name:"System Admin - Kevin",role:"System Administrator",access:"Full system access",status:"Active"},
+  {name:"Adv. Sarah Wanjiru",role:"Managing Partner",access:"All cases, firm reports",status:"Active"},
+  {name:"Adv. Brian Kiptoo",role:"Advocate/Lawyer",access:"Assigned cases only",status:"Active"},
+  {name:"Legal Assistant - Mercy",role:"Legal Assistant/Paralegal",access:"Filings, documents, hearings",status:"Active"},
+  {name:"Finance - Peter",role:"Finance Officer",access:"Billing & trust accounts",status:"Active"},
+  {name:"Receptionist - Ann",role:"Receptionist",access:"Client intake, appointments",status:"Active"},
+  {name:"Peter Kamau",role:"Client Portal User",access:"Own cases & invoices only",status:"Active"}
+];
+
+const STATUS_TAG = {"New":"tag tag-neutral","Active":"tag tag-accent","Hearing Scheduled":"tag tag-outline","Under Review":"tag tag-outline","Judgment Pending":"tag tag-outline","Closed":"tag tag-neutral","Appealed":"tag tag-accent-2"};
+CASES.forEach(c=>c.statusTagClass=STATUS_TAG[c.status]||"tag tag-neutral");
+
+const NAV_DEF = [
+  {label:"Overview",items:[{key:"dashboard",label:"Dashboard",icon:"ph-duotone ph-gauge",roles:"all"}]},
+  {label:"Practice",items:[
+    {key:"clients",label:"Clients",icon:"ph-duotone ph-users",roles:["System Administrator","Managing Partner","Advocate/Lawyer","Legal Assistant/Paralegal","Receptionist"]},
+    {key:"cases",label:"Cases",icon:"ph-duotone ph-briefcase",roles:["System Administrator","Managing Partner","Advocate/Lawyer","Legal Assistant/Paralegal"]},
+    {key:"calendar",label:"Court Diary",icon:"ph-duotone ph-calendar-check",roles:["System Administrator","Managing Partner","Advocate/Lawyer","Legal Assistant/Paralegal","Receptionist"]},
+    {key:"documents",label:"Documents",icon:"ph-duotone ph-folder",roles:["System Administrator","Managing Partner","Advocate/Lawyer","Legal Assistant/Paralegal"]},
+    {key:"tasks",label:"Tasks",icon:"ph-duotone ph-check-square",roles:["System Administrator","Managing Partner","Advocate/Lawyer","Legal Assistant/Paralegal"]},
+    {key:"time",label:"Time Tracking",icon:"ph-duotone ph-clock",roles:["Managing Partner","Advocate/Lawyer","Legal Assistant/Paralegal","Finance Officer"]}
+  ]},
+  {label:"Finance",items:[
+    {key:"billing",label:"Billing",icon:"ph-duotone ph-receipt",roles:["System Administrator","Managing Partner","Finance Officer"]}
+  ]},
+  {label:"Front office",items:[
+    {key:"appointments",label:"Appointments",icon:"ph-duotone ph-calendar-plus",roles:["Managing Partner","Advocate/Lawyer","Receptionist"]},
+    {key:"communications",label:"Communications",icon:"ph-duotone ph-chats",roles:"all"}
+  ]},
+  {label:"Insight",items:[
+    {key:"reports",label:"Reports",icon:"ph-duotone ph-chart-bar",roles:["System Administrator","Managing Partner","Finance Officer"]},
+    {key:"knowledge",label:"Knowledge Base",icon:"ph-duotone ph-book-open-text",roles:["Managing Partner","Advocate/Lawyer","Legal Assistant/Paralegal","System Administrator"]}
+  ]},
+  {label:"Admin",items:[
+    {key:"compliance",label:"Compliance & Audit",icon:"ph-duotone ph-shield-check",roles:["System Administrator","Managing Partner"]},
+    {key:"notifications",label:"Notifications",icon:"ph-duotone ph-bell",roles:"all"},
+    {key:"hr",label:"HR & Staff",icon:"ph-duotone ph-identification-badge",roles:["System Administrator","Managing Partner"]},
+    {key:"users",label:"Users & Settings",icon:"ph-duotone ph-gear",roles:["System Administrator"]}
+  ]}
+];
+
+class Component extends DCLogic {
+  state = {
+    role: "Managing Partner",
+    view: "dashboard",
+    isMobile: (typeof window !== "undefined" && window.innerWidth < 900),
+    mobileNavOpen: false,
+    clientTab: "all",
+    caseStatusFilter: "all",
+    docCategoryFilter: "all",
+    selectedClientId: null,
+    selectedCaseId: null,
+    selectedDocId: null,
+    selectedInvoiceId: null,
+    selectedHearingId: null,
+    portalView: "home",
+    invoiceOverrides: {}
+  };
+
+  componentDidMount() {
+    this._onResize = () => this.setState({isMobile: window.innerWidth < 900});
+    window.addEventListener("resize", this._onResize);
+  }
+  componentWillUnmount() {
+    window.removeEventListener("resize", this._onResize);
+  }
+
+  go(view, extra) { this.setState(Object.assign({view, mobileNavOpen:false}, extra || {})); }
+
+  renderVals() {
+    const s = this.state;
+    const role = s.role;
+    const isPortal = role === "Client Portal User";
+    const isMobile = s.isMobile;
+
+    const roleAllowed = (item) => item.roles === "all" || item.roles.includes(role);
+    const navSections = NAV_DEF.map(sec => ({
+      label: sec.label,
+      items: sec.items.filter(roleAllowed).map(item => ({
+        label: item.label, icon: item.icon,
+        color: s.view === item.key ? "var(--color-accent-700)" : "var(--color-text)",
+        weight: s.view === item.key ? "700" : "400",
+        go: () => this.go(item.key)
+      }))
+    })).filter(sec => sec.items.length > 0);
+
+    const advocateName = "Adv. Brian Kiptoo";
+    const isAdvocateSelf = role === "Advocate/Lawyer";
+    const casesForRole = isAdvocateSelf ? CASES.filter(c => c.advocate === advocateName) : CASES;
+
+    const dashStats = [
+      {label:"Active cases", value: casesForRole.filter(c=>c.status==="Active"||c.status==="Hearing Scheduled").length, color:"var(--color-accent-700)"},
+      {label:"Upcoming hearings", value: HEARINGS.length, color:"var(--color-text)"},
+      {label:"Pending tasks", value: TASKS.filter(t=>t.status!=="Scheduled" && t.status!=="Done").length, color:"var(--color-text)"},
+      {label:"Unpaid invoices", value: INVOICES.filter(i=>i.status!=="Paid").length, color:"var(--color-accent-2-700)"},
+      {label:"Revenue (Aug)", value: KES(1150000), color:"var(--color-text)"},
+      {label:"Trust balance", value: KES(TRUST.reduce((a,t)=>a+t.balance,0)), color:"var(--color-text)"}
+    ];
+
+    const statusCounts = {};
+    CASES.forEach(c => statusCounts[c.status] = (statusCounts[c.status]||0)+1);
+    const maxStatus = Math.max(...Object.values(statusCounts));
+    const casesByStatus = Object.keys(statusCounts).map(k => ({label:k, count:statusCounts[k], pct: Math.round(statusCounts[k]/maxStatus*100)+"%"}));
+
+    const revenueMonths = [{label:"Mar",v:780000},{label:"Apr",v:920000},{label:"May",v:860000},{label:"Jun",v:1010000},{label:"Jul",v:1240000},{label:"Aug",v:1150000}];
+    const maxRev = Math.max(...revenueMonths.map(m=>m.v));
+    const revenueBars = revenueMonths.map(m => ({label:m.label, h: Math.round(m.v/maxRev*100)+"%"}));
+
+    const advocateWorkload = ["Adv. Sarah Wanjiru","Adv. Brian Kiptoo","Adv. Faith Achieng"].map(name => ({name, count: CASES.filter(c=>c.advocate===name && c.status!=="Closed").length}));
+
+    const recentActivity = AUDIT.slice(0,5).map(a => `${a.user} — ${a.action.toLowerCase()} (${a.time})`);
+
+    // clients
+    const clientTabFilter = c => s.clientTab==="all" || c.type===s.clientTab;
+    const filteredClients = CLIENTS.filter(clientTabFilter).map(c => ({
+      ...c, typeLabel: c.type==="individual"?"Individual":"Corporate",
+      typeTagClass: c.type==="individual"?"tag tag-outline":"tag tag-accent",
+      open: () => this.setState({view:"clientDetail", selectedClientId:c.id})
+    }));
+    const selectedClientRaw = CLIENTS.find(c=>c.id===s.selectedClientId);
+    const selectedClient = selectedClientRaw ? {
+      ...selectedClientRaw, typeLabel: selectedClientRaw.type==="individual"?"Individual client":"Corporate client",
+      cases: CASES.filter(c=>c.clientId===selectedClientRaw.id).map(c=>({title:c.title, status:c.status, statusTagClass:c.statusTagClass})),
+      documents: DOCUMENTS.filter(d=>CASES.some(c=>c.clientId===selectedClientRaw.id && d.case===c.number)).map(d=>d.name),
+      engagements: [{date:"2024",text:"Engaged for first matter"},{date:"2025",text:"Retainer agreement renewed"},{date:"2026",text:"Active matter opened"}],
+      contacts: [{name: selectedClientRaw.contact, role:"Primary contact"}]
+    } : {cases:[],documents:[],engagements:[],contacts:[]};
+
+    // cases
+    const caseStatusList = ["all","New","Active","Hearing Scheduled","Under Review","Judgment Pending","Closed","Appealed"];
+    const caseStatusFilters = caseStatusList.map(st => ({
+      label: st==="all"?"All":st,
+      tagClass: s.caseStatusFilter===st ? "tag tag-accent" : "tag tag-outline",
+      go: () => this.setState({caseStatusFilter:st})
+    }));
+    const filteredCases = casesForRole.filter(c => s.caseStatusFilter==="all" || c.status===s.caseStatusFilter).map(c => ({
+      ...c, open: () => this.setState({view:"caseDetail", selectedCaseId:c.id})
+    }));
+    const selectedCase = CASES.find(c=>c.id===s.selectedCaseId) || {timeline:[],notes:[],hearings:[],documents:[],invoices:[]};
+
+    // documents
+    const docCats = ["all","Contracts","Pleadings","Witness Statements","Affidavits","Judgments","Correspondence"];
+    const docCategoryFilters = docCats.map(cat => ({
+      label: cat==="all"?"All":cat,
+      tagClass: s.docCategoryFilter===cat ? "tag tag-accent" : "tag tag-outline",
+      go: () => this.setState({docCategoryFilter:cat})
+    }));
+    const filteredDocuments = DOCUMENTS.filter(d => s.docCategoryFilter==="all" || d.category===s.docCategoryFilter).map(d => ({
+      ...d, open: () => this.setState({view:"docDetail", selectedDocId:d.id})
+    }));
+    const selectedDoc = DOCUMENTS.find(d=>d.id===s.selectedDocId) || {versions:[],tags:[]};
+
+    // billing
+    const invoiceOv = s.invoiceOverrides;
+    const invoices = INVOICES.map(inv => {
+      const status = invoiceOv[inv.id] || inv.status;
+      return {...inv, status, tagClass: TAG_BY_STATUS[status]||"tag tag-neutral", amountFmt: KES(inv.amount), open: () => this.setState({view:"invoiceDetail", selectedInvoiceId:inv.id})};
+    });
+    const selectedInvoiceRaw = INVOICES.find(i=>i.id===s.selectedInvoiceId);
+    const selectedInvoice = selectedInvoiceRaw ? (() => {
+      const status = invoiceOv[selectedInvoiceRaw.id] || selectedInvoiceRaw.status;
+      return {...selectedInvoiceRaw, status, tagClass: TAG_BY_STATUS[status]||"tag tag-neutral", amountFmt: KES(selectedInvoiceRaw.amount),
+        markPaid: () => this.setState({invoiceOverrides: {...invoiceOv, [selectedInvoiceRaw.id]:"Paid"}})};
+    })() : {lineItems:[]};
+    const billingStats = [
+      {label:"Total billed", value: KES(INVOICES.reduce((a,i)=>a+i.amount,0)), color:"var(--color-text)"},
+      {label:"Collected", value: KES(INVOICES.filter(i=>(invoiceOv[i.id]||i.status)==="Paid").reduce((a,i)=>a+i.amount,0)), color:"var(--color-accent-700)"},
+      {label:"Outstanding", value: KES(INVOICES.filter(i=>(invoiceOv[i.id]||i.status)!=="Paid").reduce((a,i)=>a+i.amount,0)), color:"var(--color-accent-2-700)"},
+      {label:"Trust on hand", value: KES(TRUST.reduce((a,t)=>a+t.balance,0)), color:"var(--color-text)"}
+    ];
+
+    // calendar
+    const weekDays = HEARINGS.slice(0,6).map((h,i)=>({label:["Tue","Wed","Thu","Fri","Sat","Mon"][i]||"", date:h.date.split(' ')[0], count: HEARINGS.filter(x=>x.date===h.date).length, bg: i===0?"var(--color-accent-100)":"transparent"}));
+    const hearings = HEARINGS.map(h => ({...h, open: () => this.setState({view:"hearingDetail", selectedHearingId:h.id})}));
+    const selectedHearing = HEARINGS.find(h=>h.id===s.selectedHearingId) || {};
+    const courtDatesWeek = HEARINGS.slice(0,4);
+
+    const totalBillableHours = TIME_ENTRIES.filter(t=>t.billable).reduce((a,t)=>a+t.hours,0);
+
+    const roleAccessMap = {"System Administrator":"Full system access","Managing Partner":"All cases, firm reports","Advocate/Lawyer":"Assigned cases only","Legal Assistant/Paralegal":"Filings, documents, hearings","Finance Officer":"Billing & trust accounts","Receptionist":"Client intake, appointments","Client Portal User":"Own cases & invoices only"};
+
+    // client portal
+    const portalClient = CLIENTS[3];
+    const portalCase = CASES.find(c=>c.clientId===portalClient.id);
+    const portalCases = CASES.filter(c=>c.clientId===portalClient.id).map(c=>({...c, statusTagClass:c.statusTagClass, nextHearing: HEARINGS.find(h=>h.caseId===c.id) ? HEARINGS.find(h=>h.caseId===c.id).date : "Not yet scheduled"}));
+    const portalDocs = DOCUMENTS.filter(d=>CASES.some(c=>c.clientId===portalClient.id && d.case===c.number));
+    const portalInvoices = INVOICES.filter(i=>i.client===portalClient.name).map(inv=>{
+      const status = invoiceOv[inv.id] || inv.status;
+      return {...inv, status, tagClass: TAG_BY_STATUS[status]||"tag tag-neutral", amountFmt: KES(inv.amount), pay: () => this.setState({invoiceOverrides:{...invoiceOv,[inv.id]:"Paid"}})};
+    });
+    const portalMessages = COMMUNICATIONS.filter(c=>c.with===portalClient.name).length ? COMMUNICATIONS.filter(c=>c.with===portalClient.name) : [
+      {from:"Adv. Brian Kiptoo",date:"16 Aug 2026",text:"Hi Peter, sharing the latest invoice for your review."},
+      {from:portalClient.contact,date:"16 Aug 2026",text:"Received, will process payment this week."}
+    ];
+    const portalNavKeys = [["home","Overview"],["case","My Cases"],["docs","Documents"],["invoices","Invoices"],["messages","Messages"]];
+    const portalNav = portalNavKeys.map(([key,label]) => ({
+      label, active: s.portalView===key ? "var(--color-accent-700)" : "var(--color-text)",
+      underline: s.portalView===key ? "2px solid var(--color-accent)" : "2px solid transparent",
+      go: () => this.setState({portalView:key})
+    }));
+
+    return {
+      isPortal, showInternal: !isPortal, isMobile, notMobile: !isMobile,
+      role, roleOptions: ROLES, onRoleChange: (e) => this.setState({role:e.target.value, view:"dashboard"}),
+      sidebarVisible: !isMobile || s.mobileNavOpen,
+      sidebarStyle: isMobile
+        ? "position:fixed;top:64px;left:0;bottom:0;width:260px;background:var(--color-bg);padding:var(--space-4);overflow-y:auto;z-index:20;box-shadow:var(--shadow-lg);"
+        : "width:240px;flex-shrink:0;padding:var(--space-6) var(--space-4);border-right:1px solid var(--color-neutral-200);overflow-y:auto;",
+      contentPad: isMobile ? "var(--space-4)" : "var(--space-8) var(--space-8)",
+      toggleMobileNav: () => this.setState({mobileNavOpen: !s.mobileNavOpen}),
+      navSections,
+      userInitials: role.split(/[ /]/).map(w=>w[0]).slice(0,2).join(""),
+      unreadCount: NOTIFICATIONS.length,
+      goNotifications: () => this.go("notifications"),
+
+      statGridCols: isMobile ? "1fr 1fr" : "repeat(auto-fit, minmax(170px, 1fr))",
+      widgetGridCols: isMobile ? "1fr" : "1.4fr 1fr",
+      detailGridCols: isMobile ? "1fr" : "1.3fr 1fr",
+      docGridCols: isMobile ? "1fr" : "repeat(3,1fr)",
+      reportGridCols: isMobile ? "1fr" : "repeat(3,1fr)",
+      portalGridCols: isMobile ? "1fr" : "repeat(2,1fr)",
+      portalPad: isMobile ? "var(--space-4)" : "var(--space-6)",
+
+      view_dashboard: s.view==="dashboard", view_clients: s.view==="clients", view_clientDetail: s.view==="clientDetail",
+      view_cases: s.view==="cases", view_caseDetail: s.view==="caseDetail", view_documents: s.view==="documents",
+      view_docDetail: s.view==="docDetail", view_billing: s.view==="billing", view_invoiceDetail: s.view==="invoiceDetail",
+      view_calendar: s.view==="calendar", view_hearingDetail: s.view==="hearingDetail", view_tasks: s.view==="tasks",
+      view_time: s.view==="time", view_appointments: s.view==="appointments", view_communications: s.view==="communications",
+      view_reports: s.view==="reports", view_knowledge: s.view==="knowledge", view_compliance: s.view==="compliance",
+      view_notifications: s.view==="notifications", view_hr: s.view==="hr", view_users: s.view==="users",
+
+      dashboardTitle: isAdvocateSelf ? `Good day, ${advocateName.replace("Adv. ","")}` : `${role} dashboard`,
+      dashboardSubtitle: isAdvocateSelf ? "Here's what's on your plate today." : "Firm-wide overview across all active matters.",
+      dashStats, casesByStatus, revenueBars, courtDatesWeek, advocateWorkload, recentActivity,
+
+      clientTab: s.clientTab,
+      setClientTabAll: () => this.setState({clientTab:"all"}),
+      setClientTabIndividual: () => this.setState({clientTab:"individual"}),
+      setClientTabCorporate: () => this.setState({clientTab:"corporate"}),
+      clientTabAllClass: s.clientTab==="all"?"tag tag-accent":"tag tag-outline",
+      clientTabIndClass: s.clientTab==="individual"?"tag tag-accent":"tag tag-outline",
+      clientTabCorpClass: s.clientTab==="corporate"?"tag tag-accent":"tag tag-outline",
+      filteredClients, selectedClient, backToClients: () => this.setState({view:"clients"}),
+
+      casesTitle: isAdvocateSelf ? "My cases" : "Cases",
+      caseStatusFilters, filteredCases, selectedCase, backToCases: () => this.setState({view:"cases"}),
+
+      docCategoryFilters, filteredDocuments, selectedDoc, backToDocs: () => this.setState({view:"documents"}),
+
+      invoices, selectedInvoice, billingStats, trustBalances: TRUST,
+      backToBilling: () => this.setState({view:"billing"}),
+      canMarkPaid: selectedInvoice.status !== "Paid",
+
+      weekDays, hearings, selectedHearing, backToCalendar: () => this.setState({view:"calendar"}),
+
+      tasks: TASKS, timeEntries: TIME_ENTRIES, totalBillableHours,
+      appointments: APPOINTMENTS, communications: COMMUNICATIONS,
+      caseReportLines: ["Cases by advocate: see Advocate workload widget","Cases by status: "+casesByStatus.map(c=>`${c.label} (${c.count})`).join(", "),"Cases by practice area: "+[...new Set(CASES.map(c=>c.practiceArea))].join(", ")],
+      financialReportLines: ["Revenue this month: "+KES(1150000),"Outstanding invoices: "+KES(INVOICES.filter(i=>(invoiceOv[i.id]||i.status)!=="Paid").reduce((a,i)=>a+i.amount,0)),"Collections this month: "+KES(940000)],
+      productivityReportLines: ["Billable hours logged: "+totalBillableHours,"Lawyer utilization: 78% average","Task completion rate: 84% on time"],
+      knowledgeBase: KNOWLEDGE, auditLogs: AUDIT, notifications: NOTIFICATIONS, staff: STAFF,
+      userAccounts: USERS.map(u=>({...u, access: roleAccessMap[u.role]||u.access})),
+
+      isPortal2: isPortal,
+      portalClient, portalCases, portalDocs, portalInvoices, portalMessages, portalNav,
+      portalView_home: s.portalView==="home", portalView_case: s.portalView==="case", portalView_docs: s.portalView==="docs",
+      portalView_invoices: s.portalView==="invoices", portalView_messages: s.portalView==="messages",
+      exitPortal: () => this.setState({role:"Managing Partner", view:"dashboard"})
+    };
+  }
+}
+
+</script>
+</body>
+</html>
