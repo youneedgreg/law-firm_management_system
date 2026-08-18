@@ -24,6 +24,11 @@ jobs:
           node-version: 24
           cache: npm
 
+      # Runs before install so a broken lock reports the actual cause rather
+      # than npm ci's wall of usage text.
+      - name: Check lockfile is complete
+        run: npm run check:lockfile
+
       - name: Install dependencies
         run: npm ci
 
