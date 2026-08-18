@@ -182,7 +182,8 @@ to features; every hour here saves five later.
 - [x] ADRs 0001–0008 covering every decision in §5
 - [ ] Testcontainers **verified** against a real container — installed and configured, needs Docker Desktop running
 - [ ] Strict TS: `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`; `target` to `ES2022`. Staged in `tsconfig.strict.json` — currently 18 errors; run `npx tsc --noEmit -p tsconfig.strict.json`, fix, then fold into `tsconfig.json` and delete the file
-- [ ] Vercel project linked, `main` deploying, preview deploys on PRs — blocked on `vercel login`
+- [x] Deployed to Vercel — <https://law-firmmanagementsystem.vercel.app> serving all routes
+- [ ] Confirm preview deployments fire on pull requests (production is live; per-PR previews unverified)
 - [x] Rewrite `README.md` — problem framing, screenshots, enforced architecture, stack, and an honest built-vs-planned section
 - [ ] Branch protection on `main`; work in PRs from here on
 

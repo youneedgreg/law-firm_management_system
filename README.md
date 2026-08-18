@@ -8,6 +8,9 @@ to end, a domain modelled from actual Kenyan statute rather than a generic CRUD
 schema, and an architecture whose layering is enforced by the linter rather than
 by good intentions.
 
+**[▸ Live demo](https://law-firmmanagementsystem.vercel.app/dashboard)** — no
+login yet; the role switcher in the top bar changes what the app shows.
+
 [![CI](https://github.com/youneedgreg/law-firm_management_system/actions/workflows/ci.yml/badge.svg)](https://github.com/youneedgreg/law-firm_management_system/actions/workflows/ci.yml)
 
 > **Status: in development.** The interface is complete and interactive across
@@ -201,16 +204,17 @@ files; CI runs the full suite on every pull request.
 The distinction between built and planned matters, so here it is plainly.
 
 **Working today:** all 27 routes, ~6,100 lines of TypeScript and ~1,500 lines of
-CSS. Create flows for clients, matters, hearings, tasks, time entries,
-appointments, documents, invoices, and communications — all persisting to
-`localStorage` through a `useSyncExternalStore` store. Role switching across
-seven roles. Filtering, search, and a client portal. The Effect toolchain, test
-harness, architecture boundaries, CI pipeline, and eight ADRs.
+CSS, deployed to Vercel. Create flows for clients, matters, hearings, tasks,
+time entries, appointments, documents, invoices, and communications — all
+persisting to `localStorage` through a `useSyncExternalStore` store. Role
+switching across seven roles. Filtering, search, and a client portal. The Effect
+toolchain, test harness, architecture boundaries, CI pipeline, and eight ADRs.
 
 **Not built yet:** the database, the Effect domain model, the HTTP API,
-authentication, authorization, and the deployed demo. Data lives in
-`src/lib/data/*.ts` as seed arrays. Every import of those files raises an ESLint
-warning — 59 today — which doubles as the migration checklist.
+authentication, and authorization. Data lives in `src/lib/data/*.ts` as seed
+arrays, so the live demo is per-browser: what you create is yours alone and
+disappears when you clear site data. Every import of those files raises an
+ESLint warning — 59 today — which doubles as the migration checklist.
 
 **Deliberately out of scope:** multi-tenancy. One firm, seven roles. Adding
 `firm_id` to every table and every query would be plumbing rather than signal;
