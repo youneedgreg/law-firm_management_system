@@ -192,9 +192,17 @@ npm run dev          # http://localhost:3000
 | `npm run dev`              | Development server                                     |
 | `npm test`                 | Unit and service tests — no database required          |
 | `npm run test:integration` | Integration tests against real Postgres (needs Docker) |
-| `npm run typecheck`        | `tsc --noEmit`                                         |
+| `npm run typecheck`        | `next typegen && tsc --noEmit`                         |
 | `npm run lint`             | ESLint, including architecture boundaries              |
 | `npm run verify`           | Everything CI runs                                     |
+| `npm run verify:clean`     | The same, from a wiped `node_modules` and `.next`      |
+
+Typechecking runs `next typegen` first because `PageProps` and `LayoutProps` are
+globals Next generates into `.next/types/`. Without it, `tsc` passes on a machine
+that has built recently and fails on a fresh checkout.
+
+That failure mode — green locally, red in CI, because of state a clean checkout
+does not have — is what `verify:clean` exists to catch before pushing.
 
 Commits are gated by a pre-commit hook running Prettier and ESLint on staged
 files; CI runs the full suite on every pull request.
