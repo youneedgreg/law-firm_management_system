@@ -146,18 +146,21 @@ month three.
 
 ---
 
-## 5. Open decisions
+## 5. Settled decisions
 
-Answer each before starting the phase that depends on it. Record the answer and
-reasoning as an ADR.
+All resolved 2026-08-18. Each gets an ADR in Phase 0. Revisit only with a
+recorded reason — churn on settled ground is how long projects die.
 
-| ID | Decision | Blocks | Recommendation |
-| --- | --- | --- | --- |
-| D-1 | Single firm, or multi-tenant SaaS? | Phase 2 (schema design) | **Single firm.** Multi-tenancy adds `firm_id` to every query and RLS complexity for little portfolio payoff. Note it in the README as a deliberate scope boundary — showing you know where the line is scores better than half-built tenancy. |
-| D-2 | Auth: Clerk, Better Auth, or hand-rolled? | Phase 6 | **Better Auth.** Self-hosted in your Postgres, so sessions and users are real rows you own and can model in Effect. Clerk is faster but outsources the interesting part. Hand-rolling password hashing for a system holding client funds is a bad look, not an impressive one. |
-| D-3 | Jurisdiction and currency | Phase 1 | The seed data implies Kenya (M-Pesa, advocates, KES). **Commit to it explicitly** — real jurisdictional detail (Advocates Act compliance, KRA PINs, court hierarchy) is far more impressive than generic "legal app". |
-| D-4 | Document storage backend | Phase 7 | **Vercel Blob**, private access. Real uploads, versioning, signed URLs. |
-| D-5 | How does a recruiter log in to the demo? | Phase 10 | Seeded demo accounts, one per role, with a role-switcher on the login page and nightly data reset. Remove all friction between "sees link" and "sees dashboard". |
+| ID | Decision | Consequence |
+| --- | --- | --- |
+| D-1 | **Single firm**, not multi-tenant | No `firm_id`, no RLS. Documented in the README as a deliberate scope boundary. Knowing where to stop is the signal. |
+| D-2 | **Better Auth**, self-hosted | Users and sessions are real rows in your Postgres, modelled in Effect. You own session lifecycle and role assignment without hand-rolling password hashing. |
+| D-3 | **Deep Kenyan legal domain** | Real court hierarchy, KRA PIN validation, Advocates Act trust rules, statutory deadlines from civil procedure rules, M-Pesa reconciliation. Requires actual research — budget for it in Phase 1. |
+| D-4 | **Vercel Blob**, private access | Signed URLs, real versioning, identical in preview and production. |
+| D-5 | **Seeded accounts + role switcher** | One-click login per role, rich demo data, nightly reset via cron. Doubles as a live showcase of the RBAC work. |
+| D-6 | **Keep the hand-written CSS**, formalize it | Extract tokens, document the design system. The editorial look is an asset — most portfolios are default shadcn. No rewrite. |
+| D-7 | **Testcontainers** for integration tests | Throwaway Postgres in Docker, identical locally and in CI. Hermetic, no external quota, no CI secrets. Docker required locally. |
+| D-8 | **Public repo from day one** | Commit hygiene matters starting now. The visible wireframe → system progression is itself part of the portfolio. |
 
 ---
 
@@ -172,13 +175,15 @@ Time estimates assume a few hours per week. They are ranges, not commitments.
 Set up everything that makes later work fast and safe. Resist the urge to skip
 to features; every hour here saves five later.
 
+- [ ] Push to GitHub, **repo public** (D-8)
 - [ ] Install Effect stack at pinned versions
 - [ ] `vitest` + `@effect/vitest` configured, one trivial `it.effect` test passing
+- [ ] Testcontainers wired up (D-7) with a throwaway Postgres proving connectivity
 - [ ] Strict TS: `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`; raise `target` to `ES2022`
 - [ ] ESLint import-boundary rule enforcing the layering in §4
 - [ ] Prettier + lint-staged + husky pre-commit hook
 - [ ] GitHub Actions: typecheck, lint, test, build — required on every PR
-- [ ] `docs/adr/0001-record-architecture-decisions.md` and `0002-why-effect.md`
+- [ ] ADRs for every decision in §5, plus `0001-record-architecture-decisions.md` and `0002-why-effect.md`
 - [ ] Vercel project linked, `main` deploying, preview deploys on PRs
 - [ ] Rewrite `README.md`: what it is, screenshots, stack, how to run
 - [ ] Branch protection on `main`; work in PRs from here on
@@ -195,14 +200,23 @@ Rebuild `src/lib/types.ts` as a real domain model. Pure, dependency-free, and
 exhaustively tested. This is the highest-leverage phase in the roadmap — it is
 where "good engineer" is most visible per line of code.
 
-- [ ] Branded primitives: `CaseId`, `ClientId`, `InvoiceId`, `Money`, `CaseNumber`, `KRAPin`, `PhoneNumber`
-- [ ] `Money` as integer minor units — never floats for currency, and say so in a comment
+**Research first (D-3).** Budget a week reading before coding: the Civil Procedure
+Rules on filing and service timelines, the Advocates (Accounts) Rules on client
+money, the court hierarchy and pecuniary jurisdiction limits, KRA PIN format.
+Write it up as `docs/domain-notes.md` with citations — that document alone will
+distinguish this from every other portfolio project.
+
+- [ ] Branded primitives: `CaseId`, `ClientId`, `InvoiceId`, `Money`, `CaseNumber`, `KRAPin`, `PhoneNumber` (Kenyan format, `+254…`)
+- [ ] `Money` as integer minor units (KES cents) — never floats for currency, and say so in a comment
+- [ ] **Court hierarchy as a tagged union**, not a string: Supreme, Court of Appeal, High Court (+ division), Magistrates (+ tier and pecuniary limit), ELRC, ELC. Encode which courts can hear which matter types
 - [ ] Port each entity to `Schema.Struct` with real constraints, not just shapes
 - [ ] Replace stringly-typed dates with `Schema.Date` / `DateTime`
 - [ ] Model case status as a **state machine**: legal transitions only, `New → Active → …`, with an explicit transition function returning `Either`
-- [ ] Tagged errors per domain: `CaseNotFound`, `InvalidTransition`, `TrustAccountUnderfunded`, `ConflictOfInterest`
-- [ ] Encode real business rules as pure functions: invoice totals, trust-account invariants (client funds can never go negative), conflict-of-interest checks, statutory deadline calculation
-- [ ] Property-based tests for the money and invoice arithmetic
+- [ ] Tagged errors per domain: `CaseNotFound`, `InvalidTransition`, `TrustAccountUnderfunded`, `ConflictOfInterest`, `OutsideCourtJurisdiction`
+- [ ] **Trust-account invariants** per the Advocates (Accounts) Rules: client funds never commingled with firm funds, balance never negative, every movement double-entry
+- [ ] Statutory deadline calculation from filing dates, excluding court holidays and vacation
+- [ ] Conflict-of-interest checking on client intake
+- [ ] Property-based tests for money arithmetic, trust invariants, and deadline computation
 - [ ] Migrate `src/lib/data/*.ts` to be *decoded through* the schemas — the seed data must now prove itself valid at startup
 
 **Done when:** `src/domain/` has no imports from the rest of the project, tests
@@ -222,7 +236,7 @@ errors as typed values.
 - [ ] Repository interfaces in `services/`, Postgres implementations in `infra/sql/`
 - [ ] Transaction support, with one real multi-statement use case (invoice payment → trust ledger entry)
 - [ ] Seed script importing the existing mock data into a real database
-- [ ] Integration tests against a real Postgres (Testcontainers or a Neon branch per CI run)
+- [ ] Integration tests against a real Postgres via Testcontainers (D-7), running in CI
 
 **Done when:** the seed data lives in Postgres and repository tests pass against
 a real database in CI.
@@ -289,7 +303,7 @@ client state.
 The legal domain makes this genuinely interesting: seven roles, and a client
 portal that must *never* leak another client's data.
 
-- [ ] Better Auth (per D-2) with sessions in Postgres
+- [ ] Better Auth with sessions in Postgres (D-2)
 - [ ] Login, logout, password reset, session refresh
 - [ ] `CurrentUser` as an Effect service, provided per request
 - [ ] RBAC as a typed policy layer — permissions checked in services, not in components
@@ -310,11 +324,11 @@ which is what separates senior from mid-level.
 Now grind out the rest, module by module, each a full vertical slice with tests.
 Order chosen by domain value: money and deadlines first.
 
-- [ ] **Billing** — invoices, line items, payments, M-Pesa-style reconciliation, trust accounts with enforced invariants
+- [ ] **Billing** — invoices, line items, payments, M-Pesa reconciliation, trust accounts enforcing the Phase 1 invariants at the DB level too
 - [ ] **Time tracking** — timers, billable/non-billable, feeding invoice generation
 - [ ] **Clients** — CRUD, contacts, conflict-of-interest checking on intake
 - [ ] **Hearings & calendar** — scheduling, adjournments, statutory deadline computation, reminders
-- [ ] **Documents** — real uploads to Blob (D-4), versioning, categories, access control
+- [ ] **Documents** — real uploads to private Vercel Blob (D-4), signed URLs, versioning, categories, access control
 - [ ] **Tasks** — assignment, priorities, due dates
 - [ ] **Client portal** — case visibility, invoices, secure messaging
 - [ ] **Communications, notifications, knowledge base, HR, users** — lighter slices
@@ -346,7 +360,9 @@ that is Effect's best sales pitch.
 
 ### Phase 9 — Product polish · 3–4 weeks
 
+- [ ] **Formalize the design system** (D-6): extract CSS custom properties into a documented token layer, write `docs/design-system.md`, keep the editorial identity
 - [ ] Accessibility audit: keyboard navigation, focus management, ARIA, contrast. Target WCAG 2.2 AA
+- [ ] Headless primitives only where hand-rolling a11y is genuinely hard — dialog, combobox, date picker. Everything else stays hand-written CSS
 - [ ] Responsive pass — the wireframe is desktop-first; fix mobile
 - [ ] Loading skeletons and empty states everywhere
 - [ ] Form validation UX driven by the same schemas as the server
@@ -364,7 +380,7 @@ that is Effect's best sales pitch.
 The phase most people skip, and the one with the highest return per hour.
 
 - [ ] **README rewrite**: problem, screenshots/GIF, architecture diagram, stack rationale, how to run, what you learned
-- [ ] Demo accounts per role + seeded data + nightly reset (D-5)
+- [ ] Demo login page with one-click role switcher, rich seeded data, nightly reset via cron (D-5)
 - [ ] ADR set complete and readable as a narrative
 - [ ] Architecture diagram: system context, layers, request lifecycle
 - [ ] Database ER diagram, generated
@@ -417,6 +433,14 @@ the most interesting thing an interviewer can read.
 | 2026-08-18 | Effect 3.22.x, not 4.0-rc | `@effect-rx/rx-react` peer-deps on `effect@^3.17` with no v4 track; choosing v4 today would cost the client-side Effect layer |
 | 2026-08-18 | Effect end to end, including React | Deliberate: the client-side story is the differentiator vs. typical Effect backends |
 | 2026-08-18 | Neon Postgres + Vercel | Free at portfolio scale, clean `@effect/sql-pg` fit, one-click live demo |
+| 2026-08-18 | D-1 Single firm | Multi-tenancy is plumbing, not signal; a stated scope boundary reads as judgment |
+| 2026-08-18 | D-2 Better Auth, self-hosted | Own the interesting parts (sessions, roles, audit) without hand-rolling crypto |
+| 2026-08-18 | D-3 Deep Kenyan domain | Researched jurisdictional detail is the cheapest way to look senior |
+| 2026-08-18 | D-4 Vercel Blob, private | Private-by-default matters for legal documents; no infra overhead |
+| 2026-08-18 | D-5 Seeded accounts + role switcher | Zero friction to a full dashboard; doubles as an RBAC showcase |
+| 2026-08-18 | D-6 Keep hand-written CSS | Distinctive beats default shadcn; rewriting working CSS buys nothing |
+| 2026-08-18 | D-7 Testcontainers | Hermetic and identical locally and in CI; no quota, no CI secrets |
+| 2026-08-18 | D-8 Public repo from day one | Forces commit hygiene now; the wireframe → system progression is the story |
 
 ---
 
@@ -426,4 +450,4 @@ One line per session. Keeps momentum visible across a long project.
 
 | Date | Phase | What moved |
 | --- | --- | --- |
-| 2026-08-18 | — | Wireframe committed; roadmap written |
+| 2026-08-18 | — | Wireframe committed; roadmap written; all eight architectural decisions settled |
