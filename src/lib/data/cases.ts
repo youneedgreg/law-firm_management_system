@@ -189,3 +189,10 @@ export function advocateWorkload(): { name: string; count: number }[] {
 export function practiceAreas(): string[] {
   return [...new Set(CASES.map((legalCase) => legalCase.practiceArea))];
 }
+
+/** The courts the firm already appears before — the options a new matter picks
+ *  from, rather than a free-text field that would fragment the same registry
+ *  across a dozen spellings. */
+export function courts(): string[] {
+  return [...new Set(CASES.map((legalCase) => legalCase.court))].sort();
+}

@@ -7,6 +7,15 @@ import type {
   UserAccount,
 } from "../types";
 
+/** The glyph each channel is logged under, so a new entry looks like the rest. */
+export const CHANNEL_ICONS: Record<Communication["channel"], string> = {
+  Email: "ph-duotone ph-envelope",
+  WhatsApp: "ph-duotone ph-whatsapp-logo",
+  Call: "ph-duotone ph-phone",
+  Meeting: "ph-duotone ph-users-three",
+  SMS: "ph-duotone ph-chat-circle-text",
+};
+
 export const COMMUNICATIONS: Communication[] = [
   {
     id: 1,

@@ -93,11 +93,11 @@ export interface CourtDay {
 
 const WEEKDAY_LABELS = ["Tue", "Wed", "Thu", "Fri", "Sat", "Mon"];
 
-export function courtWeek(): CourtDay[] {
-  return HEARINGS.slice(0, 6).map((hearing, index) => ({
+export function courtWeek(hearings: readonly Hearing[] = HEARINGS): CourtDay[] {
+  return hearings.slice(0, 6).map((hearing, index) => ({
     label: WEEKDAY_LABELS[index] ?? "",
     date: hearing.date.split(" ")[0],
-    count: HEARINGS.filter((other) => other.date === hearing.date).length,
+    count: hearings.filter((other) => other.date === hearing.date).length,
     isToday: index === 0,
   }));
 }
