@@ -20,7 +20,8 @@
     "check:lockfile": "node scripts/check-lockfile.mjs",
     "verify": "npm run check:lockfile && npm run format:check && npm run typecheck && npm run lint && npm run test && npm run build",
     "verify:clean": "rm -rf .next node_modules && npm ci && npm run verify",
-    "prepare": "husky"
+    "prepare": "husky",
+    "db:migrate": "tsx src/infra/sql/migrate.ts"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
@@ -45,6 +46,7 @@
   },
   "devDependencies": {
     "@effect/vitest": "0.30.0",
+    "@electric-sql/pglite": "^0.5.5",
     "@testcontainers/postgresql": "^12.1.0",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -57,6 +59,7 @@
     "lint-staged": "^17.3.0",
     "prettier": "^3.9.6",
     "testcontainers": "^12.1.0",
+    "tsx": "^4.23.12",
     "typescript": "^5",
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^3.2.7"

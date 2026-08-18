@@ -234,16 +234,17 @@ errors as typed values.
 
 ### Phase 2 — Persistence · 3–4 weeks
 
-- [ ] Provision Neon via Vercel Marketplace; `DATABASE_URL` in all three environments
-- [ ] `PgClient` layer + `ManagedRuntime` in `src/runtime/`
-- [ ] Schema design: tables, FKs, indexes, constraints. Push invariants into the DB (`CHECK`, `NOT NULL`, unique) — do not rely on application code alone
-- [ ] Migration setup with `@effect/sql` migrator, committed and ordered
+- [ ] Provision Neon via Vercel Marketplace; `DATABASE_URL` in all three environments — **blocked on `vercel login`**
+- [x] `PgClient` layer in `src/infra/sql/client.ts`, with `DATABASE_URL` validated once at startup through a `Config` service and held `Redacted` so it cannot be logged by accident
+- [x] Schema design: 12 tables, FKs, partial indexes, and constraints mirroring the domain — magistrate rank iff magistrates' court, adjournment iff a date to adjourn to, KRA PIN prefix matching client kind, no cause number without a filing date. **Rule 10 is enforced by a trigger** with `SELECT … FOR UPDATE`, since a `CHECK` sees one row and the rule needs the client's whole balance
+- [x] Migration setup with `@effect/sql` migrator, listed explicitly via `fromRecord` rather than a glob, and run by `npm run db:migrate` as a standalone script — migrating from a serverless function means instances racing to alter the same schema
 - [ ] `@effect/sql` `Model` classes bridging DB rows ↔ domain schemas
 - [ ] Repository interfaces in `services/`, Postgres implementations in `infra/sql/`
 - [ ] Transaction support, with one real multi-statement use case (invoice payment → trust ledger entry)
 - [ ] Seed script importing the existing mock data into a real database, **decoding every fixture through the domain schemas** and minting UUIDs for the integer-keyed records (carried over from Phase 1). Invalid seed data must fail the script loudly rather than reaching the database
 - [ ] Run `Ledger.overdrawnClients` after the import — a seeded trust ledger that breaches Rule 10 should stop the migration
-- [ ] Integration tests against a real Postgres via Testcontainers (D-7), running in CI — written here, but only executable once Phase 12 installs Docker
+- [x] **Schema verified against real Postgres without Docker**: PGlite runs Postgres 18 in WebAssembly in-process, so `schema.test.ts` applies the actual DDL — trigger included — and then attacks every constraint. 27 tests, ~2s, in the default suite. Caught one real defect: the trust-balance view returned `numeric` rather than `bigint`
+- [ ] Testcontainers integration tests over the real driver and `@effect/sql` (D-7) — still Phase 12, and now a narrower gap than it was
 
 **Done when:** the seed data lives in Postgres and repository tests pass against
 a real database in CI.
