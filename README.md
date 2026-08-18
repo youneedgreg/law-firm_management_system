@@ -204,8 +204,11 @@ that has built recently and fails on a fresh checkout.
 That failure mode — green locally, red in CI, because of state a clean checkout
 does not have — is what `verify:clean` exists to catch before pushing.
 
-Commits are gated by a pre-commit hook running Prettier and ESLint on staged
-files; CI runs the full suite on every pull request.
+This repository is trunk-based: all work lands on `main`, with no feature
+branches or pull requests. Two hooks stand in for the review gate — pre-commit
+runs Prettier and ESLint on staged files, and pre-push runs the lockfile check,
+formatting, typecheck, lint, and tests. CI then runs the full suite, including
+the build, on every push to `main`, which also deploys.
 
 ## Honest status
 

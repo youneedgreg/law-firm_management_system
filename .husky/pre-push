@@ -1,0 +1,14 @@
+# Trunk-based development (ROADMAP D-9): pushes go straight to a public,
+# auto-deploying main with no PR gate in front of them. This hook is the last
+# chance to catch a break before it is visible.
+#
+# Build is deliberately excluded — it is the slowest step and CI covers it.
+# Everything here is fast enough to run on every push.
+#
+# For dependency, config, or build changes, run `npm run verify:clean` instead:
+# this hook shares your working tree, so it cannot catch a failure that only
+# appears in a fresh checkout. That has already happened twice.
+#
+# Bypass with `git push --no-verify` when you have a reason you could say aloud.
+
+npm run check:lockfile && npm run format:check && npm run typecheck && npm run lint && npm test

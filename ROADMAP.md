@@ -77,7 +77,7 @@ Versions verified on npm 2026-08-18. Pin exact versions; upgrade deliberately.
 | `@effect-rx/rx-react`            | 0.42.4          | Client-side Effect state                                            |
 | `next` / `react`                 | 16.3.1 / 19.2.8 | Already installed                                                   |
 | Database                         | Neon Postgres   | Provision via Vercel Marketplace (`vercel integration`)             |
-| Hosting                          | Vercel          | Preview deploy per PR, production on `main`                         |
+| Hosting                          | Vercel          | Production deploy on every push to `main`                           |
 
 ### Three version facts that will bite you if you forget them
 
@@ -147,16 +147,17 @@ month three.
 All resolved 2026-08-18. Each gets an ADR in Phase 0. Revisit only with a
 recorded reason — churn on settled ground is how long projects die.
 
-| ID  | Decision                                    | Consequence                                                                                                                                                                                      |
-| --- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| D-1 | **Single firm**, not multi-tenant           | No `firm_id`, no RLS. Documented in the README as a deliberate scope boundary. Knowing where to stop is the signal.                                                                              |
-| D-2 | **Better Auth**, self-hosted                | Users and sessions are real rows in your Postgres, modelled in Effect. You own session lifecycle and role assignment without hand-rolling password hashing.                                      |
-| D-3 | **Deep Kenyan legal domain**                | Real court hierarchy, KRA PIN validation, Advocates Act trust rules, statutory deadlines from civil procedure rules, M-Pesa reconciliation. Requires actual research — budget for it in Phase 1. |
-| D-4 | **Vercel Blob**, private access             | Signed URLs, real versioning, identical in preview and production.                                                                                                                               |
-| D-5 | **Seeded accounts + role switcher**         | One-click login per role, rich demo data, nightly reset via cron. Doubles as a live showcase of the RBAC work.                                                                                   |
-| D-6 | **Keep the hand-written CSS**, formalize it | Extract tokens, document the design system. The editorial look is an asset — most portfolios are default shadcn. No rewrite.                                                                     |
-| D-7 | **Testcontainers** for integration tests    | Throwaway Postgres in Docker, identical locally and in CI. Hermetic, no external quota, no CI secrets. Docker required locally.                                                                  |
-| D-8 | **Public repo from day one**                | Commit hygiene matters starting now. The visible wireframe → system progression is itself part of the portfolio.                                                                                 |
+| ID  | Decision                                    | Consequence                                                                                                                                                                                             |
+| --- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D-1 | **Single firm**, not multi-tenant           | No `firm_id`, no RLS. Documented in the README as a deliberate scope boundary. Knowing where to stop is the signal.                                                                                     |
+| D-2 | **Better Auth**, self-hosted                | Users and sessions are real rows in your Postgres, modelled in Effect. You own session lifecycle and role assignment without hand-rolling password hashing.                                             |
+| D-3 | **Deep Kenyan legal domain**                | Real court hierarchy, KRA PIN validation, Advocates Act trust rules, statutory deadlines from civil procedure rules, M-Pesa reconciliation. Requires actual research — budget for it in Phase 1.        |
+| D-4 | **Vercel Blob**, private access             | Signed URLs, real versioning, identical in preview and production.                                                                                                                                      |
+| D-5 | **Seeded accounts + role switcher**         | One-click login per role, rich demo data, nightly reset via cron. Doubles as a live showcase of the RBAC work.                                                                                          |
+| D-6 | **Keep the hand-written CSS**, formalize it | Extract tokens, document the design system. The editorial look is an asset — most portfolios are default shadcn. No rewrite.                                                                            |
+| D-7 | **Testcontainers** for integration tests    | Throwaway Postgres in Docker, identical locally and in CI. Hermetic, no external quota, no CI secrets. Docker required locally.                                                                         |
+| D-8 | **Public repo from day one**                | Commit hygiene matters starting now. The visible wireframe → system progression is itself part of the portfolio.                                                                                        |
+| D-9 | **Trunk-based: `main` only**                | No feature branches, no PRs, no branch protection. Solo project where PR review is self-review anyway. Cost is the lost CI gate before `main` — replaced by a pre-push hook and `verify:clean`. See §7. |
 
 ---
 
@@ -178,20 +179,19 @@ to features; every hour here saves five later.
 - [x] Prettier + lint-staged + husky pre-commit hook
 - [x] Codebase formatted; `format:check` green and kept that way by the hook
 - [x] `AppState` reads persisted state via `useSyncExternalStore` — clears the one `react-hooks/set-state-in-effect` error that kept lint red
-- [x] GitHub Actions: format, typecheck, lint, test, build on every PR; integration job stubbed behind `if: false` until Phase 2
+- [x] GitHub Actions: format, typecheck, lint, test, build on every push to `main`; integration job stubbed behind `if: false` until Phase 12
 - [x] ADRs 0001–0008 covering every decision in §5
 - [x] Testcontainers installed and configured — verification against a real container deferred to Phase 12
 - [ ] Strict TS: `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`; `target` to `ES2022`. Staged in `tsconfig.strict.json` — currently 18 errors; run `npx tsc --noEmit -p tsconfig.strict.json`, fix, then fold into `tsconfig.json` and delete the file
 - [x] Deployed to Vercel — <https://law-firmmanagementsystem.vercel.app> serving all routes
-- [ ] Confirm preview deployments fire on pull requests (production is live; per-PR previews unverified)
+- [x] Trunk-based workflow adopted: `main` only, no feature branches, no PRs (D-9)
+- [x] Pre-push hook running the full local suite — the only gate left once PRs are gone
 - [x] Rewrite `README.md` — problem framing, screenshots, enforced architecture, stack, and an honest built-vs-planned section
-- [ ] Branch protection on `main`; work in PRs from here on
+      **Status:** Phase 0 complete. The full CI sequence passes from a wiped tree
+      (`npm run verify:clean`), the app is deployed, and Docker verification moved to
+      Phase 12 — it blocks nothing here.
 
-**Status:** the full CI sequence passes from a wiped tree (`npm run verify:clean`).
-Two items remain: confirming preview deploys on the next PR, and branch
-protection. Docker verification moved to Phase 12 — it blocks nothing here.
-
-**Done when:** a PR runs green CI, produces a preview URL, and cannot merge red.
+**Done when:** a push to `main` runs green CI and deploys.
 **Demonstrates:** I set up projects the way a team needs them, not the way a
 solo hacker gets away with.
 
@@ -438,7 +438,7 @@ database, no fixtures that drift from the schema.
 
 ## 7. Quality bar
 
-Applies to every PR from Phase 0 onward. Non-negotiable.
+Applies to every commit from Phase 0 onward. Non-negotiable.
 
 - No `any`. No `as` casts outside parsing boundaries. No `@ts-ignore`.
 - Every fallible operation returns a typed error. No thrown strings.
@@ -446,7 +446,26 @@ Applies to every PR from Phase 0 onward. Non-negotiable.
 - No `console.log` in committed code — structured logging only.
 - No secrets in the repo. All config through validated env schemas.
 - Tests are deterministic. No `sleep`, no wall-clock dependence, no flakes.
-- Every PR: green CI, meaningful description, reviewable size.
+- Every commit: one coherent change, a message explaining why, green locally.
+
+### What trunk-based development costs (D-9)
+
+Working directly on `main` removes the review gate, and on a public repo a
+broken `main` is visible. Two CI failures have already slipped through on state
+that existed locally but not in a clean checkout. The substitutes:
+
+- **The pre-push hook** runs lockfile, format, typecheck, lint, and tests. It is
+  the last gate before a mistake is public. Bypass with `--no-verify` only when
+  you have a reason you could say out loud.
+- **`npm run verify:clean`** before anything structural — dependency changes,
+  config changes, anything touching the build. It wipes `node_modules` and
+  `.next` and runs CI's exact sequence. Both failures so far would have been
+  caught by it.
+- **Commit discipline replaces review.** Nobody else is reading the diff, so the
+  commit message is the only record of intent. Write it for the person who has
+  to understand this in six months.
+- **Fix forward, never rewrite.** `main` is public and deployed; no force-pushes,
+  no rewriting shared history. A revert commit is honest and cheap.
 
 ---
 
@@ -468,6 +487,7 @@ the most interesting thing an interviewer can read.
 | 2026-08-18 | D-6 Keep hand-written CSS           | Distinctive beats default shadcn; rewriting working CSS buys nothing                                                          |
 | 2026-08-18 | D-7 Testcontainers                  | Hermetic and identical locally and in CI; no quota, no CI secrets                                                             |
 | 2026-08-19 | Docker verification → Phase 12      | Installing Docker blocks nothing early; deferring keeps Phase 0 shippable. Pull forward if Phase 2 needs the feedback loop    |
+| 2026-08-19 | D-9 Trunk-based, `main` only        | PR review is self-review on a solo project; pre-push hook and `verify:clean` replace the lost CI gate                         |
 | 2026-08-18 | D-8 Public repo from day one        | Forces commit hygiene now; the wireframe → system progression is the story                                                    |
 
 ---
