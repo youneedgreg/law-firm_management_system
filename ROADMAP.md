@@ -213,12 +213,12 @@ distinguish this from every other portfolio project.
 - [x] `Money` as integer minor units (KES cents) — `add`/`subtract`/`multiply`/`allocate`, with `allocate` proven never to lose a cent across 1,400 splits
 - [x] **Court hierarchy as a tagged union**, not a string: Supreme, Court of Appeal, High Court (+ division), Magistrates (+ rank and pecuniary limit), ELRC, ELC. `canHear` returns the statutory reason on refusal, and honours the s. 7(3) customary-law exemption
 - [x] ESLint boundary gap closed: `domain/` could still import `@/lib/*`, and every rule was bypassable with a relative path. Both now blocked, verified with probe files
-- [ ] Remaining branded primitives: `CaseId`, `ClientId`, `InvoiceId`, `CaseNumber`, `KRAPin`, `PhoneNumber` (Kenyan format, `+254…`)
+- [x] Branded ids and formatted identifiers: `CaseId`/`ClientId`/`InvoiceId`/`AdvocateId`/`DocumentId`/`HearingId`/`TrustMovementId` as branded UUIDs (not integers — portal urls should not be enumerable), plus `CaseNumber`, `KraPin`, `KenyanPhone`
 - [ ] Port each entity to `Schema.Struct` with real constraints, not just shapes
 - [ ] Replace stringly-typed dates with `Schema.Date` / `DateTime`
 - [ ] Model case status as a **state machine**: legal transitions only, `New → Active → …`, with an explicit transition function returning `Either`
 - [ ] Tagged errors per domain: `CaseNotFound`, `InvalidTransition`, `TrustAccountUnderfunded`, `ConflictOfInterest`, `OutsideCourtJurisdiction`
-- [ ] **Trust-account invariants** per the Advocates (Accounts) Rules: client funds never commingled with firm funds, balance never negative, every movement double-entry
+- [x] **Trust-account invariants** per the Advocates (Accounts) Rules: Rule 10 enforced per-client rather than per-account, balance derived from movements rather than stored, withdrawal reasons limited to Rule 9's purposes, amounts always positive with direction from the reason. Mutation-tested — swapping the per-client check for the firm total fails exactly the two tests written for it
 - [ ] Statutory deadline calculation from filing dates, excluding court holidays and vacation
 - [ ] Conflict-of-interest checking on client intake
 - [ ] Property-based tests for money arithmetic, trust invariants, and deadline computation
