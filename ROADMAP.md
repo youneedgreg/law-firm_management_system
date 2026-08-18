@@ -216,10 +216,10 @@ distinguish this from every other portfolio project.
 - [x] Branded ids and formatted identifiers: `CaseId`/`ClientId`/`InvoiceId`/`AdvocateId`/`DocumentId`/`HearingId`/`TrustMovementId` as branded UUIDs (not integers — portal urls should not be enumerable), plus `CaseNumber`, `KraPin`, `KenyanPhone`
 - [ ] Port each entity to `Schema.Struct` with real constraints, not just shapes
 - [ ] Replace stringly-typed dates with `Schema.Date` / `DateTime`
-- [ ] Model case status as a **state machine**: legal transitions only, `New → Active → …`, with an explicit transition function returning `Either`
+- [x] Case status as a **state machine**: `TRANSITIONS` declares the legal moves once, `transition` returns `Either`, and self-transitions are refused rather than treated as no-ops. Tests assert every status stays reachable from `New`, so the table and the union cannot drift apart
 - [ ] Tagged errors per domain: `CaseNotFound`, `InvalidTransition`, `TrustAccountUnderfunded`, `ConflictOfInterest`, `OutsideCourtJurisdiction`
 - [x] **Trust-account invariants** per the Advocates (Accounts) Rules: Rule 10 enforced per-client rather than per-account, balance derived from movements rather than stored, withdrawal reasons limited to Rule 9's purposes, amounts always positive with direction from the reason. Mutation-tested — swapping the per-client check for the firm total fails exactly the two tests written for it
-- [ ] Statutory deadline calculation from filing dates, excluding court holidays and vacation
+- [x] Limitation periods from the verified s. 4 figures — contract 6y, tort 3y, defamation 12mo — each result carrying its provision so the UI cites the reasoning. Month arithmetic clamps rather than overflowing (29 Feb + 3y lands on 28 Feb). Court holidays and vacation still outstanding, pending the §3.2 research
 - [ ] Conflict-of-interest checking on client intake
 - [ ] Property-based tests for money arithmetic, trust invariants, and deadline computation
 - [ ] Migrate `src/lib/data/*.ts` to be _decoded through_ the schemas — the seed data must now prove itself valid at startup
