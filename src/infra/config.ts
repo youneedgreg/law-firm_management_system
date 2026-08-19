@@ -24,18 +24,40 @@ const PostgresUrl = Schema.String.pipe(
   ),
 );
 
+/**
+ * Pins the SSL mode to `verify-full`.
+ *
+ * Neon hands out connection strings ending `?sslmode=require`. `pg` currently
+ * treats `require` as `verify-full` — it validates the certificate chain and
+ * the hostname — but warns that in v9 it will adopt libpq semantics, where
+ * `require` means "encrypt, but do not check who you are talking to". That is a
+ * downgrade that would arrive as a dependency bump rather than a decision, and
+ * it would arrive silently.
+ *
+ * Rewriting it here rather than editing the environment variable: the value is
+ * managed by Vercel and re-pulled by `vercel env pull`, so a hand-edit lasts
+ * until the next sync, and would have to be repeated for preview and
+ * production. One line in code covers every environment permanently.
+ */
+const pinSslVerification = (url: string): string =>
+  /[?&]sslmode=/.test(url)
+    ? url.replace(/([?&])sslmode=[^&]*/, "$1sslmode=verify-full")
+    : `${url}${url.includes("?") ? "&" : "?"}sslmode=verify-full`;
+
 export class DatabaseConfig extends Effect.Service<DatabaseConfig>()(
   "DatabaseConfig",
   {
     effect: Effect.gen(function* () {
-      const url = yield* Config.redacted("DATABASE_URL");
+      const configured = yield* Config.redacted("DATABASE_URL");
 
       // Validate the shape without unwrapping into anything that could be
       // logged: the value goes straight back into a Redacted afterwards.
-      yield* Schema.decodeUnknown(PostgresUrl)(Redacted.value(url));
+      const validated = yield* Schema.decodeUnknown(PostgresUrl)(
+        Redacted.value(configured),
+      );
 
       return {
-        url,
+        url: Redacted.make(pinSslVerification(validated)),
         /** Neon pools at the proxy, so a small local pool is plenty. */
         maxConnections: yield* Config.integer("DATABASE_MAX_CONNECTIONS").pipe(
           Config.withDefault(5),

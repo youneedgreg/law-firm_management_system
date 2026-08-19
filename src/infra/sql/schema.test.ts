@@ -1,6 +1,6 @@
 import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { statements } from "./migrations/0001_initial_schema";
+import { allStatements } from "./migrations";
 
 /**
  * The schema, applied to a real Postgres and then attacked.
@@ -37,7 +37,7 @@ const refuses = async (sql: string): Promise<boolean> => {
 beforeAll(async () => {
   db = await PGlite.create();
 
-  for (const statement of statements) {
+  for (const statement of allStatements) {
     await db.exec(statement);
   }
 
@@ -366,5 +366,79 @@ describe("billing constraints", () => {
     const columns = result.rows.map((row) => row.column_name);
     expect(columns).not.toContain("total_cents");
     expect(columns).not.toContain("status");
+  });
+});
+
+/**
+ * Migration 0002 removed two ways the schema could hold something the domain
+ * cannot represent. Both are attacked here for the same reason as everything
+ * above: a corrected constraint nobody has tried to break is a claim, not a
+ * guarantee.
+ */
+describe("filing dates and contact order", () => {
+  const insertCase = (columns: string, values: string) => `
+    INSERT INTO cases (id, number, title, type, status, client_id, advocate_id, opened_on${columns})
+    VALUES (gen_random_uuid(), 'OKL-2026-${Math.floor(Math.random() * 900 + 100)}',
+            'A v B', 'Civil', 'New', '${client}', '${advocate}', '2026-02-14'${values})`;
+
+  it("leaves filed_on null rather than defaulting it to the epoch", async () => {
+    await db.exec(insertCase("", ""));
+
+    const result = await db.query<{ filed_on: unknown }>(
+      `SELECT filed_on FROM cases WHERE filed_on IS NOT NULL AND filed_on < DATE '1971-01-01'`,
+    );
+
+    expect(result.rows).toStrictEqual([]);
+  });
+
+  it("still refuses a cause number when nothing was filed", async () => {
+    expect(
+      await refuses(insertCase(", cause_number", ", 'HCCC E900 of 2026'")),
+    ).toBe(true);
+  });
+
+  it("accepts a cause number once a filing date is recorded", async () => {
+    expect(
+      await refuses(
+        insertCase(
+          ", cause_number, filed_on",
+          ", 'HCCC E901 of 2026', '2026-03-01'",
+        ),
+      ),
+    ).toBe(false);
+  });
+
+  it("refuses a filing date before the matter was opened", async () => {
+    expect(await refuses(insertCase(", filed_on", ", '2026-01-01'"))).toBe(
+      true,
+    );
+  });
+
+  it("refuses two contacts claiming the same position", async () => {
+    await db.exec(`
+      INSERT INTO client_contacts (id, client_id, name, role, ordinal)
+      VALUES (gen_random_uuid(), '${client}', 'Grace Otieno', 'Company Secretary', 0)`);
+
+    expect(
+      await refuses(`
+        INSERT INTO client_contacts (id, client_id, name, role, ordinal)
+        VALUES (gen_random_uuid(), '${client}', 'Peter Kimani', 'Director', 0)`),
+    ).toBe(true);
+  });
+
+  it("accepts the next position along", async () => {
+    expect(
+      await refuses(`
+        INSERT INTO client_contacts (id, client_id, name, role, ordinal)
+        VALUES (gen_random_uuid(), '${client}', 'Peter Kimani', 'Director', 1)`),
+    ).toBe(false);
+  });
+
+  it("refuses a negative position", async () => {
+    expect(
+      await refuses(`
+        INSERT INTO client_contacts (id, client_id, name, role, ordinal)
+        VALUES (gen_random_uuid(), '${client}', 'Mary Njeri', 'Director', -1)`),
+    ).toBe(true);
   });
 });

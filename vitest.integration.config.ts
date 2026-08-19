@@ -11,6 +11,9 @@ export default defineConfig({
   plugins: [tsconfigPaths()],
   test: {
     include: ["src/**/*.integration.test.ts"],
+    // `DATABASE_URL` lives in `.env.local`, which Vitest does not put on
+    // `process.env` by itself.
+    setupFiles: ["./test/load-env.ts"],
     // Pulling and booting a Postgres image is slow on a cold cache.
     testTimeout: 120_000,
     hookTimeout: 120_000,

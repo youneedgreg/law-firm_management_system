@@ -1,5 +1,10 @@
 import { Migrator } from "@effect/sql";
-import initialSchema from "./0001_initial_schema";
+import initialSchema, {
+  statements as initialStatements,
+} from "./0001_initial_schema";
+import filingDatesAndContactOrder, {
+  statements as filingStatements,
+} from "./0002_filing_dates_and_contact_order";
 
 /**
  * The migration set, listed explicitly.
@@ -14,4 +19,17 @@ import initialSchema from "./0001_initial_schema";
  */
 export const migrations = Migrator.fromRecord({
   "0001_initial_schema": initialSchema,
+  "0002_filing_dates_and_contact_order": filingDatesAndContactOrder,
 });
+
+/**
+ * The same DDL as a flat list, in order, for the PGlite schema tests.
+ *
+ * They apply exactly what a real database applies rather than building their
+ * own tables: a test whose schema is written by the test proves only that the
+ * test agrees with itself.
+ */
+export const allStatements: readonly string[] = [
+  ...initialStatements,
+  ...filingStatements,
+];
