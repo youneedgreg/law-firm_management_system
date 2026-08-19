@@ -1,6 +1,8 @@
 "use client";
 
-import { useAppState } from "@/components/AppState";
+import { useRxValue } from "@effect-rx/rx-react";
+import { useAddRecord } from "@/rx/hooks";
+import { recordsRx } from "@/rx/session";
 import { FormDialog } from "@/components/FormDialog";
 import { SelectField, TextField } from "@/components/form";
 import { TableWrap } from "@/components/ui";
@@ -17,7 +19,7 @@ import {
 } from "@/lib/types";
 
 export function TasksTable() {
-  const { records } = useAppState();
+  const records = useRxValue(recordsRx);
   const tasks = [...records.tasks, ...TASKS];
 
   return (
@@ -55,7 +57,8 @@ export function TasksTable() {
 }
 
 export function NewTaskForm() {
-  const { records, add } = useAppState();
+  const records = useRxValue(recordsRx);
+  const add = useAddRecord();
   const cases = CASES;
   const tasks = [...TASKS, ...records.tasks];
 

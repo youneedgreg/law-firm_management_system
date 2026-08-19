@@ -1,6 +1,6 @@
 "use client";
 
-import { useAppState } from "@/components/AppState";
+import { useInvoiceStatus, useMarkPaid } from "@/rx/hooks";
 import { TableWrap } from "@/components/ui";
 import { portalInvoices } from "@/lib/data/portal";
 import { invoiceStatusTag, kes } from "@/lib/format";
@@ -10,7 +10,8 @@ import { invoiceStatusTag, kes } from "@/lib/format";
  * reads, so a client payment shows up on the internal ledger immediately.
  */
 export default function PortalInvoicesPage() {
-  const { statusOf, markPaid } = useAppState();
+  const statusOf = useInvoiceStatus();
+  const markPaid = useMarkPaid();
   const invoices = portalInvoices();
 
   return (

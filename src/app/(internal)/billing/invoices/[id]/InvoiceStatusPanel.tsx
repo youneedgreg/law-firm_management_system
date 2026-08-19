@@ -1,17 +1,18 @@
 "use client";
 
-import { useAppState } from "@/components/AppState";
+import { useInvoiceStatus, useMarkPaid } from "@/rx/hooks";
 import { invoiceStatusTag } from "@/lib/format";
 import type { Invoice } from "@/lib/types";
 
 export function InvoiceStatusTag({ invoice }: { invoice: Invoice }) {
-  const { statusOf } = useAppState();
+  const statusOf = useInvoiceStatus();
   const status = statusOf(invoice);
   return <span className={invoiceStatusTag(status)}>{status}</span>;
 }
 
 export function MarkPaidButton({ invoice }: { invoice: Invoice }) {
-  const { statusOf, markPaid } = useAppState();
+  const statusOf = useInvoiceStatus();
+  const markPaid = useMarkPaid();
 
   if (statusOf(invoice) === "Paid") {
     return (

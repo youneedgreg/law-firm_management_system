@@ -1,6 +1,6 @@
 "use client";
 
-import { useAppState } from "@/components/AppState";
+import { useInvoiceStatus } from "@/rx/hooks";
 import {
   COLLECTIONS_THIS_MONTH,
   INVOICES,
@@ -10,7 +10,7 @@ import { kes } from "@/lib/format";
 
 /** Outstanding tracks live payment state, so this column runs on the client. */
 export function FinancialReport() {
-  const { statusOf } = useAppState();
+  const statusOf = useInvoiceStatus();
 
   const outstanding = INVOICES.filter(
     (invoice) => statusOf(invoice) !== "Paid",

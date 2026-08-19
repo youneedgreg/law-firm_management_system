@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useAppState } from "@/components/AppState";
+import { useRx } from "@effect-rx/rx-react";
 import { SelectControl } from "@/components/form";
 import { NOTIFICATIONS } from "@/lib/data/firm";
 import { initials } from "@/lib/format";
+import { roleRx } from "@/rx/session";
 import { ROLES, type Role } from "@/lib/types";
 
 export function Topbar({ onToggleNav }: { onToggleNav: () => void }) {
-  const { role, setRole } = useAppState();
+  const [role, setRole] = useRx(roleRx);
   const router = useRouter();
 
   function changeRole(next: Role) {

@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useAppState } from "@/components/AppState";
+import { useRxValue } from "@effect-rx/rx-react";
+import { useInvoiceStatus } from "@/rx/hooks";
+import { recordsRx } from "@/rx/session";
 import { Stat, TableWrap } from "@/components/ui";
 import { INVOICES, TRUST_ON_HAND } from "@/lib/data/billing";
 import { invoiceStatusTag, kes } from "@/lib/format";
@@ -11,7 +13,8 @@ import { invoiceStatusTag, kes } from "@/lib/format";
  * both move the moment a payment is recorded anywhere in the app.
  */
 export function BillingStats() {
-  const { statusOf, records } = useAppState();
+  const records = useRxValue(recordsRx);
+  const statusOf = useInvoiceStatus();
 
   const invoices = [...records.invoices, ...INVOICES];
   const billed = invoices.reduce((total, invoice) => total + invoice.amount, 0);
@@ -35,7 +38,8 @@ export function BillingStats() {
 }
 
 export function InvoiceTable() {
-  const { statusOf, records } = useAppState();
+  const records = useRxValue(recordsRx);
+  const statusOf = useInvoiceStatus();
   const invoices = [...records.invoices, ...INVOICES];
 
   return (

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Source_Serif_4 } from "next/font/google";
-import { AppStateProvider } from "@/components/AppState";
+import { RxRegistry } from "@/rx/provider";
 import "@phosphor-icons/web/duotone";
 import "./globals.css";
 
@@ -26,7 +26,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={sourceSerif.variable}>
       <body>
-        <AppStateProvider>{children}</AppStateProvider>
+        <RxRegistry>{children}</RxRegistry>
       </body>
     </html>
   );

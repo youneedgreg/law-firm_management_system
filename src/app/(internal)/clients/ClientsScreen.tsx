@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useAppState } from "@/components/AppState";
+import { useRxValue } from "@effect-rx/rx-react";
+import { useAddRecord } from "@/rx/hooks";
+import { recordsRx } from "@/rx/session";
 import { FormDialog } from "@/components/FormDialog";
 import { RadioField, SelectField, TextField } from "@/components/form";
 import { TableWrap } from "@/components/ui";
@@ -15,7 +17,7 @@ import { CONFLICT_STATUSES, type ClientType } from "@/lib/types";
  * clients the forms have added.
  */
 export function ClientsTable({ type }: { type: "all" | ClientType }) {
-  const { records } = useAppState();
+  const records = useRxValue(recordsRx);
   const clients = [...records.clients, ...CLIENTS].filter(
     (client) => type === "all" || client.type === type,
   );
@@ -69,7 +71,8 @@ export function ClientsTable({ type }: { type: "all" | ClientType }) {
 }
 
 export function NewClientForm() {
-  const { records, add } = useAppState();
+  const records = useRxValue(recordsRx);
+  const add = useAddRecord();
   const clients = [...CLIENTS, ...records.clients];
 
   function createClient(fields: FormData) {

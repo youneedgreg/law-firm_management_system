@@ -12,12 +12,7 @@ import {
 } from "@/lib/action-state";
 import { attempt } from "@/runtime";
 import { CaseService } from "@/services/case-service";
-import {
-  AmendMatterForm,
-  OpenMatterForm,
-  submitted,
-  TransitionForm,
-} from "./forms";
+import { AmendMatterForm, OpenMatterForm, submitted } from "./forms";
 
 /**
  * The write side of the cases module.
@@ -158,27 +153,18 @@ export async function amendCase(
 // ── Moving a matter through the lifecycle ─────────────────────────────────
 
 /**
- * Moves a matter to a new status.
+ * There is deliberately no `moveCase` action.
  *
- * Takes the id and the target as arguments rather than `FormData` because the
- * control that calls it is a button in a client component driving
- * `useOptimistic`, not a form — but the values still go through the schema,
- * because a Server Action is reachable by a direct POST and "it came from our
- * own button" is not a fact the server can check.
+ * Phase 3 had one, and Phase 5 removed it: the status panel is a client
+ * component driving an optimistic atom, and it moves a matter by calling the
+ * `/cases/:id/status` endpoint through the generated client. Keeping a Server
+ * Action beside it would be a second way in to the same service, with its own
+ * decoding and its own translation of the same refusals — and the endpoint
+ * already exists, is already in the contract, and is already covered by the API
+ * tests.
+ *
+ * Opening and amending stay here, because both are forms. A `<form action>`
+ * submits without JavaScript, keeps the browser's own validation, and hands
+ * back per-field messages; a fetch from an atom would have to rebuild all of
+ * that to arrive at the same place.
  */
-export async function moveCase(id: string, to: string): Promise<ActionState> {
-  const decoded = Schema.decodeUnknownEither(TransitionForm)({ id, to });
-  if (Either.isLeft(decoded)) return fromParseError(decoded.left, {});
-
-  const outcome = await attempt(
-    Effect.flatMap(CaseService, (service) =>
-      service.transition(decoded.right.id, decoded.right.to),
-    ),
-  );
-
-  if (Either.isLeft(outcome)) return refused(explain(outcome.left));
-
-  revalidatePath(`/cases/${id}`);
-  revalidatePath("/cases");
-  return IDLE;
-}

@@ -1,6 +1,8 @@
 "use client";
 
-import { useAppState } from "@/components/AppState";
+import { useRxValue } from "@effect-rx/rx-react";
+import { useAddRecord } from "@/rx/hooks";
+import { recordsRx } from "@/rx/session";
 import { FormDialog } from "@/components/FormDialog";
 import { SelectField, TextAreaField, TextField } from "@/components/form";
 import { CLIENTS } from "@/lib/data/clients";
@@ -10,7 +12,7 @@ import { nextId, text } from "@/lib/forms";
 import { COMMUNICATION_CHANNELS, type CommunicationChannel } from "@/lib/types";
 
 export function CommunicationLog() {
-  const { records } = useAppState();
+  const records = useRxValue(recordsRx);
   const entries = [...records.communications, ...COMMUNICATIONS];
 
   return (
@@ -33,7 +35,8 @@ export function CommunicationLog() {
 }
 
 export function LogCommunicationForm() {
-  const { records, add } = useAppState();
+  const records = useRxValue(recordsRx);
+  const add = useAddRecord();
   const clients = [...records.clients, ...CLIENTS];
   const entries = [...COMMUNICATIONS, ...records.communications];
 

@@ -2,9 +2,8 @@ import { Either, ParseResult, Schema } from "effect";
 import * as Matter from "@/domain/case/case";
 import * as Limitation from "@/domain/case/limitation";
 import * as Court from "@/domain/court/court";
-import { AdvocateId, CaseId, ClientId } from "@/domain/shared/ids";
+import { AdvocateId, ClientId } from "@/domain/shared/ids";
 import * as Money from "@/domain/shared/money";
-import * as Status from "@/domain/case/status";
 import type { AmendMatter, OpenMatter } from "@/services/case-service";
 import { COURTS } from "./courts";
 
@@ -174,11 +173,3 @@ export const AmendMatterForm = Schema.Struct({
 export type AmendMatterFormType = typeof AmendMatterForm.Type;
 const _amendMatches: AmendMatter = null as unknown as AmendMatterFormType;
 void _amendMatches;
-
-// ── Moving a matter ───────────────────────────────────────────────────────
-
-/** The status control's submission: which matter, and where to. */
-export const TransitionForm = Schema.Struct({
-  id: CaseId,
-  to: Status.CaseStatus,
-});

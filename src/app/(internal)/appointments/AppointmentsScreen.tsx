@@ -1,6 +1,8 @@
 "use client";
 
-import { useAppState } from "@/components/AppState";
+import { useRxValue } from "@effect-rx/rx-react";
+import { useAddRecord } from "@/rx/hooks";
+import { recordsRx } from "@/rx/session";
 import { FormDialog } from "@/components/FormDialog";
 import { SelectField, TextField } from "@/components/form";
 import { APPOINTMENTS } from "@/lib/data/work";
@@ -9,7 +11,7 @@ import { nextId, text } from "@/lib/forms";
 import { APPOINTMENT_TYPES, type AppointmentType } from "@/lib/types";
 
 export function AppointmentList() {
-  const { records } = useAppState();
+  const records = useRxValue(recordsRx);
   const appointments = [...records.appointments, ...APPOINTMENTS];
 
   return (
@@ -32,7 +34,8 @@ export function AppointmentList() {
 }
 
 export function ScheduleAppointmentForm() {
-  const { records, add } = useAppState();
+  const records = useRxValue(recordsRx);
+  const add = useAddRecord();
   const appointments = [...APPOINTMENTS, ...records.appointments];
 
   function schedule(fields: FormData) {

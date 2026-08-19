@@ -1,12 +1,14 @@
 "use client";
 
 import { DocumentDetail } from "./DocumentDetail";
-import { useAppState } from "@/components/AppState";
+import { useRxValue } from "@effect-rx/rx-react";
+import { hydratedRx, recordsRx } from "@/rx/session";
 import { NotOnFile } from "@/components/ui";
 
 /** A document filed through the upload form, held in the session store. */
 export function CreatedDocument({ id }: { id: number }) {
-  const { records, hydrated } = useAppState();
+  const records = useRxValue(recordsRx);
+  const hydrated = useRxValue(hydratedRx);
 
   if (!hydrated) return null;
 

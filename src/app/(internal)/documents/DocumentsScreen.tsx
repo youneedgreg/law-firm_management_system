@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useAppState } from "@/components/AppState";
+import { useRxValue } from "@effect-rx/rx-react";
+import { useAddRecord } from "@/rx/hooks";
+import { recordsRx } from "@/rx/session";
 import { FormDialog } from "@/components/FormDialog";
 import { SelectField, TextField } from "@/components/form";
 import { CASES } from "@/lib/data/cases";
@@ -20,7 +22,7 @@ export function DocumentGrid({
 }: {
   category: DocumentCategory | "all";
 }) {
-  const { records } = useAppState();
+  const records = useRxValue(recordsRx);
   const documents = [...records.documents, ...DOCUMENTS].filter(
     (document) => category === "all" || document.category === category,
   );
@@ -57,7 +59,8 @@ export function DocumentGrid({
 }
 
 export function UploadDocumentForm() {
-  const { records, add } = useAppState();
+  const records = useRxValue(recordsRx);
+  const add = useAddRecord();
   const cases = CASES;
   const documents = [...DOCUMENTS, ...records.documents];
 

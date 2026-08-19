@@ -14,10 +14,12 @@ login yet; the role switcher in the top bar changes what the app shows.
 [![CI](https://github.com/youneedgreg/law-firm_management_system/actions/workflows/ci.yml/badge.svg)](https://github.com/youneedgreg/law-firm_management_system/actions/workflows/ci.yml)
 
 > **Status: in development.** The interface is complete and interactive across
-> 27 routes, running on seed data. The Effect backend — Postgres, typed domain
-> model, auth, and authorization — is being built now, phase by phase, in
-> [`ROADMAP.md`](ROADMAP.md). This README describes what is true today and marks
-> what is not yet built. See [Honest status](#honest-status).
+> 27 routes. The Effect backend is being built module by module: matters are
+> real — Postgres, a typed domain model, a generated HTTP API, and Rx atoms in
+> the browser — and every other module still runs on seed data. Auth and
+> authorization are next, phase by phase, in [`ROADMAP.md`](ROADMAP.md). This
+> README describes what is true today and marks what is not. See
+> [Honest status](#honest-status).
 
 ---
 
@@ -214,18 +216,26 @@ the build, on every push to `main`, which also deploys.
 
 The distinction between built and planned matters, so here it is plainly.
 
-**Working today:** all 27 routes, ~6,100 lines of TypeScript and ~1,500 lines of
-CSS, deployed to Vercel. Create flows for clients, matters, hearings, tasks,
-time entries, appointments, documents, invoices, and communications — all
-persisting to `localStorage` through a `useSyncExternalStore` store. Role
-switching across seven roles. Filtering, search, and a client portal. The Effect
-toolchain, test harness, architecture boundaries, CI pipeline, and eight ADRs.
+**Working today:** all 27 routes, ~16,000 lines of TypeScript beside ~6,500
+lines of tests and ~1,550 lines of CSS, deployed to Vercel. **Matters are real end to end**: a Kenyan legal
+domain modelled from statute, Neon Postgres behind repositories, `CaseService`,
+an `HttpApi` contract from which the router, the client and the OpenAPI document
+are all derived, and — in the browser — `@effect-rx/rx-react` atoms that read the
+caseload through that generated client and move a matter through its lifecycle
+optimistically. 433 unit tests and 39 integration tests, architecture boundaries
+enforced by the linter, CI on every push, and nine ADRs.
 
-**Not built yet:** the database, the Effect domain model, the HTTP API,
-authentication, and authorization. Data lives in `src/lib/data/*.ts` as seed
-arrays, so the live demo is per-browser: what you create is yours alone and
-disappears when you clear site data. Every import of those files raises an
-ESLint warning — 59 today — which doubles as the migration checklist.
+Every other module still runs on the wireframe's seed arrays, with its create
+flow persisting to the browser through an Effect `KeyValueStore`: clients,
+hearings, tasks, time entries, appointments, documents, invoices and
+communications. Role switching across seven roles, filtering, search, and a
+client portal.
+
+**Not built yet:** authentication and authorization, and the eight modules
+listed above. Their data lives in `src/lib/data/*.ts` as seed arrays, so those
+screens are per-browser on the live demo: what you create there is yours alone
+and disappears when you clear site data. Every import of those files raises an
+ESLint warning — 54 today — which doubles as the migration checklist.
 
 **Deliberately out of scope:** multi-tenancy. One firm, seven roles. Adding
 `firm_id` to every table and every query would be plumbing rather than signal;
@@ -234,7 +244,7 @@ the reasoning is in [ADR 0003](docs/adr/0003-single-firm-scope.md).
 ## Documentation
 
 - [`ROADMAP.md`](ROADMAP.md) — the plan, phase by phase, with progress
-- [`docs/adr/`](docs/adr/) — eight architecture decision records, including the
+- [`docs/adr/`](docs/adr/) — nine architecture decision records, including the
   arguments against each choice
 
 ---

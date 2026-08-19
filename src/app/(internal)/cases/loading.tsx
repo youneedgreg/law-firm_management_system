@@ -1,9 +1,11 @@
 /**
- * Shown while the caseload is being read.
+ * The frame the cases segment fills.
  *
- * The matters come from Postgres on every request — there is no static
- * fallback to show in the meantime — so this is the frame the page will fill,
- * which keeps the header from jumping when it does.
+ * It covers the matter file, which is still read on the server and is the wait
+ * worth showing something for. The caseload itself no longer waits here: its
+ * rows are an atom, so the page renders immediately and the table says it is
+ * reading — a loading state inside the component that owns it rather than a
+ * whole segment replaced.
  */
 export default function CasesLoading() {
   return (
@@ -11,7 +13,7 @@ export default function CasesLoading() {
       <div className="page-head">
         <h1 className="page-title">Cases</h1>
       </div>
-      <p className="dek">Reading the caseload…</p>
+      <p className="dek">Opening the file…</p>
     </>
   );
 }

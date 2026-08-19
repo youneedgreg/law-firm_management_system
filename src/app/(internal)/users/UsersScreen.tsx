@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useAppState } from "@/components/AppState";
+import { useRx, useRxValue } from "@effect-rx/rx-react";
+import { useAddRecord } from "@/rx/hooks";
+import { hydratedRx, recordsRx, settingsRx } from "@/rx/session";
 import { FormDialog } from "@/components/FormDialog";
 import {
   CheckboxGroup,
@@ -27,7 +29,7 @@ import {
 } from "@/lib/types";
 
 export function UserTable() {
-  const { records } = useAppState();
+  const records = useRxValue(recordsRx);
   const accounts = [...records.users, ...USER_ACCOUNTS];
 
   return (
@@ -67,7 +69,7 @@ export function UserTable() {
 }
 
 export function NewUserForm() {
-  const { add } = useAppState();
+  const add = useAddRecord();
 
   function createUser(fields: FormData) {
     add("users", {
@@ -116,7 +118,8 @@ export function NewUserForm() {
  * often as they are changed, so they stay on the page.
  */
 export function FirmSettingsForm() {
-  const { settings, saveSettings, hydrated } = useAppState();
+  const [settings, saveSettings] = useRx(settingsRx);
+  const hydrated = useRxValue(hydratedRx);
   const [saved, setSaved] = useState(false);
 
   function save(event: React.FormEvent<HTMLFormElement>) {

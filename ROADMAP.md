@@ -4,7 +4,7 @@
 > production TypeScript: Effect end to end, Postgres, full test coverage, CI/CD,
 > and documented architectural reasoning.
 
-**Target:** portfolio-ready in 6–12 weeks · **Status:** Phase 4 complete
+**Target:** portfolio-ready in 6–12 weeks · **Status:** Phase 5 complete
 
 ---
 
@@ -126,6 +126,8 @@ src/
 
   api/             HttpApi definition (shared contract) + server implementation
   runtime/         ManagedRuntime — one per process, wires Layers together
+  rx/              The same idea in the browser: the Layer the atoms are built
+                   from, the atoms, and the React bindings for reading them.
 
   app/             Next.js routes. Thin. Server Components call the runtime.
   components/      React. Presentational + rx-connected containers.
@@ -345,13 +347,29 @@ if server and client drift.
 
 The part you specifically asked for. Retire `AppState.tsx`.
 
-- [ ] `@effect-rx/rx-react` installed and a runtime provided to the tree
-- [ ] Rx atoms for server data with loading and error states as first-class values
-- [ ] Rewrite role switching and invoice state as Rx
-- [ ] Mutation atoms with optimistic updates and rollback on failure
-- [ ] Persist selected state to localStorage via an Rx-integrated `KeyValueStore`
-- [ ] Component tests covering loading, success, and failure paths
-- [ ] ADR: why Rx over TanStack Query / Zustand, honestly weighed
+- [x] `src/rx/` — the browser's composition root, and the mirror image of `runtime/`. `Rx.runtime` over a Layer holding the generated API client (`FetchHttpClient`) and a `KeyValueStore`; `RegistryProvider` at the root of the tree with a 30-second idle TTL, so moving between two filters or into a matter and back does not refetch. Its own ESLint boundary: it may reach the shared half of `api/`, and not `infra/`, `runtime/`, `app/` or `components/`
+- [x] Rx atoms for server data, with `Result` as the value rather than three variables. The caseload as a family keyed by the status filter, and the intake choices, both through `HttpApiClient` — so an endpoint renamed in the contract fails to compile here, and a refusal arrives as the class the service failed with. `Result.builder` renders the three cases exhaustively **and rethrows anything that is not a typed failure**, so a defect reaches `error.tsx`: the client half of the `attempt`/`run` division the server already draws
+- [x] **`Rx.withServerValue` is what makes this safe under SSR, and it is not optional.** Next renders every client component on the server first. React reads the _server value_ — not the atom — during that render and again while hydrating, so a fetching atom shows its loading state and never issues a request from a process with no origin, and a persisted atom shows its default so the first client render matches the HTML byte for byte. Without it a `localStorage` read runs during a server render and a hydration mismatch throws the tree away. There is a test asserting exactly that: a stored role reads back in the browser and still renders the default on the server
+- [x] Role switching, firm settings, the prototype's created records and the invoice-status overrides are four independent atoms, not one context object. A component that reads the role no longer re-renders when an invoice is marked paid. `AppState.tsx` is deleted; 24 components and 38 call sites moved
+- [x] **The session store is decoded through schemas now** (`rx/records.ts`), which the module it replaced admitted it did not do — it kept whatever survived `Array.isArray`. `RECORDS_MATCH_TYPES` proves each schema decodes to exactly the interface the screens are written against, so a field added to one and not the other fails to compile. A stored role this build has never heard of is refused at the boundary and the atom falls back to the default
+- [x] Mutation atom with optimistic update and rollback: `Rx.optimistic` over the status the server last gave, `Rx.optimisticFn` over the transition endpoint. The panel holds **no state at all** — not `useState`, not `useOptimistic`. The shown status, the pending flag and the refusal are all read out of two atoms. Verified in the browser by moving a matter behind the page's back with `curl` and then clicking a move that was legal when the page rendered: the guess appears, the server refuses, the panel snaps back and prints "A matter that is Closed cannot become Under Review; it may only become Appealed" — a sentence composed on the server by the domain's transition table and never transmitted
+- [x] The `moveCase` Server Action is gone with it. Opening and amending stay actions, because both are forms and a `<form action>` submits without JavaScript; a status button is not a form and had no reason to be a second way into the same service
+- [x] `KeyValueStore` over `localStorage`, chosen at layer construction rather than at module load, so a server render gets the in-memory store instead of a `ReferenceError`. `@effect/platform-browser` ships this layer and reaches `localStorage` eagerly, which is right for an app that only runs in a browser and wrong for one that is server-rendered first
+- [x] **`Rx.kvs` was not usable as shipped**, and the reason is worth stating: it collapses the read into `Result.getOrElse(defaultValue)`, so "nothing is stored" and "the store has not answered yet" are the same value. A screen that confuses those renders "no such client" for one that is about to appear. `rx/session.ts` is the same ~20 lines with the `Result` left where it can be read, and `hydratedRx` is the conjunction of all four reads
+- [x] **18 new tests: 9 through React over the real API with no socket, and 9 against the session atoms directly.** The same `toWebHandler` the API tests use, behind a stubbed global `fetch`: React reads an atom, the atom calls the generated client, the real router decodes, the real service answers, and the component renders it — only the repositories are arrays. Loading is asserted against an API held open on purpose, because a test that awaited the response could not tell an optimistic update from a fast one
+- [x] ADR [0009](docs/adr/0009-effect-rx-for-client-state.md): Rx over TanStack Query and Zustand, with the four things it costs written down — a very small ecosystem, nobody arriving knowing it, a pre-1.0 dependency that needed an `overrides` entry to dedupe `@effect/platform`, and a library helper that had to be rewritten
+- [x] Verified against Neon in the browser: the caseload reads from the API and filters without a navigation, the intake dialog fills its two selects from the firm's real clients and staff with "(may not file)" where the Advocates Act says so, a matter was moved through the lifecycle and back, a stale move was refused and rolled back, and a chosen role survived a full reload
+
+> **The trade the caseload made, stated plainly.** A Server Component read
+> reaches Postgres in-process — one query, no hop. The caseload now asks the
+> browser to make an HTTP request to a route that makes the same query. What it
+> buys: the filter is answered without a navigation, each filter's answer is
+> cached in the browser, a matter closed in another tab appears when this one
+> regains focus, and loading and failure are states the table renders rather
+> than a `loading.tsx` and an `error.tsx` for the whole segment. The matter
+> _file_ did not move and should not: it is the page you land on and link to,
+> and it changes when the matter changes rather than in response to anything the
+> browser does. Filtering is interaction; a file is a document.
 
 **Done when:** no `useState`-based data fetching remains; every async client
 state has explicit loading and error handling.
@@ -533,33 +551,38 @@ that existed locally but not in a clean checkout. The substitutes:
 Append as decisions are made. This becomes the raw material for your ADRs and
 the most interesting thing an interviewer can read.
 
-| Date       | Decision                            | Reasoning                                                                                                                                                                        |
-| ---------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-08-18 | Effect 3.22.x, not 4.0-rc           | `@effect-rx/rx-react` peer-deps on `effect@^3.17` with no v4 track; choosing v4 today would cost the client-side Effect layer                                                    |
-| 2026-08-18 | Effect end to end, including React  | Deliberate: the client-side story is the differentiator vs. typical Effect backends                                                                                              |
-| 2026-08-18 | Neon Postgres + Vercel              | Free at portfolio scale, clean `@effect/sql-pg` fit, one-click live demo                                                                                                         |
-| 2026-08-18 | D-1 Single firm                     | Multi-tenancy is plumbing, not signal; a stated scope boundary reads as judgment                                                                                                 |
-| 2026-08-18 | D-2 Better Auth, self-hosted        | Own the interesting parts (sessions, roles, audit) without hand-rolling crypto                                                                                                   |
-| 2026-08-18 | D-3 Deep Kenyan domain              | Researched jurisdictional detail is the cheapest way to look senior                                                                                                              |
-| 2026-08-18 | D-4 Vercel Blob, private            | Private-by-default matters for legal documents; no infra overhead                                                                                                                |
-| 2026-08-18 | D-5 Seeded accounts + role switcher | Zero friction to a full dashboard; doubles as an RBAC showcase                                                                                                                   |
-| 2026-08-18 | D-6 Keep hand-written CSS           | Distinctive beats default shadcn; rewriting working CSS buys nothing                                                                                                             |
-| 2026-08-18 | D-7 Testcontainers                  | Hermetic and identical locally and in CI; no quota, no CI secrets                                                                                                                |
-| 2026-08-19 | Docker verification → Phase 12      | Installing Docker blocks nothing early; deferring keeps Phase 0 shippable. Pull forward if Phase 2 needs the feedback loop                                                       |
-| 2026-08-19 | D-9 Trunk-based, `main` only        | PR review is self-review on a solo project; pre-push hook and `verify:clean` replace the lost CI gate                                                                            |
-| 2026-08-18 | D-8 Public repo from day one        | Forces commit hygiene now; the wireframe → system progression is the story                                                                                                       |
-| 2026-08-19 | Row↔domain mapping as a schema      | A `transformOrFail` has an encode side, so reads and writes cannot drift apart the way two hand-written functions do                                                             |
-| 2026-08-19 | Ordering columns for domain lists   | `contacts[0]` and an invoice's line order carry meaning; a `SELECT` with no `ORDER BY` has no first element                                                                      |
-| 2026-08-19 | `sslmode` pinned in code, not env   | Vercel owns `DATABASE_URL` and `vercel env pull` overwrites hand-edits; one line covers every environment                                                                        |
-| 2026-08-19 | In-memory repositories, not mocks   | A second implementation of an interface that already existed. No framework, no stubbed method names to keep in sync — and the fakes enforce what the schema enforces             |
-| 2026-08-19 | Certificate checked on filing only  | The domain holds the _current_ certificate and no history, so re-checking on every edit would block historic files over a year the system cannot speak to                        |
-| 2026-08-19 | Reference race left to the index    | A database sequence would remove the race and hand out gaps on every rollback; a client-visible reference is the wrong place for gaps. `UNIQUE` + retry instead                  |
-| 2026-08-19 | Courts chosen whole, not assembled  | Four free inputs can build a `MagistratesCourt` with no rank; a keyed list cannot, and a firm files in a known set of stations anyway                                            |
-| 2026-08-19 | Wire schemas separate from domain   | `DateFromSelf` encodes to a `Date`, which JSON cannot carry. Derived from the domain's own `fields`, so only the dates are restated, and guarded twice so neither half can drift |
-| 2026-08-19 | No `documents` endpoint group       | No repository, no mapping, nothing seeded. A generated client is only worth having if the contract is true; an endpoint over an empty table to tick a box spends exactly that    |
-| 2026-08-19 | Errors are the domain's own classes | Re-declaring them in `api/` would hand the client a different class with the same name. Sharing them means `reason` is reconstituted on the client rather than transmitted       |
-| 2026-08-19 | API shares the runtime's `memoMap`  | Otherwise `toWebHandler` builds `PgLive` a second time: two pools in one process, each sized for the whole process, against a database with a connection limit                   |
-| 2026-08-19 | `RepositoryFailure` dies, not fails | It carries the driver's message, which can carry the query. A defect gets an empty 500 — there is no body, so there is no encoder to be talked into including the detail         |
+| Date       | Decision                                   | Reasoning                                                                                                                                                                        |
+| ---------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-18 | Effect 3.22.x, not 4.0-rc                  | `@effect-rx/rx-react` peer-deps on `effect@^3.17` with no v4 track; choosing v4 today would cost the client-side Effect layer                                                    |
+| 2026-08-18 | Effect end to end, including React         | Deliberate: the client-side story is the differentiator vs. typical Effect backends                                                                                              |
+| 2026-08-18 | Neon Postgres + Vercel                     | Free at portfolio scale, clean `@effect/sql-pg` fit, one-click live demo                                                                                                         |
+| 2026-08-18 | D-1 Single firm                            | Multi-tenancy is plumbing, not signal; a stated scope boundary reads as judgment                                                                                                 |
+| 2026-08-18 | D-2 Better Auth, self-hosted               | Own the interesting parts (sessions, roles, audit) without hand-rolling crypto                                                                                                   |
+| 2026-08-18 | D-3 Deep Kenyan domain                     | Researched jurisdictional detail is the cheapest way to look senior                                                                                                              |
+| 2026-08-18 | D-4 Vercel Blob, private                   | Private-by-default matters for legal documents; no infra overhead                                                                                                                |
+| 2026-08-18 | D-5 Seeded accounts + role switcher        | Zero friction to a full dashboard; doubles as an RBAC showcase                                                                                                                   |
+| 2026-08-18 | D-6 Keep hand-written CSS                  | Distinctive beats default shadcn; rewriting working CSS buys nothing                                                                                                             |
+| 2026-08-18 | D-7 Testcontainers                         | Hermetic and identical locally and in CI; no quota, no CI secrets                                                                                                                |
+| 2026-08-19 | Docker verification → Phase 12             | Installing Docker blocks nothing early; deferring keeps Phase 0 shippable. Pull forward if Phase 2 needs the feedback loop                                                       |
+| 2026-08-19 | D-9 Trunk-based, `main` only               | PR review is self-review on a solo project; pre-push hook and `verify:clean` replace the lost CI gate                                                                            |
+| 2026-08-18 | D-8 Public repo from day one               | Forces commit hygiene now; the wireframe → system progression is the story                                                                                                       |
+| 2026-08-19 | Row↔domain mapping as a schema             | A `transformOrFail` has an encode side, so reads and writes cannot drift apart the way two hand-written functions do                                                             |
+| 2026-08-19 | Ordering columns for domain lists          | `contacts[0]` and an invoice's line order carry meaning; a `SELECT` with no `ORDER BY` has no first element                                                                      |
+| 2026-08-19 | `sslmode` pinned in code, not env          | Vercel owns `DATABASE_URL` and `vercel env pull` overwrites hand-edits; one line covers every environment                                                                        |
+| 2026-08-19 | In-memory repositories, not mocks          | A second implementation of an interface that already existed. No framework, no stubbed method names to keep in sync — and the fakes enforce what the schema enforces             |
+| 2026-08-19 | Certificate checked on filing only         | The domain holds the _current_ certificate and no history, so re-checking on every edit would block historic files over a year the system cannot speak to                        |
+| 2026-08-19 | Reference race left to the index           | A database sequence would remove the race and hand out gaps on every rollback; a client-visible reference is the wrong place for gaps. `UNIQUE` + retry instead                  |
+| 2026-08-19 | Courts chosen whole, not assembled         | Four free inputs can build a `MagistratesCourt` with no rank; a keyed list cannot, and a firm files in a known set of stations anyway                                            |
+| 2026-08-19 | Wire schemas separate from domain          | `DateFromSelf` encodes to a `Date`, which JSON cannot carry. Derived from the domain's own `fields`, so only the dates are restated, and guarded twice so neither half can drift |
+| 2026-08-19 | No `documents` endpoint group              | No repository, no mapping, nothing seeded. A generated client is only worth having if the contract is true; an endpoint over an empty table to tick a box spends exactly that    |
+| 2026-08-19 | Errors are the domain's own classes        | Re-declaring them in `api/` would hand the client a different class with the same name. Sharing them means `reason` is reconstituted on the client rather than transmitted       |
+| 2026-08-19 | API shares the runtime's `memoMap`         | Otherwise `toWebHandler` builds `PgLive` a second time: two pools in one process, each sized for the whole process, against a database with a connection limit                   |
+| 2026-08-19 | `RepositoryFailure` dies, not fails        | It carries the driver's message, which can carry the query. A defect gets an empty 500 — there is no body, so there is no encoder to be talked into including the detail         |
+| 2026-08-19 | Rx over TanStack Query + Zustand           | The atom runs an `Effect`, so a refusal arrives as the class the service failed with rather than as whatever a `fetch` wrapper threw. One dependency the stack already carried   |
+| 2026-08-19 | `rx/session.ts` reimplements `Rx.kvs`      | The library collapses the read into `getOrElse(default)`, so "nothing stored" and "not read yet" are one value. A screen that waits on hydration needs to tell them apart        |
+| 2026-08-19 | Every browser atom declares a server value | Next renders client components on the server first. Without it a `localStorage` read runs there and the first client render disagrees with the HTML                              |
+| 2026-08-19 | Caseload client-fetched, matter file not   | Filtering is interaction and belongs to the browser; a file is a document you land on and link to, and stays a Server Component read with no HTTP hop                            |
+| 2026-08-19 | `overrides` to dedupe `@effect/platform`   | `@effect-rx/rx` peer-depends on ^0.90 and npm nested a second copy. The `KeyValueStore` module is identical between them; two copies in one browser bundle is not                |
 
 ---
 
@@ -567,11 +590,12 @@ the most interesting thing an interviewer can read.
 
 One line per session. Keeps momentum visible across a long project.
 
-| Date       | Phase | What moved                                                                                                                                                                          |
-| ---------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-08-18 | —     | Wireframe committed; roadmap written; all eight architectural decisions settled                                                                                                     |
-| 2026-08-19 | 2     | Row↔domain mapping, case/client/invoice repositories, the trust settlement transaction, migrations 0002–0003. 263 unit tests, 34 integration                                        |
-| 2026-08-19 | 2     | Seed script: the wireframe's fixtures decoded into Postgres through the domain schemas, idempotent on derived ids. 309 unit tests, 39 integration                                   |
-| 2026-08-19 | 2     | Closed the two gaps the seed surfaced: `KenyanPhone` widened to fixed lines (migration 0004), intake dates supplied per matter. 336 unit tests                                      |
-| 2026-08-19 | 3     | `CaseService`, the runtime, and the Cases slice end to end: Server Components read Neon, Server Actions decode through Schema, refusals render as sentences. 385 unit tests         |
-| 2026-08-19 | 4     | Typed HTTP API: one contract, from which the router, the client and the OpenAPI document are all derived. Cases, clients and billing; documents deferred to Phase 7. 415 unit tests |
+| Date       | Phase | What moved                                                                                                                                                                            |
+| ---------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-18 | —     | Wireframe committed; roadmap written; all eight architectural decisions settled                                                                                                       |
+| 2026-08-19 | 2     | Row↔domain mapping, case/client/invoice repositories, the trust settlement transaction, migrations 0002–0003. 263 unit tests, 34 integration                                          |
+| 2026-08-19 | 2     | Seed script: the wireframe's fixtures decoded into Postgres through the domain schemas, idempotent on derived ids. 309 unit tests, 39 integration                                     |
+| 2026-08-19 | 2     | Closed the two gaps the seed surfaced: `KenyanPhone` widened to fixed lines (migration 0004), intake dates supplied per matter. 336 unit tests                                        |
+| 2026-08-19 | 3     | `CaseService`, the runtime, and the Cases slice end to end: Server Components read Neon, Server Actions decode through Schema, refusals render as sentences. 385 unit tests           |
+| 2026-08-19 | 4     | Typed HTTP API: one contract, from which the router, the client and the OpenAPI document are all derived. Cases, clients and billing; documents deferred to Phase 7. 415 unit tests   |
+| 2026-08-19 | 5     | Effect on the client: `AppState.tsx` retired into atoms, the caseload and intake choices read through the generated client, an optimistic status move that rolls back. 433 unit tests |

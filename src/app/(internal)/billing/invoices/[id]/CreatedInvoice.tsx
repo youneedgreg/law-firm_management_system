@@ -1,12 +1,14 @@
 "use client";
 
 import { InvoiceDetail } from "./InvoiceDetail";
-import { useAppState } from "@/components/AppState";
+import { useRxValue } from "@effect-rx/rx-react";
+import { hydratedRx, recordsRx } from "@/rx/session";
 import { NotOnFile } from "@/components/ui";
 
 /** A fee note raised through the invoice form, held in the session store. */
 export function CreatedInvoice({ id }: { id: number }) {
-  const { records, hydrated } = useAppState();
+  const records = useRxValue(recordsRx);
+  const hydrated = useRxValue(hydratedRx);
 
   if (!hydrated) return null;
 

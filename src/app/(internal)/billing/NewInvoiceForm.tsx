@@ -1,6 +1,8 @@
 "use client";
 
-import { useAppState } from "@/components/AppState";
+import { useRxValue } from "@effect-rx/rx-react";
+import { useAddRecord } from "@/rx/hooks";
+import { recordsRx } from "@/rx/session";
 import { FormDialog } from "@/components/FormDialog";
 import { SelectField, TextField } from "@/components/form";
 import { INVOICES } from "@/lib/data/billing";
@@ -16,7 +18,8 @@ import {
 
 /** Raising a fee note: one line item, priced by quantity × rate. */
 export function NewInvoiceForm() {
-  const { records, add } = useAppState();
+  const records = useRxValue(recordsRx);
+  const add = useAddRecord();
   const clients = [...records.clients, ...CLIENTS];
   const cases = CASES;
   const invoices = [...INVOICES, ...records.invoices];

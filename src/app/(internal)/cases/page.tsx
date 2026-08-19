@@ -1,23 +1,29 @@
 import Link from "next/link";
-import { Effect } from "effect";
 import { CASE_STATUSES, type CaseStatus } from "@/domain/case/status";
-import { run } from "@/runtime";
-import { CaseService } from "@/services/case-service";
 import { CasesTable, CasesTitle } from "./CasesTable";
 import { NewCaseForm } from "./NewCaseForm";
 
 /**
- * The caseload, read from Postgres on the server.
+ * The caseload.
  *
- * Two reads through `CaseService`, run in one pass on the runtime: the matters
- * with their names resolved, and the choices the intake form offers. Both are
- * effects, so `Effect.all` runs them concurrently and one failure fails the
- * page — which is the behaviour worth having, because a page that rendered a
- * caseload beside a form with no clients in it would look like it worked.
+ * Phase 3 read both the matters and the intake choices here, on the server,
+ * through `CaseService`. Phase 5 moved both into atoms, and this page is what
+ * is left: the filter, which is a URL, and the two components that answer to
+ * it.
  *
- * The status filter is applied by the service rather than by the table. It is
- * the same filter the tests cover, and pushing it to the client would mean the
- * page always fetches everything and then hides most of it.
+ * That is a trade rather than an improvement, and it is worth stating which
+ * way it goes. A server render reaches the database in-process — one query, no
+ * hop — and this one asks the browser to make an HTTP request to a route that
+ * makes the same query. What it buys is that the filter is answered without a
+ * navigation, that the answer to each filter is cached in the browser rather
+ * than recomputed, that a matter closed in another tab shows up when this one
+ * regains focus, and that the loading and failure states are values the table
+ * renders rather than a `loading.tsx` and an `error.tsx` for the whole segment.
+ *
+ * The matter *file* did not move, deliberately. It is the page you land on and
+ * link to, it changes when the matter changes and not in response to anything
+ * the browser does, and it is still read in-process by a Server Component.
+ * Filtering is interaction; a file is a document.
  */
 export default async function CasesPage({ searchParams }: PageProps<"/cases">) {
   const { status } = await searchParams;
@@ -27,25 +33,11 @@ export default async function CasesPage({ searchParams }: PageProps<"/cases">) {
     ? (status as CaseStatus)
     : "all";
 
-  const { caseload, choices } = await run(
-    Effect.gen(function* () {
-      const service = yield* CaseService;
-      const [caseload, choices] = yield* Effect.all(
-        [
-          service.caseload(active === "all" ? {} : { status: active }),
-          service.intakeChoices(),
-        ],
-        { concurrency: "unbounded" },
-      );
-      return { caseload, choices };
-    }),
-  );
-
   return (
     <>
       <div className="page-head">
         <CasesTitle />
-        <NewCaseForm choices={choices} />
+        <NewCaseForm />
       </div>
 
       <div className="filter-row">
@@ -65,7 +57,7 @@ export default async function CasesPage({ searchParams }: PageProps<"/cases">) {
         ))}
       </div>
 
-      <CasesTable caseload={caseload} />
+      <CasesTable status={active} />
     </>
   );
 }

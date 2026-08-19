@@ -1,9 +1,13 @@
 "use client";
 
-import { useOptimistic, useState, useTransition } from "react";
+import { Result, useRxSet, useRxValue } from "@effect-rx/rx-react";
+import { Exit } from "effect";
+import { useRouter } from "next/navigation";
 import type { CaseStatus } from "@/domain/case/status";
+import type { CaseId } from "@/domain/shared/ids";
 import { caseStatusTag } from "@/lib/format";
-import { moveCase } from "../actions";
+import { moveRx, showingStatusRx } from "@/rx/cases";
+import { explain } from "@/rx/failure";
 
 /**
  * Moving a matter through its lifecycle.
@@ -14,48 +18,78 @@ import { moveCase } from "../actions";
  * offers one button, Appealed, because that is the only move the law of this
  * lifecycle permits.
  *
+ * ## Three values, no state
+ *
+ * There is no `useState` in this component and no `useOptimistic` either. The
+ * status being shown, whether a move is in flight, and why the last one was
+ * refused are all read out of two atoms:
+ *
+ * - `showingStatusRx` is the server's status wrapped in `Rx.optimistic`. The
+ *   mutation moves it ahead of the server and it reverts on its own if the
+ *   server disagrees. The guess is never written anywhere.
+ * - `moveRx` is the mutation, and its `Result` is both the spinner and the
+ *   message: `waiting` while the request is out, and a `Failure` carrying the
+ *   refusal — an `InvalidTransition` whose `reason` names the moves that
+ *   *were* available. That sentence is composed on the server by the domain's
+ *   transition table and never transmitted; both ends hold the class, so it is
+ *   reconstituted here.
+ *
  * ## Why optimistic, and what it costs
  *
- * The status is shown as moved the moment the button is pressed, before the
- * server has agreed. That is honest here for a specific reason: the button was
- * built from the server's own list of legal moves, so the overwhelmingly likely
- * outcome is acceptance, and the round trip is a Neon query away — long enough
- * to feel like a hung button.
+ * The status shows as moved the moment the button is pressed, before the server
+ * has agreed. That is honest here because the button was built from the
+ * server's own list of legal moves, so acceptance is the overwhelmingly likely
+ * outcome, and the round trip is a Neon query away — long enough for a button
+ * that does nothing to feel broken.
  *
- * When it is *not* accepted — the matter moved in another tab, so the move is
- * now illegal — `useOptimistic` discards the guess as soon as the transition
- * ends, and the panel snaps back to the real status with the service's own
- * reason underneath. The guess is never written anywhere; it exists only for
- * the length of the transition.
+ * When it is *not* accepted — the matter moved in another tab, so this move is
+ * now illegal — the panel snaps back to the real status with the service's
+ * reason underneath.
+ *
+ * ## Why the router is still refreshed
+ *
+ * The page around this panel is server-rendered, and a matter that has moved to
+ * Closed offers different transitions and a different limitation position. The
+ * atom knows the new status; only the server knows the rest. `router.refresh()`
+ * re-reads the segment, which hands this component a new `status` prop — and
+ * because the atoms are keyed by the matter *and* its status, that is a new
+ * atom rather than an old one holding a stale answer.
  */
 export function StatusPanel({
   id,
   status,
   mayBeMovedTo,
 }: {
-  id: string;
+  id: CaseId;
   status: CaseStatus;
   mayBeMovedTo: readonly CaseStatus[];
 }) {
-  const [pending, startTransition] = useTransition();
-  const [optimistic, setOptimistic] = useOptimistic(status);
-  const [refusal, setRefusal] = useState("");
+  const router = useRouter();
+  const matter = { id, status };
 
-  const move = (to: CaseStatus) => {
-    setRefusal("");
-    startTransition(async () => {
-      setOptimistic(to);
-      const result = await moveCase(id, to);
-      // A refusal leaves `optimistic` to revert on its own when the transition
-      // ends; all that is needed here is the reason it was refused.
-      if (result.status === "refused") setRefusal(result.reason);
-    });
+  const showing = useRxValue(showingStatusRx(matter));
+  const move = useRxValue(moveRx(matter));
+  const requestMove = useRxSet(moveRx(matter), { mode: "promiseExit" });
+
+  const pending = move.waiting;
+
+  const refusal = Result.builder(move)
+    .onWaiting(() => "")
+    .onError(explain)
+    .onDefect(
+      () => "The matter could not be moved. The details are in the server log.",
+    )
+    .orElse(() => "");
+
+  const requested = async (to: CaseStatus): Promise<void> => {
+    const outcome = await requestMove(to);
+    if (Exit.isSuccess(outcome)) router.refresh();
   };
 
   return (
     <div>
       <div className="row row-tight">
-        <span className={caseStatusTag(optimistic)}>{optimistic}</span>
+        <span className={caseStatusTag(showing)}>{showing}</span>
         {pending && (
           <span className="dek" style={{ marginLeft: "var(--space-2)" }}>
             Saving…
@@ -75,7 +109,7 @@ export function StatusPanel({
                 type="button"
                 className="btn btn-secondary"
                 disabled={pending}
-                onClick={() => move(to)}
+                onClick={() => void requested(to)}
               >
                 {to}
               </button>

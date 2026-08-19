@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useAppState } from "@/components/AppState";
+import { useRxValue } from "@effect-rx/rx-react";
+import { useAddRecord } from "@/rx/hooks";
+import { recordsRx } from "@/rx/session";
 import { FormDialog } from "@/components/FormDialog";
 import { SelectField, TextField } from "@/components/form";
 import { SectionTitle } from "@/components/ui";
@@ -16,7 +18,7 @@ import { HEARING_STATUSES, type HearingStatus } from "@/lib/types";
  * listings, so a hearing scheduled here shows up in both at once.
  */
 export function CourtCalendar() {
-  const { records } = useAppState();
+  const records = useRxValue(recordsRx);
   const hearings = [...records.hearings, ...HEARINGS];
   const week = courtWeek(hearings);
 
@@ -62,7 +64,8 @@ export function CourtCalendar() {
 }
 
 export function ScheduleHearingForm() {
-  const { records, add } = useAppState();
+  const records = useRxValue(recordsRx);
+  const add = useAddRecord();
   const cases = CASES;
   const hearings = [...HEARINGS, ...records.hearings];
 

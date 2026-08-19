@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useAppState } from "@/components/AppState";
+import { useRxSet } from "@effect-rx/rx-react";
 import { PORTAL_CLIENT, PORTAL_NAV } from "@/lib/data/portal";
+import { roleRx } from "@/rx/session";
 
 /**
  * The client-facing surface. It carries its own masthead and nav rather than
@@ -11,7 +12,7 @@ import { PORTAL_CLIENT, PORTAL_NAV } from "@/lib/data/portal";
  */
 export function PortalShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { setRole } = useAppState();
+  const setRole = useRxSet(roleRx);
   const router = useRouter();
 
   function exitPortal() {

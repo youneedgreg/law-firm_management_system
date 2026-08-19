@@ -1,6 +1,8 @@
 "use client";
 
-import { useAppState } from "@/components/AppState";
+import { useRxValue } from "@effect-rx/rx-react";
+import { useAddRecord } from "@/rx/hooks";
+import { recordsRx } from "@/rx/session";
 import { PORTAL_CLIENT, portalMessages } from "@/lib/data/portal";
 import { today } from "@/lib/format";
 import { text } from "@/lib/forms";
@@ -10,7 +12,8 @@ import { text } from "@/lib/forms";
  * session store the rest of the app writes to, so the thread keeps them.
  */
 export function MessageThread() {
-  const { records, add } = useAppState();
+  const records = useRxValue(recordsRx);
+  const add = useAddRecord();
   const messages = [...portalMessages(), ...[...records.messages].reverse()];
 
   function send(event: React.FormEvent<HTMLFormElement>) {

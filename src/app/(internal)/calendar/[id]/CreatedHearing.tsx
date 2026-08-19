@@ -1,13 +1,15 @@
 "use client";
 
 import { HearingDetail } from "./HearingDetail";
-import { useAppState } from "@/components/AppState";
+import { useRxValue } from "@effect-rx/rx-react";
+import { hydratedRx, recordsRx } from "@/rx/session";
 import { NotOnFile } from "@/components/ui";
 import { CASES } from "@/lib/data/cases";
 
 /** A listing added through the scheduling form, held in the session store. */
 export function CreatedHearing({ id }: { id: number }) {
-  const { records, hydrated } = useAppState();
+  const records = useRxValue(recordsRx);
+  const hydrated = useRxValue(hydratedRx);
 
   if (!hydrated) return null;
 

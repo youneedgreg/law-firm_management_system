@@ -1,7 +1,8 @@
 "use client";
 
 import { ClientDetail } from "./ClientDetail";
-import { useAppState } from "@/components/AppState";
+import { useRxValue } from "@effect-rx/rx-react";
+import { hydratedRx, recordsRx } from "@/rx/session";
 import { NotOnFile } from "@/components/ui";
 import { CASES } from "@/lib/data/cases";
 import { DOCUMENTS } from "@/lib/data/documents";
@@ -11,7 +12,8 @@ import { DOCUMENTS } from "@/lib/data/documents";
  * the seed data the server renders from, so its file is assembled here.
  */
 export function CreatedClient({ id }: { id: number }) {
-  const { records, hydrated } = useAppState();
+  const records = useRxValue(recordsRx);
+  const hydrated = useRxValue(hydratedRx);
 
   // Nothing to show until the store has been read; rendering "not on file"
   // first would flash a wrong answer.

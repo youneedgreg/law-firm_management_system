@@ -1,6 +1,8 @@
 "use client";
 
-import { useAppState } from "@/components/AppState";
+import { useRxValue } from "@effect-rx/rx-react";
+import { useAddRecord } from "@/rx/hooks";
+import { recordsRx } from "@/rx/session";
 import { FormDialog } from "@/components/FormDialog";
 import { SelectField, TextField } from "@/components/form";
 import { TableWrap } from "@/components/ui";
@@ -16,7 +18,7 @@ function ownCaseNumbers(): string[] {
 }
 
 export function PortalDocumentTable() {
-  const { records } = useAppState();
+  const records = useRxValue(recordsRx);
   const own = ownCaseNumbers();
   const documents = [
     ...records.documents.filter((document) => own.includes(document.case)),
@@ -60,7 +62,8 @@ export function PortalDocumentTable() {
 }
 
 export function PortalUploadForm() {
-  const { records, add } = useAppState();
+  const records = useRxValue(recordsRx);
+  const add = useAddRecord();
   const documents = [...DOCUMENTS, ...records.documents];
 
   function upload(fields: FormData) {

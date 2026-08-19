@@ -1,19 +1,28 @@
 "use client";
 
+import { Result, useRxValue } from "@effect-rx/rx-react";
 import { ActionDialog } from "@/components/ActionDialog";
 import { Checkbox, SelectField, TextField } from "@/components/form";
 import { MATTER_TYPES } from "@/domain/case/case";
 import { LIMITATION_BASES } from "@/domain/case/limitation";
-import type { IntakeChoices } from "@/services/case-service";
+import { intakeChoicesRx } from "@/rx/cases";
+import { explain } from "@/rx/failure";
 import { openCase } from "./actions";
 import { COURT_OPTIONS } from "./courts";
 
 /**
  * Opening a matter.
  *
- * The choices are passed in from the server rather than imported from a seed
- * array — these are the firm's actual clients and actual staff, read through
- * `CaseService.intakeChoices()`.
+ * The choices are the firm's actual clients and actual staff, read through
+ * `CaseService.intakeChoices()` — never a seed array. They arrive from an atom
+ * rather than a prop, which is the difference between fetching them on every
+ * render of the caseload and fetching them when this dialog is first opened.
+ * Most visits to the caseload never open it.
+ *
+ * The selects render before the read finishes, empty and labelled as still
+ * loading, rather than the dialog withholding itself until it can be complete.
+ * A form whose trigger does nothing for half a second reads as broken; one
+ * whose two dropdowns fill in a moment later reads as loading.
  *
  * Nothing is decided here. The advocates who cannot file are labelled, not
  * removed, because a matter can perfectly well be assigned to a legal assistant
@@ -24,8 +33,18 @@ import { COURT_OPTIONS } from "./courts";
  * `id`, `number` and `status` are not on the form and never will be. The
  * reference is derived from the firm's existing matters, and a new file is New.
  */
-export function NewCaseForm({ choices }: { choices: IntakeChoices }) {
+export function NewCaseForm() {
   const today = new Date().toISOString().slice(0, 10);
+  const result = useRxValue(intakeChoicesRx);
+
+  const choices = Result.getOrElse(result, () => ({
+    clients: [],
+    advocates: [],
+  }));
+
+  const unavailable = Result.builder(result)
+    .onError(explain)
+    .orElse(() => "");
 
   return (
     <ActionDialog
@@ -63,12 +82,16 @@ export function NewCaseForm({ choices }: { choices: IntakeChoices }) {
               name="clientId"
               required
               defaultValue={kept("clientId")}
-              placeholder="Select a client"
+              placeholder={
+                Result.isSuccess(result)
+                  ? "Select a client"
+                  : "Loading clients…"
+              }
               options={choices.clients.map((client) => ({
                 value: client.id,
                 label: client.name,
               }))}
-              error={state.fields["clientId"]}
+              error={state.fields["clientId"] ?? unavailable}
             />
             <SelectField
               label="Matter type"
@@ -85,7 +108,11 @@ export function NewCaseForm({ choices }: { choices: IntakeChoices }) {
               name="advocateId"
               required
               defaultValue={kept("advocateId")}
-              placeholder="Select an advocate"
+              placeholder={
+                Result.isSuccess(result)
+                  ? "Select an advocate"
+                  : "Loading staff…"
+              }
               options={choices.advocates.map((advocate) => ({
                 value: advocate.id,
                 label: advocate.mayFile

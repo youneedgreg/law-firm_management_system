@@ -81,6 +81,31 @@ const layerBoundaries = [
     because:
       "api/ is a delivery adapter: it calls services and is wired to their implementations by runtime/. A handler that reached for a repository would be application logic living in the transport, and the next delivery mechanism would need its own copy of it.",
   },
+  {
+    /**
+     * The browser's half of the application, and the mirror image of
+     * `runtime/`: atoms, the Layer they are built from, and the React bindings
+     * for reading them.
+     *
+     * It may reach the shared half of `api/` — that is the whole point, the
+     * atoms call the generated client — and `domain/` and `lib/` for the types
+     * the screens are written against. It may not reach `infra/` or `runtime/`,
+     * which are Postgres, and a single import of either would put the driver in
+     * the browser bundle. It may not reach `app/` or `components/` either: the
+     * dependency runs the other way, and an atom that imported a screen would
+     * be a state layer that could not be tested without one.
+     */
+    name: "rx (the browser's runtime)",
+    files: ["src/rx/**/*.ts", "src/rx/**/*.tsx"],
+    forbidden: [
+      ...layer("infra"),
+      ...layer("runtime"),
+      ...layer("app"),
+      ...layer("components"),
+    ],
+    because:
+      "rx/ is the browser's composition root. It calls the API over the contract and knows nothing about how the server answers — a Postgres import here would be a driver in the client bundle, and a component import would invert the dependency the whole layering rests on.",
+  },
   /**
    * The contract is held by both ends, so it has to survive being imported
    * into a browser bundle — Phase 5 derives the client from it. `runtime/`

@@ -1,6 +1,8 @@
 "use client";
 
-import { useAppState } from "@/components/AppState";
+import { useRxValue } from "@effect-rx/rx-react";
+import { useInvoiceStatus } from "@/rx/hooks";
+import { recordsRx, roleRx } from "@/rx/session";
 import { Stat } from "@/components/ui";
 import { CASES, SIGNED_IN_ADVOCATE } from "@/lib/data/cases";
 import { HEARINGS } from "@/lib/data/hearings";
@@ -18,7 +20,7 @@ import { kes } from "@/lib/format";
  * server.
  */
 export function DashboardHeader() {
-  const { role } = useAppState();
+  const role = useRxValue(roleRx);
   const isAdvocate = role === "Advocate/Lawyer";
 
   return (
@@ -38,7 +40,9 @@ export function DashboardHeader() {
 }
 
 export function DashboardStats() {
-  const { role, statusOf, records } = useAppState();
+  const role = useRxValue(roleRx);
+  const records = useRxValue(recordsRx);
+  const statusOf = useInvoiceStatus();
   const isAdvocate = role === "Advocate/Lawyer";
 
   // Everything the forms have created counts towards the band too.

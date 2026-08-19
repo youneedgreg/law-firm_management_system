@@ -1,6 +1,8 @@
 "use client";
 
-import { useAppState } from "@/components/AppState";
+import { useRxValue } from "@effect-rx/rx-react";
+import { useAddRecord } from "@/rx/hooks";
+import { recordsRx } from "@/rx/session";
 import { FormDialog } from "@/components/FormDialog";
 import { SegmentedField, SelectField, TextField } from "@/components/form";
 import { TableWrap } from "@/components/ui";
@@ -12,7 +14,7 @@ import { nextId, text } from "@/lib/forms";
 import { TIME_ACTIVITIES, type TimeActivity } from "@/lib/types";
 
 export function TimeTable() {
-  const { records } = useAppState();
+  const records = useRxValue(recordsRx);
   const entries = [...records.timeEntries, ...TIME_ENTRIES];
   const billableHours = entries
     .filter((entry) => entry.billable)
@@ -61,7 +63,8 @@ export function TimeTable() {
 }
 
 export function LogTimeForm() {
-  const { records, add } = useAppState();
+  const records = useRxValue(recordsRx);
+  const add = useAddRecord();
   const cases = CASES;
   const entries = [...TIME_ENTRIES, ...records.timeEntries];
 

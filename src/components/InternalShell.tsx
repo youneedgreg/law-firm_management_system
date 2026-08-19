@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useAppState } from "@/components/AppState";
+import { useRxValue } from "@effect-rx/rx-react";
 import { Sidebar } from "@/components/Sidebar";
 import { Topbar } from "@/components/Topbar";
 import { canAccessPath, itemForPath } from "@/lib/nav";
+import { hydratedRx, roleRx } from "@/rx/session";
 
 /**
  * The internal (staff-facing) chrome: masthead, role-filtered sidebar, and the
@@ -15,7 +16,8 @@ import { canAccessPath, itemForPath } from "@/lib/nav";
  * walk around the menu.
  */
 export function InternalShell({ children }: { children: React.ReactNode }) {
-  const { role, hydrated } = useAppState();
+  const role = useRxValue(roleRx);
+  const hydrated = useRxValue(hydratedRx);
   const pathname = usePathname();
   const router = useRouter();
   const [navOpen, setNavOpen] = useState(false);
