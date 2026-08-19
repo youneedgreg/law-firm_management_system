@@ -24,3 +24,28 @@ export type QueryFailure = SqlError.SqlError | ParseResult.ParseError;
  */
 export const failure = (operation: string) => (error: QueryFailure) =>
   new RepositoryFailure({ operation, detail: error.message });
+
+/**
+ * Recognising a unique-index refusal, and which index refused.
+ *
+ * The driver's error carries SQLSTATE `23505` and the constraint name, but
+ * both sit on the `cause` — `@effect/sql` wraps the original — and neither is
+ * typed, since `SqlError.cause` is `unknown`. Reading them through a guard
+ * keeps that narrowing in one place rather than in every repository that has
+ * a uniqueness rule worth translating.
+ *
+ * Matching the constraint name and not just the code is the point. A table
+ * with two unique indexes refuses for two different reasons, and a translation
+ * that ignored which one would report the wrong thing exactly when a second
+ * index is added.
+ */
+export const isUniqueViolation = (
+  error: QueryFailure,
+  constraint: string,
+): boolean => {
+  const cause: unknown = "cause" in error ? error.cause : undefined;
+  if (typeof cause !== "object" || cause === null) return false;
+
+  const detail = cause as { code?: unknown; constraint?: unknown };
+  return detail.code === "23505" && detail.constraint === constraint;
+};

@@ -3,12 +3,13 @@ import { Effect, Layer, Option, Schema } from "effect";
 import type * as Matter from "../../domain/case/case";
 import { CaseId, ClientId } from "../../domain/shared/ids";
 import {
+  CaseNumberTaken,
   CaseRepository,
   NotFound,
   type RepositoryFailure,
 } from "../../services/repositories";
 import { CaseFromRow } from "./case-model";
-import { failure } from "./failure";
+import { failure, isUniqueViolation } from "./failure";
 
 /**
  * Matters, in Postgres.
@@ -52,6 +53,12 @@ export const CaseRepositoryLive = Layer.effect(
         sql`SELECT * FROM cases WHERE status <> 'Closed' ORDER BY opened_on DESC`,
     });
 
+    const all = SqlSchema.findAll({
+      Request: Schema.Void,
+      Result: CaseFromRow,
+      execute: () => sql`SELECT * FROM cases ORDER BY opened_on DESC, number`,
+    });
+
     return CaseRepository.of({
       findById: (id) => findById(id).pipe(Effect.mapError(failure("findById"))),
 
@@ -72,6 +79,8 @@ export const CaseRepositoryLive = Layer.effect(
       openMatters: () =>
         openMatters().pipe(Effect.mapError(failure("openMatters"))),
 
+      all: () => all().pipe(Effect.mapError(failure("all"))),
+
       /**
        * Upsert, because `save` is the only write the interface offers and a
        * caller holding a `Case` should not have to know whether the row exists.
@@ -90,8 +99,22 @@ export const CaseRepositoryLive = Layer.effect(
             `,
           ),
           Effect.as(matter),
-          Effect.mapError(failure("save")),
-        ) satisfies Effect.Effect<Matter.Case, RepositoryFailure>,
+          Effect.mapError((error) =>
+            /**
+             * `ON CONFLICT (id)` handles the id, so the only conflict left is
+             * `number`, and it means a *different* matter already carries this
+             * reference. Translated here for the same reason the Rule 10
+             * trigger is: a service should be matching on a domain error, not
+             * on the name of an index.
+             */
+            isUniqueViolation(error, "cases_number_key")
+              ? new CaseNumberTaken({ number: matter.number })
+              : failure("save")(error),
+          ),
+        ) satisfies Effect.Effect<
+          Matter.Case,
+          CaseNumberTaken | RepositoryFailure
+        >,
     });
   }),
 );

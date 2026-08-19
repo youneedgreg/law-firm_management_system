@@ -181,3 +181,122 @@ describe("schema constraints", () => {
     expect(Matter.isFiled(base)).toBe(false);
   });
 });
+
+describe("consistency between fields", () => {
+  it("accepts a matter filed after it was opened", () => {
+    const result = Matter.consistency({
+      ...base,
+      openedOn: utc("2026-01-19"),
+      filedOn: utc("2026-02-14"),
+    });
+
+    expect(Either.isRight(result)).toBe(true);
+  });
+
+  it("accepts a matter filed the day it was opened", () => {
+    const result = Matter.consistency({
+      ...base,
+      openedOn: utc("2026-02-14"),
+      filedOn: utc("2026-02-14"),
+    });
+
+    expect(Either.isRight(result)).toBe(true);
+  });
+
+  it("refuses a matter filed before it was opened", () => {
+    const result = Matter.consistency({
+      ...base,
+      openedOn: utc("2026-02-14"),
+      filedOn: utc("2026-01-19"),
+    });
+
+    expect(Either.isLeft(result)).toBe(true);
+    if (Either.isLeft(result)) {
+      expect(result.left._tag).toBe("FilingPrecedesIntake");
+      expect(result.left.reason).toContain("2026-01-19");
+      expect(result.left.reason).toContain("2026-02-14");
+    }
+  });
+
+  it("accepts an unfiled matter, which has no filing date to compare", () => {
+    expect(Either.isRight(Matter.consistency(base))).toBe(true);
+  });
+
+  it("refuses a cause number on a matter that was never filed", () => {
+    const result = Matter.consistency({
+      ...base,
+      causeNumber: "MCCC E0412 of 2026",
+    });
+
+    expect(Either.isLeft(result)).toBe(true);
+    if (Either.isLeft(result)) {
+      expect(result.left._tag).toBe("CauseNumberWithoutFiling");
+      expect(result.left.reason).toContain("MCCC E0412 of 2026");
+    }
+  });
+
+  it("accepts a cause number once the matter has been filed", () => {
+    const result = Matter.consistency({
+      ...base,
+      causeNumber: "MCCC E0412 of 2026",
+      filedOn: utc("2026-02-14"),
+    });
+
+    expect(Either.isRight(result)).toBe(true);
+  });
+
+  /**
+   * The Tax Appeals Tribunal is constituted under its own Act and is not in the
+   * Article 162 hierarchy `Court` models. A matter filed there is filed; it just
+   * has no `Court`, and refusing that would force a fixture to name a court the
+   * matter was never filed in.
+   */
+  it("accepts a matter filed in a forum outside the court hierarchy", () => {
+    const result = Matter.consistency({
+      ...base,
+      filedOn: utc("2026-02-14"),
+      causeNumber: "TAT E014 of 2026",
+    });
+
+    expect(Either.isRight(result)).toBe(true);
+  });
+});
+
+describe("the limitation clock needs both halves", () => {
+  it("accepts a matter with neither an accrual date nor a basis", () => {
+    expect(Either.isRight(Matter.consistency(base))).toBe(true);
+  });
+
+  it("accepts a matter with both", () => {
+    const result = Matter.consistency({
+      ...base,
+      accruedOn: utc("2024-08-30"),
+      limitationBasis: "contract",
+    });
+
+    expect(Either.isRight(result)).toBe(true);
+  });
+
+  it("refuses an accrual date with no basis to measure from it", () => {
+    const result = Matter.consistency({
+      ...base,
+      accruedOn: utc("2024-08-30"),
+    });
+
+    expect(Either.isLeft(result)).toBe(true);
+    if (Either.isLeft(result)) {
+      expect(result.left._tag).toBe("IncompleteLimitation");
+      expect(result.left.reason).toContain("basis");
+    }
+  });
+
+  it("refuses a basis with no date to measure from", () => {
+    const result = Matter.consistency({ ...base, limitationBasis: "tort" });
+
+    expect(Either.isLeft(result)).toBe(true);
+    if (Either.isLeft(result)) {
+      expect(result.left._tag).toBe("IncompleteLimitation");
+      expect(result.left.reason).toContain("accrual date");
+    }
+  });
+});

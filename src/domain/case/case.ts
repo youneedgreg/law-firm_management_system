@@ -152,3 +152,103 @@ export const changeStatus = (
     ...matter,
     status,
   }));
+
+// ── Consistency ───────────────────────────────────────────────────────────
+
+export class FilingPrecedesIntake extends Schema.TaggedError<FilingPrecedesIntake>()(
+  "FilingPrecedesIntake",
+  { openedOn: Schema.DateFromSelf, filedOn: Schema.DateFromSelf },
+) {
+  get reason(): string {
+    const day = (date: Date) => date.toISOString().slice(0, 10);
+    return (
+      `The matter was filed on ${day(this.filedOn)} but opened on ` +
+      `${day(this.openedOn)}. A file is opened before it is filed`
+    );
+  }
+}
+
+export class CauseNumberWithoutFiling extends Schema.TaggedError<CauseNumberWithoutFiling>()(
+  "CauseNumberWithoutFiling",
+  { causeNumber: Schema.String },
+) {
+  get reason(): string {
+    return (
+      `Cause number ${this.causeNumber} was recorded against a matter with no ` +
+      `filing date. The court assigns it on filing, so one without the other ` +
+      `is a record of something that did not happen`
+    );
+  }
+}
+
+export class IncompleteLimitation extends Schema.TaggedError<IncompleteLimitation>()(
+  "IncompleteLimitation",
+  { has: Schema.Literal("accrual date", "basis") },
+) {
+  get reason(): string {
+    const missing = this.has === "accrual date" ? "basis" : "accrual date";
+    return (
+      `The limitation clock needs both an accrual date and a basis; this ` +
+      `matter has only the ${this.has}. Record the ${missing}, or remove the ` +
+      `${this.has} — one alone computes nothing and invites a later guess at ` +
+      `the other`
+    );
+  }
+}
+
+export type Inconsistency =
+  FilingPrecedesIntake | CauseNumberWithoutFiling | IncompleteLimitation;
+
+/**
+ * The rules relating a matter's fields to each other.
+ *
+ * The schema can say a filing date is a date; it cannot say the date is not
+ * before the intake date, because that compares two fields. Those checks live
+ * here rather than in the persistence layer so they are enforced on a `Case`
+ * that never reaches a database — and so the reason an advocate reads is a
+ * sentence rather than the name of a Postgres constraint.
+ *
+ * Both mirror a constraint in the schema on purpose. The database is the
+ * backstop for whatever bypasses this code; this is what stops anything
+ * bypassing it from being the *normal* path.
+ *
+ * **A filed matter with no court is deliberately allowed.** `Court` models the
+ * Article 162 hierarchy, and matters are genuinely filed outside it — the Tax
+ * Appeals Tribunal is constituted under its own Act. Refusing that would force
+ * a tribunal matter to name a court it was never filed in, which is the kind of
+ * invented fact this whole layer exists to prevent.
+ */
+export const consistency = (
+  matter: Case,
+): Either.Either<Case, Inconsistency> => {
+  if (
+    matter.filedOn !== undefined &&
+    matter.filedOn.getTime() < matter.openedOn.getTime()
+  ) {
+    return Either.left(
+      new FilingPrecedesIntake({
+        openedOn: matter.openedOn,
+        filedOn: matter.filedOn,
+      }),
+    );
+  }
+
+  if (matter.causeNumber !== undefined && matter.filedOn === undefined) {
+    return Either.left(
+      new CauseNumberWithoutFiling({ causeNumber: matter.causeNumber }),
+    );
+  }
+
+  if (
+    (matter.accruedOn === undefined) !==
+    (matter.limitationBasis === undefined)
+  ) {
+    return Either.left(
+      new IncompleteLimitation({
+        has: matter.accruedOn === undefined ? "basis" : "accrual date",
+      }),
+    );
+  }
+
+  return Either.right(matter);
+};

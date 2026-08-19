@@ -46,6 +46,24 @@ export class RepositoryFailure extends Schema.TaggedError<RepositoryFailure>()(
 }
 
 /**
+ * A matter reference the firm has already used.
+ *
+ * `cases.number` is `UNIQUE`, and the number is derived from what is already
+ * stored — so two intakes racing compute the same one and the second loses. The
+ * database is the arbiter, exactly as it is for Rule 10: recognising the
+ * refusal is the repository's job, and deciding what to do about it is the
+ * caller's. `CaseService.open` retries.
+ */
+export class CaseNumberTaken extends Schema.TaggedError<CaseNumberTaken>()(
+  "CaseNumberTaken",
+  { number: Schema.String },
+) {
+  get reason(): string {
+    return `Matter reference ${this.number} is already in use`;
+  }
+}
+
+/**
  * People at the firm.
  *
  * Read-mostly: staff records change rarely, and every matter points at one.
@@ -90,9 +108,18 @@ export interface CaseRepository {
     RepositoryFailure
   >;
 
+  /**
+   * The whole caseload, closed matters included.
+   *
+   * Separate from `openMatters` rather than a parameter on it: that one is
+   * shaped to the `cases_by_status` partial index and this one deliberately
+   * is not, so a reader can tell from the call site which query runs.
+   */
+  readonly all: () => Effect.Effect<readonly Matter.Case[], RepositoryFailure>;
+
   readonly save: (
     matter: Matter.Case,
-  ) => Effect.Effect<Matter.Case, RepositoryFailure>;
+  ) => Effect.Effect<Matter.Case, CaseNumberTaken | RepositoryFailure>;
 }
 
 export const CaseRepository =
