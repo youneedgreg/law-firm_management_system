@@ -1,8 +1,9 @@
 import { Context, Effect, Option, Schema } from "effect";
+import type * as Billing from "../domain/billing/invoice";
 import type * as Matter from "../domain/case/case";
 import type * as Client from "../domain/client/client";
 import type * as Ledger from "../domain/trust/ledger";
-import type { CaseId, ClientId } from "../domain/shared/ids";
+import type { CaseId, ClientId, InvoiceId } from "../domain/shared/ids";
 import type * as Money from "../domain/shared/money";
 
 /**
@@ -81,6 +82,48 @@ export interface ClientRepository {
 
 export const ClientRepository =
   Context.GenericTag<ClientRepository>("ClientRepository");
+
+export interface InvoiceRepository {
+  readonly byId: (
+    id: InvoiceId,
+  ) => Effect.Effect<Billing.Invoice, NotFound | RepositoryFailure>;
+
+  readonly forClient: (
+    clientId: ClientId,
+  ) => Effect.Effect<readonly Billing.Invoice[], RepositoryFailure>;
+
+  readonly save: (
+    invoice: Billing.Invoice,
+  ) => Effect.Effect<Billing.Invoice, RepositoryFailure>;
+
+  /**
+   * Pays an invoice out of the money the firm already holds for that client.
+   *
+   * Two writes that must not come apart: a payment against the invoice, and the
+   * matching withdrawal from the client's trust account. Either one alone is a
+   * misstatement — a payment with no withdrawal says the firm was paid from
+   * nowhere, and a withdrawal with no payment says client money left the
+   * account for no reason. That is the second thing an auditor looks for.
+   *
+   * Whether the payment is *allowed* is not decided here: the caller checks it
+   * against the invoice with `Billing.recordPayment` and picks a Rule 9 purpose
+   * for the movement first. This is the operation that makes the two writes
+   * atomic, and Rule 10 remains the database's to enforce — hence
+   * `TrustAccountUnderfunded` in the error channel, translated from the trigger
+   * exactly as `TrustRepository.recordWithdrawal` translates it.
+   */
+  readonly settleFromTrust: (settlement: {
+    readonly invoiceId: InvoiceId;
+    readonly payment: Billing.Payment;
+    readonly movement: Ledger.TrustMovement;
+  }) => Effect.Effect<
+    void,
+    Ledger.TrustAccountUnderfunded | NotFound | RepositoryFailure
+  >;
+}
+
+export const InvoiceRepository =
+  Context.GenericTag<InvoiceRepository>("InvoiceRepository");
 
 /**
  * The trust ledger.

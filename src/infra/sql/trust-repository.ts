@@ -1,12 +1,11 @@
-import { SqlClient, SqlError } from "@effect/sql";
+import { SqlClient } from "@effect/sql";
 import { Effect, Layer } from "effect";
 import type { ClientId } from "../../domain/shared/ids";
 import * as Money from "../../domain/shared/money";
 import * as Ledger from "../../domain/trust/ledger";
-import {
-  RepositoryFailure,
-  TrustRepository,
-} from "../../services/repositories";
+import { TrustRepository } from "../../services/repositories";
+import { failure } from "./failure";
+import { isRule10Violation } from "./rule10";
 
 /**
  * The trust ledger, in Postgres.
@@ -21,18 +20,6 @@ import {
  * refusal and reconstructs the domain error from the balance it reads back,
  * leaving everything else as a `RepositoryFailure`.
  */
-
-/** The trigger raises `check_violation` with a message naming rule 10. */
-const isRule10Violation = (error: SqlError.SqlError): boolean =>
-  /r\.10|check_violation/i.test(String(error.cause ?? error.message));
-
-const failure = (operation: string) => (error: SqlError.SqlError) =>
-  new RepositoryFailure({
-    operation,
-    // The message, not the whole error: a driver error can carry the query,
-    // and the query can carry values that should not reach a log.
-    detail: error.message,
-  });
 
 export const TrustRepositoryLive = Layer.effect(
   TrustRepository,

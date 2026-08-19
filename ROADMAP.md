@@ -223,7 +223,7 @@ distinguish this from every other portfolio project.
 - [x] Limitation periods from the verified s. 4 figures — contract 6y, tort 3y, defamation 12mo — each result carrying its provision so the UI cites the reasoning. Month arithmetic clamps rather than overflowing (29 Feb + 3y lands on 28 Feb). Court holidays and vacation still outstanding, pending the §3.2 research
 - [x] Conflict-of-interest screening on intake — returns findings with the matter and concern, never a boolean. An empty result carries `mattersSearched`, so "nothing matched in these records" cannot be read as "no conflict exists"
 - [x] Exhaustive rather than sampled property tests where the space is small enough to enumerate: `allocate` over 1,400 amount/part combinations, the trust invariant over 40 interleaved withdrawals, every status pair through the transition table. Two mutation tests confirm the suite fails when the rule is broken
-- [ ] **Moved to Phase 2.** Decoding `src/lib/data/*.ts` through the schemas cannot happen here: the seed fixtures key on small integers and the domain keys on UUIDs, so the migration is the seed script's job, where real ids are minted. Attempting it now would mean writing a legacy-id adapter that Phase 2 immediately deletes
+- [x] **Moved to Phase 2.** Decoding `src/lib/data/*.ts` through the schemas cannot happen here: the seed fixtures key on small integers and the domain keys on UUIDs, so the migration is the seed script's job, where real ids are minted. Attempting it now would mean writing a legacy-id adapter that Phase 2 immediately deletes
 
 **Done when:** `src/domain/` has no imports from the rest of the project, and
 tests cover every business rule.
@@ -237,20 +237,25 @@ errors as typed values.
 - [x] Neon provisioned through the Vercel Marketplace (`neon-coffee-compass`), connected to the project, env vars pulled to `.env.local`. `DATABASE_URL` present in development
 - [x] Migrations applied to real Neon via `npm run db:migrate`. Verified against the live database: 12 tables, the `trust_movements_rule_10` trigger present, zero non-bigint money columns, and an overdraw refused with `Advocates (Accounts) Rules r.10: cannot withdraw 30000000 cents against a balance of 20000000 cents`
 - [ ] Add `DATABASE_URL` to preview and production environments (development only so far)
-- [ ] Revisit the `sslmode` deprecation: `pg` currently treats `require` as `verify-full`, but v9 will adopt weaker libpq semantics. Pin `sslmode=verify-full` before that upgrade rather than after
+- [x] `sslmode=verify-full` pinned in the config layer rather than in the environment variable — Vercel owns `DATABASE_URL` and `vercel env pull` would overwrite a hand-edit, so one line in code covers development, preview and production permanently. `pg` v9's move to libpq semantics now arrives as a no-op instead of as a silent downgrade
 - [x] `PgClient` layer in `src/infra/sql/client.ts`, with `DATABASE_URL` validated once at startup through a `Config` service and held `Redacted` so it cannot be logged by accident
 - [x] Schema design: 12 tables, FKs, partial indexes, and constraints mirroring the domain — magistrate rank iff magistrates' court, adjournment iff a date to adjourn to, KRA PIN prefix matching client kind, no cause number without a filing date. **Rule 10 is enforced by a trigger** with `SELECT … FOR UPDATE`, since a `CHECK` sees one row and the rule needs the client's whole balance
 - [x] Migration setup with `@effect/sql` migrator, listed explicitly via `fromRecord` rather than a glob, and run by `npm run db:migrate` as a standalone script — migrating from a serverless function means instances racing to alter the same schema
-- [ ] `@effect/sql` `Model` classes bridging DB rows ↔ domain schemas
+- [x] `@effect/sql` `Model` classes bridging DB rows ↔ domain schemas, expressed as `Schema.transformOrFail` rather than a pair of functions — **reads and writes share one mapping**, so encoding a `Case` produces exactly the record `sql.insert` takes and a column cannot be written in one shape and read in another. Built on the `insert` variant, so `created_at` stays the database's. Refusals the schema cannot express live here: a corporate client with no contacts, an invoice with no lines, a `MagistratesCourt` with no rank
+- [x] Two column schemas for the conversions the driver gets subtly wrong: `bigint` arrives as a string and is refused rather than coerced when it will not round-trip; `date` arrives at _local_ midnight, so encoding always emits `YYYY-MM-DD`. A filing date that drifts one day is the difference between inside and outside a limitation period
 - [x] Repository interfaces declared in `services/` (`CaseRepository`, `ClientRepository`, `TrustRepository`) — a service depends on the interface it needs and never on Postgres; the boundary rule makes that structural
 - [x] `TrustRepositoryLive` in `infra/sql/`, which **translates the Rule 10 trigger refusal into the domain's `TrustAccountUnderfunded`**, reading the balance back only after Postgres has refused so the trigger stays the arbiter and the `FOR UPDATE` race stays closed
 - [x] Integration tests against real Neon — 7 tests covering the driver, `@effect/sql`, and the error translation. Gated on `DATABASE_URL`, so a fresh checkout still runs `npm test` clean
-- [ ] `CaseRepository` and `ClientRepository` implementations
-- [ ] Transaction support, with one real multi-statement use case (invoice payment → trust ledger entry)
+- [x] `CaseRepository` and `ClientRepository` implementations. Clients are read as two queries and a group rather than a join — a join cannot distinguish "a client with no contacts" from "no such client", which is exactly the case the domain refuses
+- [x] `InvoiceRepository`, needed by the settlement below: an aggregate across three tables with no stored total and no stored status, because the domain derives both
+- [x] Transaction support, with the real multi-statement use case: `settleFromTrust` pays a fee note out of client money as one payment row plus one trust withdrawal. The withdrawal is written **last** on purpose — it is the write Rule 10 can refuse, so the rollback path is the one actually exercised. Mutation-tested: removing `withTransaction` fails three tests, including the one asserting a refused withdrawal leaves no payment row behind
 - [ ] Seed script importing the existing mock data into a real database, **decoding every fixture through the domain schemas** and minting UUIDs for the integer-keyed records (carried over from Phase 1). Invalid seed data must fail the script loudly rather than reaching the database
 - [ ] Run `Ledger.overdrawnClients` after the import — a seeded trust ledger that breaches Rule 10 should stop the migration
 - [x] **Schema verified against real Postgres without Docker**: PGlite runs Postgres 18 in WebAssembly in-process, so `schema.test.ts` applies the actual DDL — trigger included — and then attacks every constraint. 27 tests, ~2s, in the default suite. Caught one real defect: the trust-balance view returned `numeric` rather than `bigint`
-- [ ] Testcontainers integration tests over the real driver and `@effect/sql` (D-7) — still Phase 12, and now a narrower gap than it was
+- [x] **Migration 0002** — two defects that only surfaced once rows had to round-trip through the domain. `cases.filed_on` was `NOT NULL DEFAULT '1970-01-01'`, an epoch sentinel for "not filed" that the mapping had to hide on every access; it is nullable now. `client_contacts` had no ordering column, so `contacts[0]` — the person the firm takes instructions from — was whichever row Postgres returned first
+- [x] **Migration 0003** — the same omission in the two other places a domain list is stored as rows: `invoice_lines` and `payments`. An invoice is a document a client reads, and `received_on` is a `date`, so it cannot break the tie between two payments on the same day, which is exactly what a double-posted M-Pesa confirmation looks like
+- [x] `.env.local` is loaded by `db:migrate` and by the integration config, so the database-backed tests can no longer pass by silently skipping themselves
+- [ ] Testcontainers integration tests over the real driver and `@effect/sql` (D-7) — still Phase 12, and now a much narrower gap: 34 integration tests already run against real Neon
 
 **Done when:** the seed data lives in Postgres and repository tests pass against
 a real database in CI.
@@ -500,6 +505,9 @@ the most interesting thing an interviewer can read.
 | 2026-08-19 | Docker verification → Phase 12      | Installing Docker blocks nothing early; deferring keeps Phase 0 shippable. Pull forward if Phase 2 needs the feedback loop    |
 | 2026-08-19 | D-9 Trunk-based, `main` only        | PR review is self-review on a solo project; pre-push hook and `verify:clean` replace the lost CI gate                         |
 | 2026-08-18 | D-8 Public repo from day one        | Forces commit hygiene now; the wireframe → system progression is the story                                                    |
+| 2026-08-19 | Row↔domain mapping as a schema      | A `transformOrFail` has an encode side, so reads and writes cannot drift apart the way two hand-written functions do          |
+| 2026-08-19 | Ordering columns for domain lists   | `contacts[0]` and an invoice's line order carry meaning; a `SELECT` with no `ORDER BY` has no first element                   |
+| 2026-08-19 | `sslmode` pinned in code, not env   | Vercel owns `DATABASE_URL` and `vercel env pull` overwrites hand-edits; one line covers every environment                     |
 
 ---
 
@@ -507,6 +515,7 @@ the most interesting thing an interviewer can read.
 
 One line per session. Keeps momentum visible across a long project.
 
-| Date       | Phase | What moved                                                                      |
-| ---------- | ----- | ------------------------------------------------------------------------------- |
-| 2026-08-18 | —     | Wireframe committed; roadmap written; all eight architectural decisions settled |
+| Date       | Phase | What moved                                                                                                                                   |
+| ---------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-18 | —     | Wireframe committed; roadmap written; all eight architectural decisions settled                                                              |
+| 2026-08-19 | 2     | Row↔domain mapping, case/client/invoice repositories, the trust settlement transaction, migrations 0002–0003. 263 unit tests, 34 integration |

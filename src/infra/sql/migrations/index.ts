@@ -5,6 +5,9 @@ import initialSchema, {
 import filingDatesAndContactOrder, {
   statements as filingStatements,
 } from "./0002_filing_dates_and_contact_order";
+import invoiceLineAndPaymentOrder, {
+  statements as invoiceOrderStatements,
+} from "./0003_invoice_line_and_payment_order";
 
 /**
  * The migration set, listed explicitly.
@@ -20,6 +23,7 @@ import filingDatesAndContactOrder, {
 export const migrations = Migrator.fromRecord({
   "0001_initial_schema": initialSchema,
   "0002_filing_dates_and_contact_order": filingDatesAndContactOrder,
+  "0003_invoice_line_and_payment_order": invoiceLineAndPaymentOrder,
 });
 
 /**
@@ -32,4 +36,5 @@ export const migrations = Migrator.fromRecord({
 export const allStatements: readonly string[] = [
   ...initialStatements,
   ...filingStatements,
+  ...invoiceOrderStatements,
 ];
