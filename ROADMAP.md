@@ -246,16 +246,26 @@ errors as typed values.
 - [x] Repository interfaces declared in `services/` (`CaseRepository`, `ClientRepository`, `TrustRepository`) — a service depends on the interface it needs and never on Postgres; the boundary rule makes that structural
 - [x] `TrustRepositoryLive` in `infra/sql/`, which **translates the Rule 10 trigger refusal into the domain's `TrustAccountUnderfunded`**, reading the balance back only after Postgres has refused so the trigger stays the arbiter and the `FOR UPDATE` race stays closed
 - [x] Integration tests against real Neon — 7 tests covering the driver, `@effect/sql`, and the error translation. Gated on `DATABASE_URL`, so a fresh checkout still runs `npm test` clean
+- [x] `AdvocateRepository`, so the seed writes staff through the same boundary as everything else rather than dropping raw SQL into a script. The bridge refuses the half-populated practising certificate the `certificate_complete` constraint exists to prevent
 - [x] `CaseRepository` and `ClientRepository` implementations. Clients are read as two queries and a group rather than a join — a join cannot distinguish "a client with no contacts" from "no such client", which is exactly the case the domain refuses
 - [x] `InvoiceRepository`, needed by the settlement below: an aggregate across three tables with no stored total and no stored status, because the domain derives both
 - [x] Transaction support, with the real multi-statement use case: `settleFromTrust` pays a fee note out of client money as one payment row plus one trust withdrawal. The withdrawal is written **last** on purpose — it is the write Rule 10 can refuse, so the rollback path is the one actually exercised. Mutation-tested: removing `withTransaction` fails three tests, including the one asserting a refused withdrawal leaves no payment row behind
-- [ ] Seed script importing the existing mock data into a real database, **decoding every fixture through the domain schemas** and minting UUIDs for the integer-keyed records (carried over from Phase 1). Invalid seed data must fail the script loudly rather than reaching the database
-- [ ] Run `Ledger.overdrawnClients` after the import — a seeded trust ledger that breaches Rule 10 should stop the migration
+- [x] Seed script (`npm run db:seed`) importing the existing mock data, **decoding every fixture through its domain schema** before anything is written. Failures accumulate and are reported together rather than short-circuiting — somebody fixing seed data wants the whole list, not its first line
+- [x] Ids are **derived**, not generated: uuid v5 over a fixed namespace, keyed on the prototype's integers. That is what makes the import idempotent — a second run updates the same rows through the repositories' upserts instead of inserting a parallel copy of the firm, and it lets a matter reference its client before either has been written
+- [x] The translation is where the work is, and it is pure and hermetically tested (46 tests). Free-text court names resolve through an explicit table where an unmapped name is a **failure, never a default**; the Tax Appeals Tribunal maps to _no court_, because it is constituted under its own Act and is not in the Article 162 hierarchy. The prototype's stored invoice status is reconstructed from lines and payments and the adapter refuses if the domain then derives something else
+- [x] `Ledger.overdrawnClients` runs against the adapted movements before any write, and `TrustRepository.overdrawn` runs against Postgres after. A seeded ledger that breaches Rule 10 stops the import
 - [x] **Schema verified against real Postgres without Docker**: PGlite runs Postgres 18 in WebAssembly in-process, so `schema.test.ts` applies the actual DDL — trigger included — and then attacks every constraint. 27 tests, ~2s, in the default suite. Caught one real defect: the trust-balance view returned `numeric` rather than `bigint`
 - [x] **Migration 0002** — two defects that only surfaced once rows had to round-trip through the domain. `cases.filed_on` was `NOT NULL DEFAULT '1970-01-01'`, an epoch sentinel for "not filed" that the mapping had to hide on every access; it is nullable now. `client_contacts` had no ordering column, so `contacts[0]` — the person the firm takes instructions from — was whichever row Postgres returned first
 - [x] **Migration 0003** — the same omission in the two other places a domain list is stored as rows: `invoice_lines` and `payments`. An invoice is a document a client reads, and `received_on` is a `date`, so it cannot break the tie between two payments on the same day, which is exactly what a double-posted M-Pesa confirmation looks like
 - [x] `.env.local` is loaded by `db:migrate` and by the integration config, so the database-backed tests can no longer pass by silently skipping themselves
 - [ ] Testcontainers integration tests over the real driver and `@effect/sql` (D-7) — still Phase 12, and now a much narrower gap: 34 integration tests already run against real Neon
+
+> **Two gaps this phase surfaced, both still open.** `KenyanPhone` accepts
+> mobile prefixes only, so a corporate client's switchboard landline —
+> `+254 20 445 3021` in the fixtures — cannot be represented; the seed records
+> the instructing contact's mobile and `CLIENT_SUPPLEMENT` says so out loud.
+> And the prototype records one date per matter, so `openedOn` and `filedOn`
+> are seeded equal rather than inventing a gap between intake and filing.
 
 **Done when:** the seed data lives in Postgres and repository tests pass against
 a real database in CI.
@@ -515,7 +525,8 @@ the most interesting thing an interviewer can read.
 
 One line per session. Keeps momentum visible across a long project.
 
-| Date       | Phase | What moved                                                                                                                                   |
-| ---------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-08-18 | —     | Wireframe committed; roadmap written; all eight architectural decisions settled                                                              |
-| 2026-08-19 | 2     | Row↔domain mapping, case/client/invoice repositories, the trust settlement transaction, migrations 0002–0003. 263 unit tests, 34 integration |
+| Date       | Phase | What moved                                                                                                                                        |
+| ---------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-18 | —     | Wireframe committed; roadmap written; all eight architectural decisions settled                                                                   |
+| 2026-08-19 | 2     | Row↔domain mapping, case/client/invoice repositories, the trust settlement transaction, migrations 0002–0003. 263 unit tests, 34 integration      |
+| 2026-08-19 | 2     | Seed script: the wireframe's fixtures decoded into Postgres through the domain schemas, idempotent on derived ids. 309 unit tests, 39 integration |

@@ -1,4 +1,4 @@
-import { Either, Schema } from "effect";
+import { Either, Schema, Struct } from "effect";
 import { describe, expect, it } from "vitest";
 import * as Billing from "../../domain/billing/invoice";
 import { CaseId, ClientId, InvoiceId } from "../../domain/shared/ids";
@@ -65,7 +65,7 @@ describe("an invoice survives the round trip", () => {
   });
 
   it("with no matter attached", () => {
-    const { caseId: _dropped, ...general } = invoice;
+    const general = Struct.omit(invoice, "caseId");
 
     expect(decode(encode(general))).toStrictEqual(general);
     expect(encode(general).invoice.caseId).toBeNull();

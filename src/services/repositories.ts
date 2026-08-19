@@ -2,8 +2,14 @@ import { Context, Effect, Option, Schema } from "effect";
 import type * as Billing from "../domain/billing/invoice";
 import type * as Matter from "../domain/case/case";
 import type * as Client from "../domain/client/client";
+import type * as Firm from "../domain/firm/advocate";
 import type * as Ledger from "../domain/trust/ledger";
-import type { CaseId, ClientId, InvoiceId } from "../domain/shared/ids";
+import type {
+  AdvocateId,
+  CaseId,
+  ClientId,
+  InvoiceId,
+} from "../domain/shared/ids";
 import type * as Money from "../domain/shared/money";
 
 /**
@@ -38,6 +44,33 @@ export class RepositoryFailure extends Schema.TaggedError<RepositoryFailure>()(
     return `${this.operation} failed: ${this.detail}`;
   }
 }
+
+/**
+ * People at the firm.
+ *
+ * Read-mostly: staff records change rarely, and every matter points at one.
+ * It exists as a repository rather than as raw SQL in whatever needs it
+ * because `mayAppearInCourt` reads the practising certificate, and a half
+ * populated certificate must be refused at the boundary rather than reasoned
+ * about downstream.
+ */
+export interface AdvocateRepository {
+  readonly byId: (
+    id: AdvocateId,
+  ) => Effect.Effect<Firm.Advocate, NotFound | RepositoryFailure>;
+
+  readonly all: () => Effect.Effect<
+    readonly Firm.Advocate[],
+    RepositoryFailure
+  >;
+
+  readonly save: (
+    advocate: Firm.Advocate,
+  ) => Effect.Effect<Firm.Advocate, RepositoryFailure>;
+}
+
+export const AdvocateRepository =
+  Context.GenericTag<AdvocateRepository>("AdvocateRepository");
 
 export interface CaseRepository {
   readonly byId: (
