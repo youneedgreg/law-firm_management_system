@@ -53,6 +53,13 @@ const layerBoundaries = [
     because:
       "infra/ is a leaf: it implements interfaces, it does not call into the UI.",
   },
+  {
+    name: "runtime",
+    files: ["src/runtime/**/*.ts"],
+    forbidden: [...layer("app"), ...layer("components")],
+    because:
+      "runtime/ is where services meet their implementations. It is imported by the UI and imports none of it — a Layer that reached for a component would make the wiring un-runnable outside a request.",
+  },
 ];
 
 const eslintConfig = defineConfig([
