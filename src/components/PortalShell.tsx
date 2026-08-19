@@ -52,7 +52,9 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
         ))}
       </nav>
 
-      <main className="portal-content">{children}</main>
+      <main className="portal-content">
+        <div className="portal-content-inner">{children}</div>
+      </main>
     </div>
   );
 }

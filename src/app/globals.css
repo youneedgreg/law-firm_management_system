@@ -14,21 +14,35 @@ html {
 }
 
 body {
-  min-height: 100%;
+  height: 100%;
+}
+
+/* Only shell routes own the viewport; anything else (a framework error page,
+   say) keeps ordinary document scrolling. */
+body:has(.shell) {
+  overflow: hidden;
 }
 
 /* ── shell ─────────────────────────────────────────────────────────────── */
 
+/* The shell is a fixed viewport frame: the masthead never scrolls away, and
+   the sidebar and the content pane each own their own scrollbar. `dvh` keeps
+   the frame honest on mobile browsers whose toolbars resize the viewport. */
 .shell {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
 }
 
 .shell-body {
   display: flex;
   flex: 1;
   position: relative;
+  /* Without this a tall child stretches the row past the frame instead of
+     scrolling inside it. */
+  min-height: 0;
 }
 
 /* ── top bar ───────────────────────────────────────────────────────────── */
@@ -143,6 +157,8 @@ body {
   padding: var(--space-6) var(--space-4);
   border-right: 1px solid var(--color-neutral-200);
   overflow-y: auto;
+  /* Reaching the end of the nav must not hand the wheel to the content pane. */
+  overscroll-behavior: contain;
 }
 
 .sidebar-section {
@@ -219,6 +235,8 @@ body {
   flex: 1;
   padding: var(--space-8);
   min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 @media (max-width: 899px) {
@@ -575,6 +593,7 @@ body {
   padding: var(--space-4) var(--space-6);
   border-bottom: 2px solid var(--color-text);
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .portal-brand {
@@ -601,6 +620,7 @@ body {
   padding: var(--space-4) var(--space-6);
   border-bottom: 1px solid var(--color-neutral-300);
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .portal-nav a {
@@ -621,9 +641,17 @@ body {
   border-bottom-color: var(--color-accent);
 }
 
+/* The scroll box spans the full width so its scrollbar sits at the window
+   edge; the measure is held by the inner wrapper. */
 .portal-content {
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: var(--space-6);
+}
+
+.portal-content-inner {
   max-width: 1100px;
   margin: 0 auto;
   width: 100%;
