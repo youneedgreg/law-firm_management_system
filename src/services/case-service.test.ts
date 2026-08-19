@@ -680,3 +680,51 @@ describe("moving a matter through the lifecycle", () => {
     ),
   );
 });
+
+describe("what an intake form may offer", () => {
+  it.effect("lists clients and active advocates, by name", () =>
+    scenario(
+      Effect.gen(function* () {
+        const service = yield* CaseService;
+        const choices = yield* service.intakeChoices();
+
+        expect(choices.clients.map((client) => client.name)).toEqual([
+          "Wanjiku Mwangi",
+          "Zenith Distributors Ltd",
+        ]);
+      }),
+    ),
+  );
+
+  /** Someone who has left the firm is not a choice that was nearly right. */
+  it.effect("leaves out staff who are no longer at the firm", () =>
+    scenario(
+      Effect.gen(function* () {
+        const service = yield* CaseService;
+        const choices = yield* service.intakeChoices();
+
+        expect(choices.advocates.map((each) => each.name)).not.toContain(
+          daniel.name,
+        );
+      }),
+    ),
+  );
+
+  it.effect("marks who may file, against today's date", () =>
+    scenario(
+      Effect.gen(function* () {
+        const service = yield* CaseService;
+        const choices = yield* service.intakeChoices();
+        const byId = new Map(
+          choices.advocates.map((each) => [each.id, each.mayFile] as const),
+        );
+
+        expect(byId.get(sarah.id)).toBe(true);
+        // A legal assistant may carry a matter and may not file one.
+        expect(byId.get(grace.id)).toBe(false);
+        // Last year's certificate does not cover this year's filing.
+        expect(byId.get(lapsed.id)).toBe(false);
+      }),
+    ),
+  );
+});

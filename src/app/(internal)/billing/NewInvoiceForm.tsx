@@ -18,7 +18,7 @@ import {
 export function NewInvoiceForm() {
   const { records, add } = useAppState();
   const clients = [...records.clients, ...CLIENTS];
-  const cases = [...records.cases, ...CASES];
+  const cases = CASES;
   const invoices = [...INVOICES, ...records.invoices];
 
   function createInvoice(fields: FormData) {

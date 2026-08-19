@@ -4,7 +4,7 @@
 > production TypeScript: Effect end to end, Postgres, full test coverage, CI/CD,
 > and documented architectural reasoning.
 
-**Target:** portfolio-ready in 6–12 weeks · **Status:** Phase 0
+**Target:** portfolio-ready in 6–12 weeks · **Status:** Phase 3 complete
 
 ---
 
@@ -232,7 +232,7 @@ errors as typed values.
 
 ---
 
-### Phase 2 — Persistence · 3–4 weeks
+### Phase 2 — Persistence · 3–4 days
 
 - [x] Neon provisioned through the Vercel Marketplace (`neon-coffee-compass`), connected to the project, env vars pulled to `.env.local`. `DATABASE_URL` present in development
 - [x] Migrations applied to real Neon via `npm run db:migrate`. Verified against the live database: 12 tables, the `trust_movements_rule_10` trigger present, zero non-bigint money columns, and an overdraw refused with `Advocates (Accounts) Rules r.10: cannot withdraw 30000000 cents against a balance of 20000000 cents`
@@ -269,18 +269,40 @@ a real database in CI.
 
 ---
 
-### Phase 3 — Services and the first vertical slice · 3–4 weeks
+### Phase 3 — Services and the first vertical slice · 3–4 days
 
 Take **Cases** all the way through the new stack while every other module still
 runs on mock data. Prove the architecture on one slice before committing to it
 across twenty.
 
-- [ ] `CaseService` as an `Effect.Service` with a Layer
-- [ ] Wire `/cases` and `/cases/[id]` to real data via Server Components
-- [ ] Create and edit cases through Server Actions with `Schema` validation at the boundary
-- [ ] Error handling: typed failures mapped to UI states, `error.tsx` boundaries
-- [ ] Optimistic UI on status transitions
-- [ ] Service-level tests with in-memory repository Layers (no DB needed)
+- [x] `CaseService` as an `Effect.Service` with a Layer, depending only on the repository _interfaces_ declared in `services/`. What it adds over them is the work that spans them: resolving the client and advocate names a screen shows, deriving the next matter reference from every reference already issued, and the rules that need a stored fact — whether a court may hear the claim, and whether the assigned advocate holds a practising certificate
+- [x] **Three consistency rules moved into `domain/case`**, where they can be checked on a `Case` that never reaches a database: a filing date before the intake date, a cause number with no filing, half a limitation clock. Each mirrors a constraint in the schema on purpose — the database stays the backstop and stops being the normal path. A filed matter with _no_ court remains legal, because the Tax Appeals Tribunal is outside the Article 162 hierarchy
+- [x] **The Advocates Act rule that needed a service to enforce it**: only an advocate holding a current practising certificate may file (s. 9, s. 31), so `open` and `amend` refuse a filing by anyone else — but _only when the write is the act of filing_. Editing a matter filed in 2025 does not re-file it, and demanding a current certificate for that would make historic files uneditable over a year the system has no record of. Both directions mutation-tested
+- [x] **The derived matter reference is a real race, and is not papered over.** `OKL-2026-041` is computed from what is stored, so two intakes at once compute the same one; `cases.number` is `UNIQUE`, the repository translates the unique violation into `CaseNumberTaken` exactly as the Rule 10 trigger becomes `TrustAccountUnderfunded`, and `open` retries onto the next free number. The in-memory fake enforces the same uniqueness, so removing the retry fails the test
+- [x] Service-level tests with in-memory repository Layers — 38 tests, no database, no container, no cleanup, nothing to skip when Docker is down. The Postgres implementations are still tested against real Postgres; the _rules_ run in 250ms. **A fake that accepts writes the real one refuses is a fake that makes tests pass and production fail**, so the fakes enforce what the schema enforces
+- [x] `ManagedRuntime` in `src/runtime/` — the only file that knows both that `CaseService` exists and that it is backed by Postgres. Held on `globalThis` behind a symbol, because Next re-evaluates modules on every dev edit and a module-level `const` opens a fresh pool per save until Neon refuses connections
+- [x] Wire `/cases` and `/cases/[id]` to real data via Server Components. `generateStaticParams` is gone: matters are rows, and a build-time id list would 404 every file opened after the deploy
+- [x] Create and edit cases through Server Actions with `Schema` validation at the boundary. `FormData` is decoded through a schema rather than parsed by hand — a hand parser makes `NaN` from a mistyped amount and `Invalid Date` from a mistyped date, and both reach the service looking like data. `errors: "all"` plus `ArrayFormatter` puts each message against the input that caused it
+- [x] Courts are picked whole from the firm's list rather than assembled from four inputs, so a form cannot produce the `MagistratesCourt` with no rank that the tagged union exists to forbid
+- [x] Error handling: `run` lets a failure reject into `error.tsx`; `attempt` returns the typed failure as a value via `Effect.either`, so a refusal is a message beside the form and a defect still reaches the boundary. `RepositoryFailure` is the one refusal not shown — it carries a driver message that can carry the query, so it goes to the log
+- [x] Optimistic UI on status transitions, with the buttons built from `Status.TRANSITIONS` by way of the service, so there is no second list to fall out of step with the state machine
+- [x] `serverExternalPackages: ["pg", …]`. Bundling the driver for Server Components hangs the first query and returns `PgClient: Connection timed out`, while the identical layer under `tsx` connects in under a second
+- [x] Cases removed from the browser-side `CreatedRecords` store. A second answer to what the firm has on its books is one the caseload screen would not show and no invoice could be raised against
+- [x] Verified end to end against Neon in the browser: the caseload reads, a matter opens and lands on its file as `OKL-2026-041`, a Resident Magistrate refuses a 9m claim with the statutory reason, a filing date before the intake date is refused, a status moves optimistically and settles, an unknown id 404s and a malformed one 404s the same way
+
+> **A refused form must not lose what was typed.** React resets an uncontrolled
+> `<form action={…}>` once the action returns, which is right after a success and
+> destructive after a refusal. The submitted values come back in the action's
+> result and go out through `defaultValue` — and the fields are remounted by
+> key, because React applies `defaultValue` to a `<select>` only at mount, so
+> without it the text fields keep their values while every dropdown snaps back
+> to its placeholder. Half a restored form is worse than none.
+
+> **What is deliberately still mock.** Hearings, documents and invoices on the
+> matter file, and every other module's case picker, still read `lib/data`.
+> That is the shape of a vertical slice: one module through the whole stack, the
+> rest untouched until its own migration. The seam is visible in the UI and says
+> so.
 
 **Done when:** cases are fully real — read, create, edit, transition — and the
 test suite covers the service with mock Layers.
@@ -496,24 +518,28 @@ that existed locally but not in a clean checkout. The substitutes:
 Append as decisions are made. This becomes the raw material for your ADRs and
 the most interesting thing an interviewer can read.
 
-| Date       | Decision                            | Reasoning                                                                                                                     |
-| ---------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| 2026-08-18 | Effect 3.22.x, not 4.0-rc           | `@effect-rx/rx-react` peer-deps on `effect@^3.17` with no v4 track; choosing v4 today would cost the client-side Effect layer |
-| 2026-08-18 | Effect end to end, including React  | Deliberate: the client-side story is the differentiator vs. typical Effect backends                                           |
-| 2026-08-18 | Neon Postgres + Vercel              | Free at portfolio scale, clean `@effect/sql-pg` fit, one-click live demo                                                      |
-| 2026-08-18 | D-1 Single firm                     | Multi-tenancy is plumbing, not signal; a stated scope boundary reads as judgment                                              |
-| 2026-08-18 | D-2 Better Auth, self-hosted        | Own the interesting parts (sessions, roles, audit) without hand-rolling crypto                                                |
-| 2026-08-18 | D-3 Deep Kenyan domain              | Researched jurisdictional detail is the cheapest way to look senior                                                           |
-| 2026-08-18 | D-4 Vercel Blob, private            | Private-by-default matters for legal documents; no infra overhead                                                             |
-| 2026-08-18 | D-5 Seeded accounts + role switcher | Zero friction to a full dashboard; doubles as an RBAC showcase                                                                |
-| 2026-08-18 | D-6 Keep hand-written CSS           | Distinctive beats default shadcn; rewriting working CSS buys nothing                                                          |
-| 2026-08-18 | D-7 Testcontainers                  | Hermetic and identical locally and in CI; no quota, no CI secrets                                                             |
-| 2026-08-19 | Docker verification → Phase 12      | Installing Docker blocks nothing early; deferring keeps Phase 0 shippable. Pull forward if Phase 2 needs the feedback loop    |
-| 2026-08-19 | D-9 Trunk-based, `main` only        | PR review is self-review on a solo project; pre-push hook and `verify:clean` replace the lost CI gate                         |
-| 2026-08-18 | D-8 Public repo from day one        | Forces commit hygiene now; the wireframe → system progression is the story                                                    |
-| 2026-08-19 | Row↔domain mapping as a schema      | A `transformOrFail` has an encode side, so reads and writes cannot drift apart the way two hand-written functions do          |
-| 2026-08-19 | Ordering columns for domain lists   | `contacts[0]` and an invoice's line order carry meaning; a `SELECT` with no `ORDER BY` has no first element                   |
-| 2026-08-19 | `sslmode` pinned in code, not env   | Vercel owns `DATABASE_URL` and `vercel env pull` overwrites hand-edits; one line covers every environment                     |
+| Date       | Decision                            | Reasoning                                                                                                                                                            |
+| ---------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-18 | Effect 3.22.x, not 4.0-rc           | `@effect-rx/rx-react` peer-deps on `effect@^3.17` with no v4 track; choosing v4 today would cost the client-side Effect layer                                        |
+| 2026-08-18 | Effect end to end, including React  | Deliberate: the client-side story is the differentiator vs. typical Effect backends                                                                                  |
+| 2026-08-18 | Neon Postgres + Vercel              | Free at portfolio scale, clean `@effect/sql-pg` fit, one-click live demo                                                                                             |
+| 2026-08-18 | D-1 Single firm                     | Multi-tenancy is plumbing, not signal; a stated scope boundary reads as judgment                                                                                     |
+| 2026-08-18 | D-2 Better Auth, self-hosted        | Own the interesting parts (sessions, roles, audit) without hand-rolling crypto                                                                                       |
+| 2026-08-18 | D-3 Deep Kenyan domain              | Researched jurisdictional detail is the cheapest way to look senior                                                                                                  |
+| 2026-08-18 | D-4 Vercel Blob, private            | Private-by-default matters for legal documents; no infra overhead                                                                                                    |
+| 2026-08-18 | D-5 Seeded accounts + role switcher | Zero friction to a full dashboard; doubles as an RBAC showcase                                                                                                       |
+| 2026-08-18 | D-6 Keep hand-written CSS           | Distinctive beats default shadcn; rewriting working CSS buys nothing                                                                                                 |
+| 2026-08-18 | D-7 Testcontainers                  | Hermetic and identical locally and in CI; no quota, no CI secrets                                                                                                    |
+| 2026-08-19 | Docker verification → Phase 12      | Installing Docker blocks nothing early; deferring keeps Phase 0 shippable. Pull forward if Phase 2 needs the feedback loop                                           |
+| 2026-08-19 | D-9 Trunk-based, `main` only        | PR review is self-review on a solo project; pre-push hook and `verify:clean` replace the lost CI gate                                                                |
+| 2026-08-18 | D-8 Public repo from day one        | Forces commit hygiene now; the wireframe → system progression is the story                                                                                           |
+| 2026-08-19 | Row↔domain mapping as a schema      | A `transformOrFail` has an encode side, so reads and writes cannot drift apart the way two hand-written functions do                                                 |
+| 2026-08-19 | Ordering columns for domain lists   | `contacts[0]` and an invoice's line order carry meaning; a `SELECT` with no `ORDER BY` has no first element                                                          |
+| 2026-08-19 | `sslmode` pinned in code, not env   | Vercel owns `DATABASE_URL` and `vercel env pull` overwrites hand-edits; one line covers every environment                                                            |
+| 2026-08-19 | In-memory repositories, not mocks   | A second implementation of an interface that already existed. No framework, no stubbed method names to keep in sync — and the fakes enforce what the schema enforces |
+| 2026-08-19 | Certificate checked on filing only  | The domain holds the _current_ certificate and no history, so re-checking on every edit would block historic files over a year the system cannot speak to            |
+| 2026-08-19 | Reference race left to the index    | A database sequence would remove the race and hand out gaps on every rollback; a client-visible reference is the wrong place for gaps. `UNIQUE` + retry instead      |
+| 2026-08-19 | Courts chosen whole, not assembled  | Four free inputs can build a `MagistratesCourt` with no rank; a keyed list cannot, and a firm files in a known set of stations anyway                                |
 
 ---
 
@@ -521,9 +547,10 @@ the most interesting thing an interviewer can read.
 
 One line per session. Keeps momentum visible across a long project.
 
-| Date       | Phase | What moved                                                                                                                                        |
-| ---------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-08-18 | —     | Wireframe committed; roadmap written; all eight architectural decisions settled                                                                   |
-| 2026-08-19 | 2     | Row↔domain mapping, case/client/invoice repositories, the trust settlement transaction, migrations 0002–0003. 263 unit tests, 34 integration      |
-| 2026-08-19 | 2     | Seed script: the wireframe's fixtures decoded into Postgres through the domain schemas, idempotent on derived ids. 309 unit tests, 39 integration |
-| 2026-08-19 | 2     | Closed the two gaps the seed surfaced: `KenyanPhone` widened to fixed lines (migration 0004), intake dates supplied per matter. 336 unit tests    |
+| Date       | Phase | What moved                                                                                                                                                                  |
+| ---------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-18 | —     | Wireframe committed; roadmap written; all eight architectural decisions settled                                                                                             |
+| 2026-08-19 | 2     | Row↔domain mapping, case/client/invoice repositories, the trust settlement transaction, migrations 0002–0003. 263 unit tests, 34 integration                                |
+| 2026-08-19 | 2     | Seed script: the wireframe's fixtures decoded into Postgres through the domain schemas, idempotent on derived ids. 309 unit tests, 39 integration                           |
+| 2026-08-19 | 2     | Closed the two gaps the seed surfaced: `KenyanPhone` widened to fixed lines (migration 0004), intake dates supplied per matter. 336 unit tests                              |
+| 2026-08-19 | 3     | `CaseService`, the runtime, and the Cases slice end to end: Server Components read Neon, Server Actions decode through Schema, refusals render as sentences. 385 unit tests |

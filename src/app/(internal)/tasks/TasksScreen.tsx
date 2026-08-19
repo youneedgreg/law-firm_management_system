@@ -56,7 +56,7 @@ export function TasksTable() {
 
 export function NewTaskForm() {
   const { records, add } = useAppState();
-  const cases = [...records.cases, ...CASES];
+  const cases = CASES;
   const tasks = [...TASKS, ...records.tasks];
 
   function createTask(fields: FormData) {

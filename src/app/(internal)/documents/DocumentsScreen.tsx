@@ -58,7 +58,7 @@ export function DocumentGrid({
 
 export function UploadDocumentForm() {
   const { records, add } = useAppState();
-  const cases = [...records.cases, ...CASES];
+  const cases = CASES;
   const documents = [...DOCUMENTS, ...records.documents];
 
   function upload(fields: FormData) {

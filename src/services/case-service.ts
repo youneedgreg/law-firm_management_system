@@ -74,6 +74,25 @@ export interface CaseFile {
   readonly mayBeMovedTo: readonly Status.CaseStatus[];
 }
 
+/**
+ * The choices an intake form has to offer, and one fact about each advocate.
+ *
+ * `mayFile` is computed rather than left to the form, because the rule is
+ * `mayAppearInCourt` and it depends on today's date — a form that decided it
+ * from `role` alone would be a second, wrong copy of the Advocates Act check
+ * the service enforces on submission. The form marks the ones who cannot; the
+ * service is still what refuses.
+ */
+export interface IntakeChoices {
+  readonly clients: readonly { readonly id: ClientId; readonly name: string }[];
+  readonly advocates: readonly {
+    readonly id: AdvocateId;
+    readonly name: string;
+    readonly role: string;
+    readonly mayFile: boolean;
+  }[];
+}
+
 export interface CaseloadFilter {
   readonly status?: Status.CaseStatus | undefined;
   /** Scopes to one advocate's own matters — the "My cases" view. */
@@ -386,6 +405,36 @@ export class CaseService extends Effect.Service<CaseService>()("CaseService", {
 
     return {
       caseload,
+
+      /** Who a matter may be opened for, and who may carry it. */
+      intakeChoices: () =>
+        Effect.gen(function* () {
+          const [everyClient, everyAdvocate, today] = yield* Effect.all([
+            clients.all(),
+            advocates.all(),
+            DateTime.nowAsDate,
+          ]);
+
+          return {
+            clients: everyClient
+              .map((client) => ({ id: client.id, name: client.name }))
+              .sort((a, b) => a.name.localeCompare(b.name)),
+            /**
+             * Inactive staff are left out entirely rather than shown and
+             * refused. Someone who has left the firm is not a choice that was
+             * nearly right.
+             */
+            advocates: everyAdvocate
+              .filter((advocate) => advocate.active)
+              .map((advocate) => ({
+                id: advocate.id,
+                name: advocate.name,
+                role: advocate.role,
+                mayFile: Firm.mayAppearInCourt(advocate, today),
+              }))
+              .sort((a, b) => a.name.localeCompare(b.name)),
+          } satisfies IntakeChoices;
+        }),
 
       /** The matter file: the matter, the two records it names, and the clock. */
       file: (id: CaseId) =>

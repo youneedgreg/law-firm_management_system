@@ -62,7 +62,7 @@ export function TimeTable() {
 
 export function LogTimeForm() {
   const { records, add } = useAppState();
-  const cases = [...records.cases, ...CASES];
+  const cases = CASES;
   const entries = [...TIME_ENTRIES, ...records.timeEntries];
 
   // Everyone who can carry a matter: the advocates, plus the assistants and

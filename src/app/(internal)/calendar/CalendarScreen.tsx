@@ -63,7 +63,7 @@ export function CourtCalendar() {
 
 export function ScheduleHearingForm() {
   const { records, add } = useAppState();
-  const cases = [...records.cases, ...CASES];
+  const cases = CASES;
   const hearings = [...HEARINGS, ...records.hearings];
 
   function schedule(fields: FormData) {

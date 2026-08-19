@@ -20,9 +20,7 @@ export function CreatedHearing({ id }: { id: number }) {
     );
   }
 
-  const legalCase = [...records.cases, ...CASES].find(
-    (entry) => entry.id === hearing.caseId,
-  );
+  const legalCase = CASES.find((entry) => entry.id === hearing.caseId);
 
   return <HearingDetail hearing={hearing} legalCase={legalCase} />;
 }

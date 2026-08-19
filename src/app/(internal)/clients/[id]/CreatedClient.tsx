@@ -26,9 +26,7 @@ export function CreatedClient({ id }: { id: number }) {
     );
   }
 
-  const cases = [...records.cases, ...CASES].filter(
-    (legalCase) => legalCase.clientId === client.id,
-  );
+  const cases = CASES.filter((legalCase) => legalCase.clientId === client.id);
   const caseNumbers = cases.map((legalCase) => legalCase.number);
   const documents = [...records.documents, ...DOCUMENTS].filter((document) =>
     caseNumbers.includes(document.case),

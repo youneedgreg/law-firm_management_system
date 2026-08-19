@@ -32,6 +32,14 @@ interface FieldProps {
   label: string;
   /** Guidance under the control, e.g. how a value will be used. */
   hint?: string | undefined;
+  /**
+   * Why the server would not accept this field.
+   *
+   * It replaces the hint rather than stacking under it: the guidance is what to
+   * type, and once the server has said what is wrong with what was typed, the
+   * guidance is the less useful of the two.
+   */
+  error?: string | undefined;
   /** Spans both columns of a `.form-grid`. */
   wide?: boolean | undefined;
 }
@@ -40,6 +48,7 @@ interface FieldProps {
 export function Field({
   label,
   hint,
+  error,
   wide,
   htmlFor,
   children,
@@ -48,7 +57,13 @@ export function Field({
     <div className={wide ? "field field-wide" : "field"}>
       <label htmlFor={htmlFor}>{label}</label>
       {children}
-      {hint && <p className="field-hint">{hint}</p>}
+      {error ? (
+        <p className="field-error" id={`${htmlFor}-error`}>
+          {error}
+        </p>
+      ) : (
+        hint && <p className="field-hint">{hint}</p>
+      )}
     </div>
   );
 }
@@ -57,6 +72,7 @@ export function Field({
 export function FieldGroup({
   label,
   hint,
+  error,
   wide,
   children,
 }: FieldProps & { children: React.ReactNode }) {
@@ -66,7 +82,11 @@ export function FieldGroup({
     >
       <legend className="field-legend">{label}</legend>
       {children}
-      {hint && <p className="field-hint">{hint}</p>}
+      {error ? (
+        <p className="field-error">{error}</p>
+      ) : (
+        hint && <p className="field-hint">{hint}</p>
+      )}
     </fieldset>
   );
 }
@@ -82,14 +102,21 @@ export function FormActions({ children }: { children: React.ReactNode }) {
 export function TextField({
   label,
   hint,
+  error,
   wide,
   ...input
 }: FieldProps & React.ComponentProps<"input">) {
   const generatedId = useId();
   const id = input.id ?? generatedId;
   return (
-    <Field label={label} hint={hint} wide={wide} htmlFor={id}>
-      <input {...input} id={id} className="input" />
+    <Field label={label} hint={hint} error={error} wide={wide} htmlFor={id}>
+      <input
+        {...input}
+        id={id}
+        className="input"
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? `${id}-error` : undefined}
+      />
     </Field>
   );
 }
@@ -97,14 +124,21 @@ export function TextField({
 export function TextAreaField({
   label,
   hint,
+  error,
   wide,
   ...textarea
 }: FieldProps & React.ComponentProps<"textarea">) {
   const generatedId = useId();
   const id = textarea.id ?? generatedId;
   return (
-    <Field label={label} hint={hint} wide={wide} htmlFor={id}>
-      <textarea {...textarea} id={id} className="input" />
+    <Field label={label} hint={hint} error={error} wide={wide} htmlFor={id}>
+      <textarea
+        {...textarea}
+        id={id}
+        className="input"
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? `${id}-error` : undefined}
+      />
     </Field>
   );
 }
@@ -140,6 +174,7 @@ export function SelectControl({
 export function SelectField({
   label,
   hint,
+  error,
   wide,
   options,
   placeholder,
@@ -151,12 +186,14 @@ export function SelectField({
   const generatedId = useId();
   const id = select.id ?? generatedId;
   return (
-    <Field label={label} hint={hint} wide={wide} htmlFor={id}>
+    <Field label={label} hint={hint} error={error} wide={wide} htmlFor={id}>
       <SelectControl
         {...select}
         id={id}
         options={options}
         placeholder={placeholder}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? `${id}-error` : undefined}
       />
     </Field>
   );

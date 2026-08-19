@@ -42,7 +42,7 @@ export function DashboardStats() {
   const isAdvocate = role === "Advocate/Lawyer";
 
   // Everything the forms have created counts towards the band too.
-  const cases = [...records.cases, ...CASES];
+  const cases = CASES;
   const hearings = [...records.hearings, ...HEARINGS];
   const invoices = [...records.invoices, ...INVOICES];
   const pendingTasks =

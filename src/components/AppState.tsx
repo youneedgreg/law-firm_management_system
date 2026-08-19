@@ -10,7 +10,6 @@ import {
 import {
   ROLES,
   type Appointment,
-  type Case,
   type Client,
   type Communication,
   type FirmDocument,
@@ -32,10 +31,16 @@ const STORAGE_KEY = "oklaw.appstate.v1";
  * into it: a screen reads `[...SEED, ...records.x]` and the seeded fixtures
  * stay untouched. Newest first, so a just-created record lands at the top of
  * the list that made it.
+ *
+ * **Cases are absent, and that absence is the shape of Phase 3.** Matters are
+ * rows in Postgres now, so a second store of them in the browser would be a
+ * second answer to what the firm has on its books — one the caseload screen
+ * would not show and no invoice could be raised against. Every module still
+ * listed below runs on the wireframe's arrays and keeps its entry until its own
+ * migration takes it away the same way.
  */
 export interface CreatedRecords {
   clients: Client[];
-  cases: Case[];
   hearings: Hearing[];
   tasks: FirmTask[];
   timeEntries: TimeEntry[];
@@ -49,7 +54,6 @@ export interface CreatedRecords {
 
 const EMPTY_RECORDS: CreatedRecords = {
   clients: [],
-  cases: [],
   hearings: [],
   tasks: [],
   timeEntries: [],

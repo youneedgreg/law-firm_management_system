@@ -3,28 +3,35 @@
 import Link from "next/link";
 import { useAppState } from "@/components/AppState";
 import { TableWrap } from "@/components/ui";
-import { CASES, SIGNED_IN_ADVOCATE } from "@/lib/data/cases";
+import type { CaseSummary } from "@/services/case-service";
+import { SIGNED_IN_ADVOCATE } from "@/lib/data/cases";
 import { caseStatusTag } from "@/lib/format";
-import type { CaseStatus } from "@/lib/types";
+import { courtName } from "./display";
 
 /**
- * Role scoping happens here rather than on the server: an Advocate/Lawyer sees
- * only the matters assigned to them, and the current role lives in client state.
+ * The caseload table.
+ *
+ * The rows arrive from the server already resolved — no fetching here, and no
+ * seed arrays. What is left on the client is the role scoping, because the
+ * current role lives in `localStorage` and the server has no way to read it.
+ *
+ * **That scoping is presentation, not authorization.** It hides rows an
+ * Advocate/Lawyer has no reason to see; it does not stop anyone from reading
+ * them, because the data has already been sent. The service takes an
+ * `advocateId` filter and applies it in the query, which is where this belongs
+ * and where Phase 6 moves it once there is a signed-in user to filter by.
  */
-export function CasesTable({ status }: { status: CaseStatus | "all" }) {
-  const { role, records } = useAppState();
+export function CasesTable({ caseload }: { caseload: readonly CaseSummary[] }) {
+  const { role } = useAppState();
 
-  const all = [...records.cases, ...CASES];
-  const scoped =
+  const rows =
     role === "Advocate/Lawyer"
-      ? all.filter((legalCase) => legalCase.advocate === SIGNED_IN_ADVOCATE)
-      : all;
+      ? caseload.filter(
+          (summary) => summary.advocateName === SIGNED_IN_ADVOCATE,
+        )
+      : caseload;
 
-  const cases = scoped.filter(
-    (legalCase) => status === "all" || legalCase.status === status,
-  );
-
-  if (cases.length === 0) {
+  if (rows.length === 0) {
     return <p className="dek">No matters match this filter.</p>;
   }
 
@@ -36,6 +43,7 @@ export function CasesTable({ status }: { status: CaseStatus | "all" }) {
             <th>Case #</th>
             <th>Title</th>
             <th>Type</th>
+            <th>Client</th>
             <th>Court</th>
             <th>Advocate</th>
             <th>Status</th>
@@ -43,20 +51,21 @@ export function CasesTable({ status }: { status: CaseStatus | "all" }) {
           </tr>
         </thead>
         <tbody>
-          {cases.map((legalCase) => (
-            <tr key={legalCase.id}>
-              <td>{legalCase.number}</td>
-              <td>{legalCase.title}</td>
-              <td>{legalCase.type}</td>
-              <td>{legalCase.court}</td>
-              <td>{legalCase.advocate}</td>
+          {rows.map(({ matter, clientName, advocateName }) => (
+            <tr key={matter.id}>
+              <td>{matter.number}</td>
+              <td>{matter.title}</td>
+              <td>{matter.type}</td>
+              <td>{clientName}</td>
+              <td>{courtName(matter.court)}</td>
+              <td>{advocateName}</td>
               <td>
-                <span className={caseStatusTag(legalCase.status)}>
-                  {legalCase.status}
+                <span className={caseStatusTag(matter.status)}>
+                  {matter.status}
                 </span>
               </td>
               <td className="cell-action">
-                <Link href={`/cases/${legalCase.id}`} className="btn btn-ghost">
+                <Link href={`/cases/${matter.id}`} className="btn btn-ghost">
                   Open
                 </Link>
               </td>
