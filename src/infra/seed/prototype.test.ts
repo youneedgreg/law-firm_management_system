@@ -5,6 +5,7 @@ import * as Matter from "../../domain/case/case";
 import * as ClientDomain from "../../domain/client/client";
 import * as Advocate from "../../domain/firm/advocate";
 import * as Ledger from "../../domain/trust/ledger";
+import { phoneKind } from "../../domain/shared/ids";
 import { CASES } from "../../lib/data/cases";
 import { stableId } from "./ids";
 import {
@@ -178,8 +179,31 @@ describe("clients", () => {
 
   it("normalises the phone numbers the prototype wrote with spaces", () => {
     for (const client of firmClients) {
-      expect(client.phone).toMatch(/^\+254[17]\d{8}$/);
+      expect(client.phone).toMatch(/^\+254[1-9]\d{8}$/);
     }
+  });
+
+  /**
+   * The fixtures' corporate numbers are switchboard landlines. They were
+   * substituted with mobiles while `KenyanPhone` accepted mobile ranges only —
+   * the seed falsifying data to satisfy a type that was too narrow. This
+   * asserts the substitution is gone and the real numbers survive.
+   */
+  it("keeps a company's switchboard number rather than substituting one", () => {
+    const company = firmClients.find(
+      (client) => client.name === "General Innovations Ltd",
+    );
+
+    expect(company?.phone).toBe("+254204453021");
+    expect(phoneKind(company!.phone)).toBe("fixed line");
+  });
+
+  it("still knows which numbers can receive an SMS", () => {
+    const person = firmClients.find(
+      (client) => client.name === "Wanjiku Mwangi",
+    );
+
+    expect(phoneKind(person!.phone)).toBe("mobile");
   });
 
   it("gives every company someone who can instruct the firm", () => {
@@ -390,5 +414,35 @@ describe("the trust ledger", () => {
 
   it("holds the balance the prototype's totals imply", () => {
     expect(Ledger.totalHeld(movements)).toBe(240_000_00);
+  });
+});
+
+describe("matters open before they are filed", () => {
+  const staff = right(advocates());
+  const firmMatters = right(
+    matters(
+      clientIdsByPrototypeKey(),
+      new Map(staff.map((person) => [person.name, person.id])),
+    ),
+  );
+
+  /**
+   * `openedOn` and `filedOn` were seeded equal while the supplement had no
+   * intake date, which said every matter was filed the day it walked in the
+   * door. Intake, conflict screening and drafting all sit in that gap.
+   */
+  it("gives every matter a gap between intake and filing", () => {
+    for (const matter of firmMatters) {
+      expect(matter.filedOn).toBeDefined();
+      expect(matter.openedOn.getTime()).toBeLessThan(matter.filedOn!.getTime());
+    }
+  });
+
+  it("satisfies the filed_after_opened constraint the database enforces", () => {
+    for (const matter of firmMatters) {
+      expect(matter.filedOn!.getTime()).toBeGreaterThanOrEqual(
+        matter.openedOn.getTime(),
+      );
+    }
   });
 });

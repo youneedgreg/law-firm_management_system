@@ -12,6 +12,8 @@ import {
   DocumentId,
   HearingId,
   KenyanPhone,
+  normalisePhone,
+  phoneKind,
   KraPin,
 } from "./shared/ids";
 import * as Money from "./shared/money";
@@ -334,5 +336,56 @@ describe("Document", () => {
     });
 
     expect(Either.isLeft(result)).toBe(true);
+  });
+});
+
+/**
+ * The phone number widened from mobile-only when the seed import ran into it:
+ * a firm holds a switchboard number for a corporate client, and a type that
+ * cannot represent one forces the number to be falsified or dropped.
+ *
+ * Widening a validator is the easy half. The half worth testing is that it
+ * still refuses what it refused before, and that the distinction it used to
+ * enforce is still *knowable* — Phase 7 texts hearing reminders, and a landline
+ * cannot receive one.
+ */
+describe("KenyanPhone", () => {
+  const decode = Schema.decodeUnknownEither(KenyanPhone);
+
+  it.each([
+    ["+254722445109", "mobile"],
+    ["+254733208771", "mobile"],
+    ["+254111234567", "mobile"],
+    ["+254204453021", "fixed line"],
+    ["+254412207743", "fixed line"],
+    ["+254512218890", "fixed line"],
+  ])("accepts %s and reads it as a %s", (input, kind) => {
+    const result = decode(input);
+
+    expect(Either.isRight(result)).toBe(true);
+    if (Either.isRight(result)) expect(phoneKind(result.right)).toBe(kind);
+  });
+
+  it.each([
+    "+2540722445109",
+    "+254722445",
+    "+25472244510912",
+    "+447700900000",
+    "0722445109",
+    "254722445109",
+    "+254 722 445 109",
+    "",
+  ])("refuses %o", (input) => {
+    expect(Either.isLeft(decode(input))).toBe(true);
+  });
+
+  /**
+   * `normalisePhone` is the lenient half, and it has to stay lenient about the
+   * shapes people type without becoming lenient about what gets stored.
+   */
+  it("normalises what a receptionist actually types", () => {
+    expect(normalisePhone("0722 445 109")).toBe("+254722445109");
+    expect(normalisePhone("254722445109")).toBe("+254722445109");
+    expect(normalisePhone("+254 (20) 445-3021")).toBe("+254204453021");
   });
 });

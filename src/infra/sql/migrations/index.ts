@@ -8,6 +8,9 @@ import filingDatesAndContactOrder, {
 import invoiceLineAndPaymentOrder, {
   statements as invoiceOrderStatements,
 } from "./0003_invoice_line_and_payment_order";
+import widenPhoneNumbers, {
+  statements as phoneStatements,
+} from "./0004_widen_phone_numbers";
 
 /**
  * The migration set, listed explicitly.
@@ -24,6 +27,7 @@ export const migrations = Migrator.fromRecord({
   "0001_initial_schema": initialSchema,
   "0002_filing_dates_and_contact_order": filingDatesAndContactOrder,
   "0003_invoice_line_and_payment_order": invoiceLineAndPaymentOrder,
+  "0004_widen_phone_numbers": widenPhoneNumbers,
 });
 
 /**
@@ -37,4 +41,5 @@ export const allStatements: readonly string[] = [
   ...initialStatements,
   ...filingStatements,
   ...invoiceOrderStatements,
+  ...phoneStatements,
 ];

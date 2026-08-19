@@ -212,7 +212,7 @@ export const clients = (): Outcome<ClientDomain.Client> =>
         number: client.number,
         name: client.name,
         email: client.email,
-        phone: normalisePhone(extra.phone ?? client.phone),
+        phone: normalisePhone(client.phone),
         kraPin: extra.kraPin,
         onboardedOn: new Date(`${extra.onboardedOn}T00:00:00.000Z`),
       };
@@ -270,7 +270,21 @@ export const matters = (
         return fail(`no seeded advocate named ${legalCase.advocate}`);
       }
 
-      const extra = MATTER_SUPPLEMENT[legalCase.number] ?? {};
+      const extra = MATTER_SUPPLEMENT[legalCase.number];
+      if (extra === undefined) {
+        return fail(
+          "no entry in MATTER_SUPPLEMENT; the wireframe records only a filing " +
+            "date, and the date the file was opened may not be invented per-record",
+        );
+      }
+
+      const openedOn = new Date(`${extra.openedOn}T00:00:00.000Z`);
+      if (openedOn.getTime() > filed.getTime()) {
+        return fail(
+          `opened on ${extra.openedOn} but filed on ${legalCase.filed}, which ` +
+            "is backwards",
+        );
+      }
 
       return decoding(
         Matter.Case,
@@ -284,9 +298,7 @@ export const matters = (
         clientId,
         advocateId,
         underCustomaryLaw: false,
-        // The prototype records one date. A matter is opened before it is
-        // filed, but inventing a gap would be inventing a fact.
-        openedOn: filed,
+        openedOn,
         filedOn: filed,
         ...(court === null ? {} : { court }),
         ...(extra.causeNumber === undefined

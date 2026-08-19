@@ -86,22 +86,44 @@ export const kraPinHolder = (pin: KraPin): "individual" | "entity" =>
   pin.startsWith("A") ? "individual" : "entity";
 
 /**
- * A Kenyan mobile number in E.164 form, e.g. `+254722445109`.
+ * A Kenyan telephone number in E.164 form, e.g. `+254722445109`.
  *
- * Mobile prefixes begin 7 or 1. Unverified against a Communications Authority
- * numbering plan (domain-notes §4.2), so this checks shape and nothing more —
- * in particular it does not infer the network operator, which portability
- * makes unknowable from the prefix anyway.
+ * Nine significant digits after the country code, which is what both mobile and
+ * fixed-line numbers carry: `+254 722 445 109` is a mobile, `+254 20 445 3021`
+ * is a Nairobi landline. The national trunk `0` never appears in E.164, so the
+ * first digit is 1–9.
+ *
+ * This accepted mobile prefixes only until the seed import ran into it. A firm
+ * genuinely does hold a switchboard number for a corporate client, and a type
+ * that cannot represent one forces the number to be falsified or dropped —
+ * which is a worse outcome than accepting a shape this module cannot fully
+ * verify. See domain-notes §4.2, still ⚠️: shorter legacy fixed-line numbers in
+ * smaller exchanges are **not** covered, and no source has been checked for
+ * them.
  */
 export const KenyanPhone = Schema.String.pipe(
-  Schema.pattern(/^\+254[17]\d{8}$/),
+  Schema.pattern(/^\+254[1-9]\d{8}$/),
   Schema.brand("KenyanPhone"),
   Schema.annotations({
     identifier: "KenyanPhone",
-    description: "Kenyan mobile number in E.164 form, e.g. +254722445109",
+    description: "Kenyan number in E.164 form, e.g. +254722445109",
   }),
 );
 export type KenyanPhone = typeof KenyanPhone.Type;
+
+/**
+ * Whether a number can receive an SMS.
+ *
+ * Mobile ranges begin 7 or 1; everything else in the plan is a fixed line. The
+ * distinction is not decorative — Phase 7 sends hearing reminders by SMS, and
+ * texting a company's switchboard is a reminder nobody receives.
+ *
+ * Shape-based and no more, on the same footing as the schema above: it says
+ * which range a number falls in, never which operator holds it, because
+ * portability makes that unknowable from the prefix.
+ */
+export const phoneKind = (phone: KenyanPhone): "mobile" | "fixed line" =>
+  /^\+254[17]/.test(phone) ? "mobile" : "fixed line";
 
 /**
  * Accepts the shapes people actually type — `0722 445 109`, `254722445109`,

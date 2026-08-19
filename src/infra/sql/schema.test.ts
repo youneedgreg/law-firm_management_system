@@ -370,6 +370,41 @@ describe("billing constraints", () => {
 });
 
 /**
+ * Migration 0004 widened the phone constraint from mobile-only to any Kenyan
+ * number. What matters is that it widened rather than opened: a landline is
+ * accepted now, and a mistyped trunk prefix still is not.
+ */
+describe("phone numbers", () => {
+  const insertClient = (phone: string) => `
+    INSERT INTO clients (id, number, kind, name, email, phone, onboarded_on)
+    VALUES (gen_random_uuid(), 'CLT-${Math.floor(Math.random() * 9000 + 1000)}',
+            'Corporate', 'Zenith Ltd', 'legal@zenith.co.ke', '${phone}', '2026-01-10')`;
+
+  it("accepts a Nairobi switchboard landline", async () => {
+    expect(await refuses(insertClient("+254204453021"))).toBe(false);
+  });
+
+  it("accepts a Mombasa landline", async () => {
+    expect(await refuses(insertClient("+254412207743"))).toBe(false);
+  });
+
+  it("still accepts a mobile", async () => {
+    expect(await refuses(insertClient("+254722445109"))).toBe(false);
+  });
+
+  it("still refuses the national trunk prefix, which E.164 never carries", async () => {
+    expect(await refuses(insertClient("+2540722445109"))).toBe(true);
+  });
+
+  it.each(["+254722445", "+25472244510912", "+447700900000", "0722445109"])(
+    "still refuses %o",
+    async (phone) => {
+      expect(await refuses(insertClient(phone))).toBe(true);
+    },
+  );
+});
+
+/**
  * Migration 0002 removed two ways the schema could hold something the domain
  * cannot represent. Both are attacked here for the same reason as everything
  * above: a corrected constraint nobody has tried to break is a claim, not a

@@ -31,38 +31,23 @@ export interface ClientSupplement {
   /** KRA issues `A` PINs to individuals and `P` PINs to entities. */
   readonly kraPin: string;
   readonly onboardedOn: string;
-  /**
-   * Present only where the prototype's number cannot be represented.
-   *
-   * The corporate fixtures carry switchboard landlines — `+254 20 445 3021` —
-   * and the domain's `KenyanPhone` accepts mobile prefixes only (7 or 1). That
-   * is a genuine limitation of the domain rather than bad data: a firm does
-   * hold a landline for a company. Until `KenyanPhone` is widened, the seed
-   * records the mobile of the person who instructs, which is the number the
-   * domain's field actually means. Noted in ROADMAP §Phase 2.
-   */
-  readonly phone?: string;
 }
 
+/**
+ * The corporate fixtures' switchboard landlines are used as written now.
+ *
+ * They were substituted with mobiles when `KenyanPhone` accepted mobile ranges
+ * only — the seed was falsifying data to satisfy a type that was too narrow.
+ * The type was the thing that was wrong, and widening it (and the matching
+ * constraint, migration 0004) removed the need for the substitution entirely.
+ */
 export const CLIENT_SUPPLEMENT: Readonly<Record<string, ClientSupplement>> = {
   "CLT-1001": { kraPin: "A004521987Z", onboardedOn: "2024-03-11" },
   "CLT-1002": { kraPin: "A009873214M", onboardedOn: "2025-01-20" },
   "CLT-1003": { kraPin: "A001122334K", onboardedOn: "2025-06-02" },
-  "CLT-2001": {
-    kraPin: "P051234876T",
-    onboardedOn: "2023-09-14",
-    phone: "+254722310884",
-  },
-  "CLT-2002": {
-    kraPin: "P059988771B",
-    onboardedOn: "2024-11-05",
-    phone: "+254733914026",
-  },
-  "CLT-2003": {
-    kraPin: "P052277431H",
-    onboardedOn: "2025-02-17",
-    phone: "+254711603558",
-  },
+  "CLT-2001": { kraPin: "P051234876T", onboardedOn: "2023-09-14" },
+  "CLT-2002": { kraPin: "P059988771B", onboardedOn: "2024-11-05" },
+  "CLT-2003": { kraPin: "P052277431H", onboardedOn: "2025-02-17" },
 };
 
 // ── Staff ─────────────────────────────────────────────────────────────────
@@ -157,6 +142,20 @@ export const COURTS: Readonly<Record<string, Court.Court | null>> = {
 
 export interface MatterSupplement {
   /**
+   * When the firm opened the file, which is not when it was filed in court.
+   *
+   * The prototype records one date per matter — the filing date — so
+   * `openedOn` and `filedOn` were seeded equal, which said every matter was
+   * filed the day it walked in the door. Intake, conflict screening and
+   * drafting all sit in that gap, and `filed_after_opened` is the constraint
+   * that assumes it exists.
+   *
+   * Supplied, like everything else here. Required rather than optional: a
+   * matter with no intake date is a fixture nobody has looked at, and the
+   * import says so rather than falling back to the filing date again.
+   */
+  readonly openedOn: string;
+  /**
    * What the matter is worth, where it has a pecuniary value.
    *
    * Absent for the criminal defence and the divorce — which is a different
@@ -172,27 +171,38 @@ export interface MatterSupplement {
 
 export const MATTER_SUPPLEMENT: Readonly<Record<string, MatterSupplement>> = {
   "OKL-2026-014": {
+    openedOn: "2026-01-19",
     claimValueShillings: 4_200_000,
     accruedOn: "2024-08-30",
     limitationBasis: "contract",
     causeNumber: "MCCC E0412 of 2026",
   },
-  "OKL-2026-021": { causeNumber: "MCCR E1188 of 2026" },
-  "OKL-2025-098": { causeNumber: "HCSUCC E220 of 2025" },
+  // A criminal defence is instructed and filed within days; the gap is short.
+  "OKL-2026-021": { openedOn: "2026-02-27", causeNumber: "MCCR E1188 of 2026" },
+  "OKL-2025-098": {
+    openedOn: "2025-09-08",
+    causeNumber: "HCSUCC E220 of 2025",
+  },
   "OKL-2026-005": {
+    openedOn: "2025-11-24",
     claimValueShillings: 18_400_000,
     accruedOn: "2025-02-11",
     limitationBasis: "contract",
     causeNumber: "HCCOMM E0091 of 2026",
   },
-  "OKL-2026-032": { claimValueShillings: 7_650_000 },
+  "OKL-2026-032": { openedOn: "2026-03-16", claimValueShillings: 7_650_000 },
   "OKL-2026-011": {
+    openedOn: "2025-12-15",
     claimValueShillings: 2_900_000,
     causeNumber: "ELRC E0334 of 2026",
   },
   "OKL-2026-040": {
+    openedOn: "2026-04-13",
     claimValueShillings: 11_000_000,
     causeNumber: "ELC E0077 of 2026",
   },
-  "OKL-2025-076": { causeNumber: "HCFAM E0512 of 2025" },
+  "OKL-2025-076": {
+    openedOn: "2025-08-11",
+    causeNumber: "HCFAM E0512 of 2025",
+  },
 };

@@ -236,7 +236,7 @@ errors as typed values.
 
 - [x] Neon provisioned through the Vercel Marketplace (`neon-coffee-compass`), connected to the project, env vars pulled to `.env.local`. `DATABASE_URL` present in development
 - [x] Migrations applied to real Neon via `npm run db:migrate`. Verified against the live database: 12 tables, the `trust_movements_rule_10` trigger present, zero non-bigint money columns, and an overdraw refused with `Advocates (Accounts) Rules r.10: cannot withdraw 30000000 cents against a balance of 20000000 cents`
-- [ ] Add `DATABASE_URL` to preview and production environments (development only so far)
+- [x] `DATABASE_URL` present in preview and production. **This item was never actually outstanding** — the Neon Marketplace integration provisioned all three environments when it was installed, and the roadmap's "development only so far" was wrong. Verified with `vercel env ls` per environment, and all three resolve to the same Neon endpoint and database, so preview and production see the migrated, seeded data. That sharing is deliberate at portfolio scale (D-5's nightly reset); per-preview Neon branches are the obvious upgrade if preview ever writes
 - [x] `sslmode=verify-full` pinned in the config layer rather than in the environment variable — Vercel owns `DATABASE_URL` and `vercel env pull` would overwrite a hand-edit, so one line in code covers development, preview and production permanently. `pg` v9's move to libpq semantics now arrives as a no-op instead of as a silent downgrade
 - [x] `PgClient` layer in `src/infra/sql/client.ts`, with `DATABASE_URL` validated once at startup through a `Config` service and held `Redacted` so it cannot be logged by accident
 - [x] Schema design: 12 tables, FKs, partial indexes, and constraints mirroring the domain — magistrate rank iff magistrates' court, adjournment iff a date to adjourn to, KRA PIN prefix matching client kind, no cause number without a filing date. **Rule 10 is enforced by a trigger** with `SELECT … FOR UPDATE`, since a `CHECK` sees one row and the rule needs the client's whole balance
@@ -260,12 +260,8 @@ errors as typed values.
 - [x] `.env.local` is loaded by `db:migrate` and by the integration config, so the database-backed tests can no longer pass by silently skipping themselves
 - [ ] Testcontainers integration tests over the real driver and `@effect/sql` (D-7) — still Phase 12, and now a much narrower gap: 34 integration tests already run against real Neon
 
-> **Two gaps this phase surfaced, both still open.** `KenyanPhone` accepts
-> mobile prefixes only, so a corporate client's switchboard landline —
-> `+254 20 445 3021` in the fixtures — cannot be represented; the seed records
-> the instructing contact's mobile and `CLIENT_SUPPLEMENT` says so out loud.
-> And the prototype records one date per matter, so `openedOn` and `filedOn`
-> are seeded equal rather than inventing a gap between intake and filing.
+- [x] **Both gaps the seed surfaced, closed.** `KenyanPhone` accepted mobile ranges only, so a corporate client's switchboard landline could not be represented and the seed was substituting a mobile — falsifying data to satisfy a type that was too narrow. The type was the thing that was wrong: it now takes any nine-digit Kenyan number, `phoneKind` keeps the mobile/fixed distinction knowable (Phase 7 texts hearing reminders, and a landline cannot receive one), and **migration 0004** widens the matching `CHECK`. The substituted numbers are gone and the fixtures' real landlines are stored
+- [x] `openedOn` and `filedOn` were seeded equal, which said every matter was filed the day it walked in the door. Intake dates are supplied per matter in `MATTER_SUPPLEMENT` and are **required** — a matter with no entry fails the import rather than falling back to the filing date again
 
 **Done when:** the seed data lives in Postgres and repository tests pass against
 a real database in CI.
@@ -530,3 +526,4 @@ One line per session. Keeps momentum visible across a long project.
 | 2026-08-18 | —     | Wireframe committed; roadmap written; all eight architectural decisions settled                                                                   |
 | 2026-08-19 | 2     | Row↔domain mapping, case/client/invoice repositories, the trust settlement transaction, migrations 0002–0003. 263 unit tests, 34 integration      |
 | 2026-08-19 | 2     | Seed script: the wireframe's fixtures decoded into Postgres through the domain schemas, idempotent on derived ids. 309 unit tests, 39 integration |
+| 2026-08-19 | 2     | Closed the two gaps the seed surfaced: `KenyanPhone` widened to fixed lines (migration 0004), intake dates supplied per matter. 336 unit tests    |
