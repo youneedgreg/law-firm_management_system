@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import type * as Billing from "@/domain/billing/invoice";
 import type * as Matter from "@/domain/case/case";
 import type * as Client from "@/domain/client/client";
 import type * as Firm from "@/domain/firm/advocate";
@@ -7,6 +8,7 @@ import {
   CaseId,
   CaseNumber,
   ClientId,
+  InvoiceId,
   KenyanPhone,
 } from "@/domain/shared/ids";
 
@@ -33,6 +35,8 @@ const clientId = (n: number) =>
   Schema.decodeSync(ClientId)(`00000000-0000-4000-8000-00000000000${n}`);
 const advocateId = (n: number) =>
   Schema.decodeSync(AdvocateId)(`40000000-0000-4000-8000-00000000000${n}`);
+const invoiceId = (n: number) =>
+  Schema.decodeSync(InvoiceId)(`60000000-0000-4000-8000-00000000000${n}`);
 const phone = (digits: string) => Schema.decodeSync(KenyanPhone)(digits);
 
 // ── Staff ─────────────────────────────────────────────────────────────────
@@ -171,3 +175,85 @@ export const closedMatter: Matter.Case = {
 };
 
 export const matters = [filedMatter, unfiledMatter, closedMatter];
+
+// ── Fee notes ─────────────────────────────────────────────────────────────
+
+/**
+ * Three invoices chosen to land on three different derived statuses as at
+ * `TODAY`, because the status is never stored and a fixture that only ever
+ * produced one of them would leave the derivation untested.
+ */
+
+/** Paid in full: two lines, one M-Pesa payment covering the total. */
+export const settledInvoice: Billing.Invoice = {
+  id: invoiceId(1),
+  number: "INV-1001",
+  clientId: wanjiku.id,
+  caseId: filedMatter.id,
+  issuedOn: utc("2026-05-04"),
+  dueOn: utc("2026-06-03"),
+  lines: [
+    {
+      description: "Drafting plaint and verifying affidavit",
+      quantityHundredths: 400,
+      unitPriceCents: 1_500_00,
+    },
+    {
+      description: "Court filing fees (disbursement)",
+      quantityHundredths: 100,
+      unitPriceCents: 5_000_00,
+    },
+  ],
+  payments: [
+    {
+      amountCents: 11_000_00,
+      method: "M-Pesa",
+      receivedOn: utc("2026-05-29"),
+      reference: "SFH4KJ2L91",
+    },
+  ],
+};
+
+/** Issued and due before `TODAY` with nothing paid: derives to Overdue. */
+export const overdueInvoice: Billing.Invoice = {
+  id: invoiceId(2),
+  number: "INV-1002",
+  clientId: zenith.id,
+  caseId: unfiledMatter.id,
+  issuedOn: utc("2026-06-15"),
+  dueOn: utc("2026-07-15"),
+  lines: [
+    {
+      description: "Supply agreement review and advice",
+      quantityHundredths: 650,
+      unitPriceCents: 2_000_00,
+    },
+  ],
+  payments: [],
+};
+
+/** Part paid and not yet due: derives to Partially Paid. */
+export const partPaidInvoice: Billing.Invoice = {
+  id: invoiceId(3),
+  number: "INV-1003",
+  clientId: zenith.id,
+  issuedOn: utc("2026-08-03"),
+  dueOn: utc("2026-09-02"),
+  lines: [
+    {
+      description: "Retainer — August 2026",
+      quantityHundredths: 100,
+      unitPriceCents: 8_000_00,
+    },
+  ],
+  payments: [
+    {
+      amountCents: 3_000_00,
+      method: "Bank Transfer",
+      receivedOn: utc("2026-08-10"),
+      reference: "FT26222XY41",
+    },
+  ],
+};
+
+export const invoices = [settledInvoice, overdueInvoice, partPaidInvoice];

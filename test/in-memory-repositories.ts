@@ -1,13 +1,15 @@
 import { Effect, Layer, Option, Ref } from "effect";
+import type * as Billing from "@/domain/billing/invoice";
 import type * as Matter from "@/domain/case/case";
 import type * as Client from "@/domain/client/client";
 import type * as Firm from "@/domain/firm/advocate";
-import type { CaseId, ClientId } from "@/domain/shared/ids";
+import type { CaseId, ClientId, InvoiceId } from "@/domain/shared/ids";
 import {
   AdvocateRepository,
   CaseNumberTaken,
   CaseRepository,
   ClientRepository,
+  InvoiceRepository,
   NotFound,
 } from "@/services/repositories";
 
@@ -158,6 +160,58 @@ export const inMemoryAdvocates = (
         save: (advocate) =>
           Ref.update(store, (rows) => upsert(rows, advocate)).pipe(
             Effect.as(advocate),
+          ),
+      });
+    }),
+  );
+
+/**
+ * Invoices, backed by an array.
+ *
+ * `settleFromTrust` is deliberately absent from what this can honestly fake.
+ * The real one is a transaction whose whole purpose is that two writes cannot
+ * come apart, and whose refusal comes from the Rule 10 trigger inside Postgres.
+ * A version of it over arrays would pass without exercising either property —
+ * it would be a test that the fake works. It is tested where it means
+ * something, in `invoice-repository.integration.test.ts`, against real
+ * Postgres, so here it fails loudly rather than pretending.
+ */
+export const inMemoryInvoices = (
+  seed: readonly Billing.Invoice[] = [],
+): Layer.Layer<InvoiceRepository> =>
+  Layer.effect(
+    InvoiceRepository,
+    Effect.gen(function* () {
+      const store = yield* Ref.make(seed);
+
+      return InvoiceRepository.of({
+        byId: (id: InvoiceId) =>
+          Ref.get(store).pipe(
+            Effect.flatMap((rows) => {
+              const found = rows.find((invoice) => invoice.id === id);
+              return found === undefined
+                ? notFound("Invoice", id)
+                : Effect.succeed(found);
+            }),
+          ),
+
+        forClient: (clientId) =>
+          Ref.get(store).pipe(
+            Effect.map((rows) =>
+              rows.filter((invoice) => invoice.clientId === clientId),
+            ),
+          ),
+
+        save: (invoice) =>
+          Ref.update(store, (rows) => upsert(rows, invoice)).pipe(
+            Effect.as(invoice),
+          ),
+
+        settleFromTrust: () =>
+          Effect.die(
+            "settleFromTrust has no in-memory equivalent: it is a transaction " +
+              "arbitrated by the Rule 10 trigger. See " +
+              "invoice-repository.integration.test.ts",
           ),
       });
     }),

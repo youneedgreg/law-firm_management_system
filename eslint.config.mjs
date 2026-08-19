@@ -11,12 +11,21 @@ import nextTs from "eslint-config-next/typescript";
  * fails CI rather than surviving review.
  */
 /**
- * Patterns are written twice — once for the `@/` alias and once as `**​/dir/**`
- * — because `no-restricted-imports` matches the import string, not the resolved
- * file. Blocking only `@/lib/*` would leave `../../lib/data/clients` wide open,
- * which is exactly the import someone reaches for when the alias is refused.
+ * Patterns are written four ways, because `no-restricted-imports` matches the
+ * import *string* rather than the file it resolves to.
+ *
+ * - `@/dir/*` and `@/dir` — the alias, with and without a path after it.
+ * - `**​/dir/**` — the relative form, `../../lib/data/clients`. Blocking only
+ *   the alias leaves this wide open, and it is exactly what somebody reaches
+ *   for when the alias is refused.
+ * - `**​/dir` — the relative form of a *directory* import, `../runtime`, which
+ *   resolves to its `index.ts`. This one was missing until Phase 4 added
+ *   `src/api/` and a probe walked straight through the new rule: `../runtime`
+ *   matches neither `@/runtime` nor `**​/runtime/**`. Every boundary declared
+ *   here had the same hole, and only `runtime/` and `api/` have an index for it
+ *   to be exploited through today.
  */
-const layer = (dir) => [`@/${dir}/*`, `@/${dir}`, `**/${dir}/**`];
+const layer = (dir) => [`@/${dir}/*`, `@/${dir}`, `**/${dir}/**`, `**/${dir}`];
 
 const layerBoundaries = [
   {
@@ -59,6 +68,52 @@ const layerBoundaries = [
     forbidden: [...layer("app"), ...layer("components")],
     because:
       "runtime/ is where services meet their implementations. It is imported by the UI and imports none of it — a Layer that reached for a component would make the wiring un-runnable outside a request.",
+  },
+  {
+    name: "api",
+    files: ["src/api/**/*.ts"],
+    forbidden: [
+      ...layer("infra"),
+      ...layer("app"),
+      ...layer("components"),
+      ...layer("lib"),
+    ],
+    because:
+      "api/ is a delivery adapter: it calls services and is wired to their implementations by runtime/. A handler that reached for a repository would be application logic living in the transport, and the next delivery mechanism would need its own copy of it.",
+  },
+  /**
+   * The contract is held by both ends, so it has to survive being imported
+   * into a browser bundle — Phase 5 derives the client from it. `runtime/`
+   * reaches Postgres, so a single import of it anywhere in this list would
+   * put the driver in the client bundle, and the failure arrives as an
+   * inscrutable build error rather than as a boundary violation.
+   *
+   * `server.ts`, `openapi.ts` and `handlers/` are deliberately not listed:
+   * they are the server half, and the whole point is that the line runs
+   * between them and these.
+   *
+   * Listed by name rather than by a glob, because a glob would silently take
+   * in whatever is added next — and whether a new file belongs to the shared
+   * half is a decision, not a default.
+   */
+  {
+    name: "api contract (shared with the browser)",
+    files: [
+      "src/api/wire.ts",
+      "src/api/responses.ts",
+      "src/api/failures.ts",
+      "src/api/contract.ts",
+      "src/api/client.ts",
+    ],
+    forbidden: [
+      ...layer("infra"),
+      ...layer("runtime"),
+      ...layer("app"),
+      ...layer("components"),
+      ...layer("lib"),
+    ],
+    because:
+      "This half of api/ is the shared contract. It is imported by the browser, so it may reach domain/ and services/ and nothing that touches a database.",
   },
 ];
 

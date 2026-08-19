@@ -155,9 +155,24 @@ export const changeStatus = (
 
 // ── Consistency ───────────────────────────────────────────────────────────
 
+/**
+ * The two dates are `Schema.Date` rather than `Schema.DateFromSelf`, which is
+ * the only place in this module that distinction is visible.
+ *
+ * Both carry a `Date` on the type side, so nothing that constructs or reads
+ * this error changes. They differ on the *encoded* side: `DateFromSelf` encodes
+ * to a `Date`, which is not JSON, and an error that cannot be serialised is an
+ * error that cannot leave the process. This one has to — it is returned by the
+ * API in Phase 4, decoded back into this class by the generated client, and the
+ * `reason` below is what the client then renders.
+ *
+ * The rest of the module keeps `DateFromSelf` deliberately: `Case` is encoded
+ * by the SQL layer into columns, not into JSON, and `columns.ts` owns that
+ * conversion because a date column and an ISO timestamp are not the same thing.
+ */
 export class FilingPrecedesIntake extends Schema.TaggedError<FilingPrecedesIntake>()(
   "FilingPrecedesIntake",
-  { openedOn: Schema.DateFromSelf, filedOn: Schema.DateFromSelf },
+  { openedOn: Schema.Date, filedOn: Schema.Date },
 ) {
   get reason(): string {
     const day = (date: Date) => date.toISOString().slice(0, 10);

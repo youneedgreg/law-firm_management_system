@@ -3,7 +3,10 @@ import { AdvocateRepositoryLive } from "../infra/sql/advocate-repository";
 import { CaseRepositoryLive } from "../infra/sql/case-repository";
 import { PgLive } from "../infra/sql/client";
 import { ClientRepositoryLive } from "../infra/sql/client-repository";
+import { InvoiceRepositoryLive } from "../infra/sql/invoice-repository";
+import { BillingService } from "../services/billing-service";
 import { CaseService } from "../services/case-service";
+import { ClientService } from "../services/client-service";
 
 /**
  * Where the layers meet the framework.
@@ -24,16 +27,28 @@ const repositories = Layer.mergeAll(
   CaseRepositoryLive,
   ClientRepositoryLive,
   AdvocateRepositoryLive,
+  InvoiceRepositoryLive,
 ).pipe(Layer.provide(PgLive));
 
 /**
  * Everything a route may ask for.
  *
- * Deliberately only what is wired: Phase 3 takes Cases through the stack and
- * every other module still runs on `lib/data`. A layer listed here that nothing
- * uses is a claim the app does not honour.
+ * Deliberately only what is wired. A layer listed here that nothing uses is a
+ * claim the app does not honour — so `TrustRepository` is absent, because no
+ * service reads the ledger yet, and there is no `DocumentService` because there
+ * is no `DocumentRepository` for one to depend on.
+ *
+ * `ClientService` and `BillingService` joined in Phase 4. Both are read-only,
+ * which is exactly as much as the API offers: their data is real and served
+ * from Postgres, and the write paths are Phase 7's along with the rest of those
+ * modules. The screens for them still read `lib/data` — the seam Phase 3
+ * described has moved, not closed.
  */
-export const AppLayer = CaseService.Default.pipe(Layer.provide(repositories));
+export const AppLayer = Layer.mergeAll(
+  CaseService.Default,
+  ClientService.Default,
+  BillingService.Default,
+).pipe(Layer.provide(repositories));
 
 export type AppServices = Layer.Layer.Success<typeof AppLayer>;
 

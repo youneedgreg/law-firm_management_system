@@ -70,7 +70,15 @@ export interface CaseFile {
   readonly matter: Matter.Case;
   readonly client: Client.Client;
   readonly advocate: Firm.Advocate;
-  readonly limitation: LimitationView | undefined;
+  /**
+   * Optional rather than required-and-possibly-undefined, which is how every
+   * other absent value in this codebase is modelled — `Case.accruedOn`,
+   * `Case.court`, `Case.filedOn`. It was the odd one out, and Phase 4 is where
+   * that stopped being cosmetic: JSON has no `undefined`, so a required key
+   * holding it encodes to an absent key and decodes back to a missing one. A
+   * shape that cannot survive its own round trip is the wrong shape.
+   */
+  readonly limitation?: LimitationView | undefined;
   readonly mayBeMovedTo: readonly Status.CaseStatus[];
 }
 
