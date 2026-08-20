@@ -77,6 +77,33 @@ body:has(.shell) {
   width: 280px;
 }
 
+/* Who is signed in. Replaces the prototype's role select (Phase 6): the role
+   is no longer something the browser chooses, so there is nothing to pick. */
+.topbar-identity {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.2;
+  min-width: 0;
+}
+
+.topbar-name {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.topbar-role {
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-neutral-700);
+  white-space: nowrap;
+}
+
 .topbar-icon-btn {
   all: unset;
   cursor: pointer;
@@ -930,6 +957,70 @@ body:has(.shell) {
   font-size: 13px;
   color: var(--color-accent-2-700);
   background: color-mix(in srgb, var(--color-accent-2) 6%, transparent);
+}
+
+/* ── signing in ────────────────────────────────────────────────────────── */
+
+.signin {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-6) var(--space-4);
+  background: var(--color-neutral-100);
+}
+
+.signin-card {
+  width: 100%;
+  max-width: 460px;
+  padding: var(--space-6);
+  background: var(--color-bg);
+}
+
+.signin-form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.signin-form .btn {
+  justify-self: start;
+}
+
+/* The demo credentials, set apart so nobody mistakes them for chrome. */
+.signin-demo {
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-neutral-300);
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+
+.signin-demo p {
+  margin: var(--space-2) 0 0;
+  line-height: 1.6;
+}
+
+.signin-demo code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  background: var(--color-neutral-100);
+  padding: 1px 4px;
+  border-radius: var(--radius-sm);
+}
+
+/* ── the audit trail ───────────────────────────────────────────────────── */
+
+/* One line per field that moved, rather than two blobs of JSON side by side. */
+.audit-changes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  display: grid;
+  gap: 2px;
+}
+
+.audit-changes strong {
+  font-weight: 600;
 }
 
 .check-row {

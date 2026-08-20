@@ -1,5 +1,7 @@
 import { Context, Effect, Option, Schema } from "effect";
+import type * as Audit from "../domain/audit/entry";
 import type * as Billing from "../domain/billing/invoice";
+import type * as Identity from "../domain/identity/principal";
 import type * as Matter from "../domain/case/case";
 import type * as Client from "../domain/client/client";
 import type * as Firm from "../domain/firm/advocate";
@@ -9,6 +11,7 @@ import type {
   CaseId,
   ClientId,
   InvoiceId,
+  UserId,
 } from "../domain/shared/ids";
 import type * as Money from "../domain/shared/money";
 
@@ -224,3 +227,175 @@ export interface TrustRepository {
 
 export const TrustRepository =
   Context.GenericTag<TrustRepository>("TrustRepository");
+
+/**
+ * Logins, and the person behind one.
+ *
+ * `provision` rather than `create`, and the word is chosen: a login is issued
+ * to somebody the firm already knows about. It takes the subject as a tagged
+ * value for the same reason `Principal` is a union — there is no way to call
+ * this with both an advocate and a client, or with neither.
+ *
+ * Nothing here touches a password. Better Auth owns the credential and the
+ * session (ADR 0004); this owns who the credential *is*, which is the half
+ * that has to join to `advocates` and `clients`.
+ */
+export interface UserRepository {
+  /**
+   * The principal behind a user id, or `NotFound` if the row is gone.
+   *
+   * Called on every authenticated request, which is why it is one query rather
+   * than a lookup followed by a second one for the staff or client record: the
+   * cost falls on every page in the application.
+   */
+  readonly principalOf: (
+    id: UserId,
+  ) => Effect.Effect<Identity.Principal, NotFound | RepositoryFailure>;
+
+  readonly byEmail: (
+    email: string,
+  ) => Effect.Effect<Option.Option<Identity.Principal>, RepositoryFailure>;
+
+  readonly provision: (login: {
+    readonly id: UserId;
+    readonly name: string;
+    readonly email: string;
+    readonly subject:
+      | { readonly _tag: "Staff"; readonly advocateId: AdvocateId }
+      | { readonly _tag: "Client"; readonly clientId: ClientId };
+  }) => Effect.Effect<Identity.Principal, RepositoryFailure>;
+}
+
+export const UserRepository =
+  Context.GenericTag<UserRepository>("UserRepository");
+
+/**
+ * The audit trail.
+ *
+ * Write-and-read-back only: there is no `update` and no `delete`, here or in
+ * Postgres, where a trigger refuses both. An interface that offered them would
+ * be an interface somebody eventually implements.
+ */
+export interface AuditRepository {
+  readonly record: (
+    entry: Audit.AuditEntry,
+  ) => Effect.Effect<Audit.AuditEntry, RepositoryFailure>;
+
+  readonly recent: (
+    limit: number,
+  ) => Effect.Effect<readonly Audit.AuditEntry[], RepositoryFailure>;
+
+  readonly forEntity: (
+    entity: Audit.AuditedEntity,
+    id: string,
+  ) => Effect.Effect<readonly Audit.AuditEntry[], RepositoryFailure>;
+}
+
+export const AuditRepository =
+  Context.GenericTag<AuditRepository>("AuditRepository");
+
+/**
+ * Sessions, as the transport sees them.
+ *
+ * The one part of authentication that is genuinely somebody else's code: is
+ * this cookie a live session, and whose? `handle` passes a request to the
+ * sign-in, sign-out and password-reset endpoints and hands back their response.
+ *
+ * It is declared here, as an interface, so that `IdentityService` can be tested
+ * against a fake that answers "yes, this token is user X" with no Better Auth,
+ * no cookie parsing and no database — and so that swapping the library out is
+ * a change to one file in `infra/` rather than to every service that needs to
+ * know who is calling.
+ */
+export interface SessionGateway {
+  /** Whose live session this request carries, if any. */
+  readonly identify: (
+    headers: Headers,
+  ) => Effect.Effect<Option.Option<UserId>, RepositoryFailure>;
+
+  /**
+   * Exchanges an email and password for a session.
+   *
+   * Returns the cookies to set rather than setting them: this layer has no
+   * response to write them to, and the two callers that do — a Server Action
+   * and a route handler — write them differently. `SessionCookie` is the
+   * vocabulary in between, which is why it is a small structured value rather
+   * than a raw `Set-Cookie` string somebody would have to parse twice.
+   */
+  readonly signIn: (credentials: {
+    readonly email: string;
+    readonly password: string;
+  }) => Effect.Effect<SignedIn, InvalidCredentials | RepositoryFailure>;
+
+  /** Ends the session this request carries. Idempotent. */
+  readonly signOut: (
+    headers: Headers,
+  ) => Effect.Effect<readonly SessionCookie[], RepositoryFailure>;
+
+  /** Serves the remaining authentication endpoints — password reset, and any
+   * the library adds. */
+  readonly handle: (
+    request: Request,
+  ) => Effect.Effect<Response, RepositoryFailure>;
+}
+
+export interface SignedIn {
+  readonly userId: UserId;
+  readonly cookies: readonly SessionCookie[];
+}
+
+/** A cookie to write, in terms neither Better Auth nor Next owns. */
+export interface SessionCookie {
+  readonly name: string;
+  readonly value: string;
+  readonly options: {
+    readonly httpOnly?: boolean | undefined;
+    readonly secure?: boolean | undefined;
+    readonly sameSite?: "lax" | "strict" | "none" | undefined;
+    readonly path?: string | undefined;
+    readonly domain?: string | undefined;
+    readonly maxAge?: number | undefined;
+    readonly expires?: Date | undefined;
+  };
+}
+
+/**
+ * The email and password did not match.
+ *
+ * One error for both halves, deliberately: "no such account" and "wrong
+ * password" are different facts and telling them apart tells an attacker which
+ * addresses are worth attacking. It is the same reasoning as the 404 for an
+ * out-of-scope record, applied to the sign-in form.
+ */
+export class InvalidCredentials extends Schema.TaggedError<InvalidCredentials>()(
+  "InvalidCredentials",
+  {},
+) {
+  get reason(): string {
+    return "That email address and password do not match an account";
+  }
+}
+
+export const SessionGateway =
+  Context.GenericTag<SessionGateway>("SessionGateway");
+
+/**
+ * Runs several writes as one.
+ *
+ * Declared in `services/` rather than reached for as `sql.withTransaction`,
+ * because a service that imported `@effect/sql` to get a transaction would be a
+ * service that knows it is stored in SQL — and every one of its tests would
+ * need a database to run.
+ *
+ * What needs it in Phase 6 is the audit entry. A mutation that commits and an
+ * audit entry that does not leaves a change nobody made; the two go in
+ * together or neither does, and the in-memory implementation enforces the same
+ * thing by discarding both on failure.
+ */
+export interface Transactor {
+  readonly transaction: <A, E, R>(
+    effect: Effect.Effect<A, E, R>,
+  ) => Effect.Effect<A, E | RepositoryFailure, R>;
+}
+
+export const Transactor = Context.GenericTag<Transactor>("Transactor");

@@ -1,12 +1,18 @@
 import { type Either, Effect, Layer, ManagedRuntime } from "effect";
+import { SessionGatewayLive } from "../infra/auth/session-gateway";
 import { AdvocateRepositoryLive } from "../infra/sql/advocate-repository";
+import { AuditRepositoryLive } from "../infra/sql/audit-repository";
 import { CaseRepositoryLive } from "../infra/sql/case-repository";
 import { PgLive } from "../infra/sql/client";
 import { ClientRepositoryLive } from "../infra/sql/client-repository";
 import { InvoiceRepositoryLive } from "../infra/sql/invoice-repository";
+import { TransactorLive } from "../infra/sql/transactor";
+import { UserRepositoryLive } from "../infra/sql/user-repository";
+import { AuditLog } from "../services/audit-service";
 import { BillingService } from "../services/billing-service";
 import { CaseService } from "../services/case-service";
 import { ClientService } from "../services/client-service";
+import { IdentityService } from "../services/identity-service";
 
 /**
  * Where the layers meet the framework.
@@ -28,7 +34,22 @@ const repositories = Layer.mergeAll(
   ClientRepositoryLive,
   AdvocateRepositoryLive,
   InvoiceRepositoryLive,
+  UserRepositoryLive,
+  AuditRepositoryLive,
+  TransactorLive,
 ).pipe(Layer.provide(PgLive));
+
+/**
+ * Sessions, wired to Better Auth.
+ *
+ * Beside the repositories rather than among them because it is not one: it
+ * reaches the same database, through a different client, over the pool they
+ * share. `PgPoolLive` is a single layer value referenced by both `PgLive` and
+ * `AuthLive`, so Effect's layer memoisation builds it once and hands the same
+ * pool to each — the same trick as the API's shared `memoMap`, and for the same
+ * reason.
+ */
+const sessions = SessionGatewayLive;
 
 /**
  * Everything a route may ask for.
@@ -48,7 +69,12 @@ export const AppLayer = Layer.mergeAll(
   CaseService.Default,
   ClientService.Default,
   BillingService.Default,
-).pipe(Layer.provide(repositories));
+  AuditLog.Default,
+  IdentityService.Default,
+).pipe(
+  Layer.provide(AuditLog.Default),
+  Layer.provide(Layer.mergeAll(repositories, sessions)),
+);
 
 export type AppServices = Layer.Layer.Success<typeof AppLayer>;
 

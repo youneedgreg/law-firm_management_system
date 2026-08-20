@@ -1,3 +1,4 @@
+import type { InvoiceStatus as FeeNoteStatus } from "@/domain/billing/invoice";
 import type {
   CaseStatus,
   InvoiceStatus,
@@ -34,6 +35,29 @@ const INVOICE_STATUS_TAG: Record<InvoiceStatus, TagClass> = {
 
 export function invoiceStatusTag(status: InvoiceStatus): TagClass {
   return INVOICE_STATUS_TAG[status];
+}
+
+/**
+ * The same idea for the domain's own invoice statuses.
+ *
+ * Two functions because there are, for now, two vocabularies: the prototype's
+ * (`Issued`) and the domain's, which is derived from an invoice's lines and
+ * payments and includes `Overpaid` — a state the prototype could not represent
+ * and a firm genuinely reaches when a client pays twice. The screens still on
+ * seed data use the first; anything reading `BillingService` uses this. They
+ * converge in Phase 7 when the billing module migrates, and the prototype's
+ * goes with it.
+ */
+const FEE_NOTE_STATUS_TAG: Record<FeeNoteStatus, TagClass> = {
+  Unpaid: "tag tag-neutral",
+  "Partially Paid": "tag tag-outline",
+  Paid: "tag tag-accent",
+  Overdue: "tag tag-accent-2",
+  Overpaid: "tag tag-accent-2",
+};
+
+export function feeNoteStatusTag(status: FeeNoteStatus): TagClass {
+  return FEE_NOTE_STATUS_TAG[status];
 }
 
 const PRIORITY_TAG: Record<Priority, TagClass> = {

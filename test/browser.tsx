@@ -1,7 +1,11 @@
 import { render, type RenderResult } from "@testing-library/react";
 import { vi } from "vitest";
+import { SessionProvider } from "@/components/Session";
+import { permissionsOf } from "@/domain/identity/permissions";
+import type * as Identity from "@/domain/identity/principal";
 import { RxRegistry } from "@/rx/provider";
 import { type Firm, runningApi } from "./api-harness";
+import { asPartner } from "./fixtures";
 
 /**
  * A component, its atoms, and the real API underneath them.
@@ -84,6 +88,26 @@ export const unreachable = (): void => {
   );
 };
 
-/** Renders inside the registry the application itself provides. */
-export const renderWithAtoms = (ui: React.ReactElement): RenderResult =>
-  render(<RxRegistry>{ui}</RxRegistry>);
+/**
+ * Renders inside the registry *and* the session the application provides.
+ *
+ * Both are the real thing: `RxRegistry` is the provider the root layout
+ * mounts, and `SessionProvider` is what the two shells wrap their children in
+ * after the layout has resolved the principal on the server. A component that
+ * reads `useSession` outside one throws, deliberately — so a test that forgets
+ * this is a test that fails loudly rather than one that renders a screen as
+ * nobody.
+ */
+export const renderWithAtoms = (
+  ui: React.ReactElement,
+  principal: Identity.Principal = asPartner,
+): RenderResult =>
+  render(
+    <RxRegistry>
+      <SessionProvider
+        session={{ principal, permissions: permissionsOf(principal) }}
+      >
+        {ui}
+      </SessionProvider>
+    </RxRegistry>,
+  );

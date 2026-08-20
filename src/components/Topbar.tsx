@@ -1,24 +1,37 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useRx } from "@effect-rx/rx-react";
-import { SelectControl } from "@/components/form";
+import { signOut } from "@/app/(auth)/sign-in/actions";
+import { useSession } from "@/components/Session";
+import { roleLabel } from "@/domain/identity/principal";
 import { NOTIFICATIONS } from "@/lib/data/firm";
 import { initials } from "@/lib/format";
-import { roleRx } from "@/rx/session";
-import { ROLES, type Role } from "@/lib/types";
 
+/**
+ * The masthead.
+ *
+ * Where the role switcher used to be there is now a name, a role and a way
+ * out. That is the visible half of Phase 6: the prototype let you *choose* to
+ * be a Managing Partner, and the difference between that and signing in as one
+ * is the whole phase.
+ *
+ * Sign-out is a `<form action={…}>` around a Server Action rather than a button
+ * with an `onClick`. Three things follow from that and all of them are wanted:
+ * it works before hydration, it is a POST rather than a link (so nothing can
+ * sign a person out by embedding an image), and it goes through
+ * `IdentityService`, where the audit entry is written.
+ *
+ * The action is imported from `app/`, which is the one place in this codebase
+ * where a component reaches into the route tree. It is deliberate: a Server
+ * Action is a function the framework serialises into the form's `action`
+ * attribute, not a module this component renders or depends on the shape of,
+ * and both shells need the same one. The alternative — a second copy of the
+ * action beside each shell — would be two doors to the thing the audit trail
+ * is watching.
+ */
 export function Topbar({ onToggleNav }: { onToggleNav: () => void }) {
-  const [role, setRole] = useRx(roleRx);
-  const router = useRouter();
-
-  function changeRole(next: Role) {
-    setRole(next);
-    // The portal is a separate surface, not a filtered view of the internal
-    // one — switching into (or out of) that role changes which app you are in.
-    router.push(next === "Client Portal User" ? "/portal" : "/dashboard");
-  }
+  const { principal } = useSession();
+  const role = roleLabel(principal);
 
   return (
     <header className="topbar">
@@ -53,14 +66,6 @@ export function Topbar({ onToggleNav }: { onToggleNav: () => void }) {
         aria-label="Search cases, clients and documents"
       />
 
-      <SelectControl
-        className="role-select"
-        value={role}
-        onChange={(event) => changeRole(event.target.value as Role)}
-        aria-label="Switch role"
-        options={ROLES}
-      />
-
       <Link
         href="/notifications"
         className="topbar-icon-btn"
@@ -76,9 +81,20 @@ export function Topbar({ onToggleNav }: { onToggleNav: () => void }) {
         </span>
       </Link>
 
-      <div className="avatar" title={role}>
-        {initials(role)}
+      <div className="topbar-identity">
+        <span className="topbar-name">{principal.name}</span>
+        <span className="topbar-role">{role}</span>
       </div>
+
+      <div className="avatar" title={`${principal.name} · ${role}`}>
+        {initials(principal.name)}
+      </div>
+
+      <form action={signOut}>
+        <button type="submit" className="btn btn-ghost">
+          Sign out
+        </button>
+      </form>
     </header>
   );
 }

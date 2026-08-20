@@ -7,6 +7,7 @@ import {
 } from "@effect/platform";
 import { Schema } from "effect";
 import { CaseId, ClientId, InvoiceId } from "../domain/shared/ids";
+import { Authentication } from "./authentication";
 import * as Failures from "./failures";
 import * as Responses from "./responses";
 import * as Wire from "./wire";
@@ -64,12 +65,21 @@ export class CasesGroup extends HttpApiGroup.make("cases")
     HttpApiEndpoint.get("caseload", "/cases")
       .setUrlParams(Responses.CaseloadQuery)
       .addSuccess(Schema.Array(Responses.CaseSummary))
+      /**
+       * 404 on a *list*, which looks odd and is right. For a portal user the
+       * caseload is their own client record's matters, so a login pointing at
+       * a client that has since been deleted has nothing to answer with — and
+       * an empty list would say "you have no matters" to somebody whose record
+       * is missing.
+       */
+      .addError(Failures.NotFound)
       .annotateContext(
         OpenApi.annotations({
           title: "The caseload",
           description:
-            "Every matter, with its client and advocate names resolved. " +
-            "Optionally filtered by status, or scoped to one advocate.",
+            "Every matter, with its client and advocate names resolved — or, " +
+            "for a signed-in client, their own. Optionally filtered by " +
+            "status, or scoped to one advocate.",
         }),
       ),
   )
@@ -186,10 +196,13 @@ export class ClientsGroup extends HttpApiGroup.make("clients")
   .add(
     HttpApiEndpoint.get("directory", "/clients")
       .addSuccess(Schema.Array(Responses.ClientSummary))
+      .addError(Failures.NotFound)
       .annotateContext(
         OpenApi.annotations({
           title: "The client list",
-          description: "Every client, with their caseload counted.",
+          description:
+            "Every client, with their caseload counted. A signed-in client " +
+            "sees exactly one entry: themselves.",
         }),
       ),
   )
@@ -253,6 +266,47 @@ export class BillingGroup extends HttpApiGroup.make("billing")
     }),
   ) {}
 
+// ── The session ───────────────────────────────────────────────────────────
+
+/**
+ * Who the caller is, and what they may do.
+ *
+ * One endpoint, and the browser needs it for something specific: the screens
+ * decide what to *offer* from the same permission table the services enforce
+ * with. A "Move to Closed" button rendered for a Receptionist and then refused
+ * on click is a worse experience than one that was never drawn — and hiding it
+ * without this would mean the browser holding its own copy of the table, which
+ * is the copy that goes stale.
+ *
+ * `permissions` is the principal's own list and nobody else's, so it discloses
+ * nothing: it is what the caller is about to find out by trying.
+ */
+export class SessionGroup extends HttpApiGroup.make("session")
+  .add(
+    HttpApiEndpoint.get("me", "/me")
+      .addSuccess(Responses.Me)
+      .annotateContext(
+        OpenApi.annotations({
+          title: "The signed-in principal",
+          description:
+            "Staff carry a role and an advocate id; a portal user carries a " +
+            "client id and no role at all. The two are a tagged union rather " +
+            "than one shape with optional fields, so a caller cannot read the " +
+            "wrong half of it.",
+        }),
+      ),
+  )
+  .annotateContext(
+    OpenApi.annotations({
+      title: "Session",
+      description:
+        "Signing in and out are Better Auth's own endpoints under " +
+        "/api/auth (ADR 0004) and are not described by this contract. This " +
+        "group is what the application knows about whoever those endpoints " +
+        "let in.",
+    }),
+  ) {}
+
 // ── The API ───────────────────────────────────────────────────────────────
 
 /**
@@ -265,6 +319,22 @@ export class OkLawApi extends HttpApi.make("oklaw")
   .add(CasesGroup)
   .add(ClientsGroup)
   .add(BillingGroup)
+  .add(SessionGroup)
+  /**
+   * Applied to the whole API rather than group by group.
+   *
+   * Every endpoint here runs as somebody, and the way to keep that true is for
+   * it to be the default rather than a line each group has to remember. A
+   * public endpoint, if there is ever one, becomes a visible exemption.
+   */
+  .middleware(Authentication)
+  /**
+   * Declared once, for the same reason. Every operation can be refused for want
+   * of a permission, because every operation checks one — listing 403 on each
+   * endpoint would be twelve copies of the same sentence, eleven of which stay
+   * right when somebody edits the twelfth.
+   */
+  .addError(Failures.NotPermitted)
   .prefix("/api")
   .annotateContext(
     OpenApi.annotations({

@@ -10,7 +10,7 @@ import {
   refused,
   typedValues,
 } from "@/lib/action-state";
-import { attempt } from "@/runtime";
+import { attemptAs } from "@/runtime/session";
 import { CaseService } from "@/services/case-service";
 import { AmendMatterForm, OpenMatterForm, submitted } from "./forms";
 
@@ -102,7 +102,7 @@ export async function openCase(
 
   if (Either.isLeft(decoded)) return fromParseError(decoded.left, values);
 
-  const outcome = await attempt(
+  const outcome = await attemptAs(
     Effect.flatMap(CaseService, (service) => service.open(decoded.right)),
   );
 
@@ -137,7 +137,7 @@ export async function amendCase(
 
   if (Either.isLeft(decoded)) return fromParseError(decoded.left, values);
 
-  const outcome = await attempt(
+  const outcome = await attemptAs(
     Effect.flatMap(CaseService, (service) =>
       service.amend(matterId.right, decoded.right),
     ),

@@ -3,7 +3,9 @@ import type { Schema } from "effect";
 import * as Matter from "../domain/case/case";
 import * as Status from "../domain/case/status";
 import * as Court from "../domain/court/court";
+import * as Permissions from "../domain/identity/permissions";
 import * as CaseService from "../services/case-service";
+import * as Policy from "../services/policy";
 import * as Repositories from "../services/repositories";
 
 /**
@@ -43,6 +45,33 @@ const withStatus =
   (status: number, description: string) =>
   <A, I, R>(schema: Schema.Schema<A, I, R>): Schema.Schema<A, I, R> =>
     schema.annotations(HttpApiSchema.annotations<A>({ status, description }));
+
+// ── 401 and 403: who is asking ────────────────────────────────────────────
+
+export const NotAuthenticated = withStatus(
+  401,
+  "No session. Sign in at /sign-in; the session is a cookie, so a browser " +
+    "needs no further arrangement and a script needs to keep the jar",
+)(Policy.NotAuthenticated);
+
+/**
+ * 403, and deliberately terse about the reason.
+ *
+ * It names the role and the permission and stops there. Explaining *why* the
+ * permission is not held — which roles hold it, what else it gates — would be
+ * documenting the permission table to whoever just tried to step outside it.
+ *
+ * Note what is **not** here: there is no 403 for a portal user reaching another
+ * client's matter. That is a 404, decided in `services/policy.ts`, because a
+ * refusal that distinguishes "not yours" from "does not exist" tells the caller
+ * the record exists — and for a law firm, the existence of a matter is itself
+ * confidential.
+ */
+export const NotPermitted = withStatus(
+  403,
+  "The signed-in role does not hold the permission this operation requires. " +
+    "Signing in again will not change it",
+)(Permissions.NotPermitted);
 
 // ── 404: it is not there ──────────────────────────────────────────────────
 

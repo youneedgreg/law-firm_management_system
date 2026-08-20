@@ -2,11 +2,11 @@
 
 import { Registry, Rx } from "@effect-rx/rx-react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { DEFAULT_SETTINGS } from "./records";
 import {
   hydratedRx,
   invoiceOverridesRx,
   recordsRx,
-  roleRx,
   settingsRx,
 } from "./session";
 
@@ -23,7 +23,20 @@ import {
  * `localStorage`, which is cleared.
  */
 
-const STORED = "oklaw.role.v1";
+/**
+ * The persisted atom these tests drive.
+ *
+ * It was the role until Phase 6, which is where the role stopped being a value
+ * the browser chooses: it now comes from the session, on the server, through
+ * `components/Session.tsx`. The machinery under test here is unchanged — a
+ * `KeyValueStore` read decoded through a schema, a server value that keeps the
+ * first client render matching the HTML — so the tests moved to the firm's
+ * settings, which is still exactly that kind of value.
+ */
+const STORED = "oklaw.settings.v1";
+
+const stored = (settings: Partial<typeof DEFAULT_SETTINGS>) =>
+  JSON.stringify({ ...DEFAULT_SETTINGS, ...settings });
 
 /**
  * Mounts an atom and waits for the store to answer.
@@ -49,7 +62,7 @@ describe("the session", () => {
     const registry = Registry.make();
     await settled(registry);
 
-    expect(registry.get(roleRx)).toBe("Managing Partner");
+    expect(registry.get(settingsRx).firmName).toBe("OKLaw Advocates");
     expect(registry.get(recordsRx).clients).toEqual([]);
     expect(registry.get(settingsRx).currency).toBe("KES");
   });
@@ -63,54 +76,60 @@ describe("the session", () => {
    * which `useSyncExternalStore` reads on the server *and* again while
    * hydrating. The stored role arrives on the commit after that.
    */
-  it("renders the default on the server even when a role is stored", async () => {
-    window.localStorage.setItem(STORED, '"Finance Officer"');
+  it("renders the default on the server even when a value is stored", async () => {
+    window.localStorage.setItem(STORED, stored({ firmName: "Wanjiru & Co" }));
 
     const registry = Registry.make();
     await settled(registry);
 
-    expect(registry.get(roleRx)).toBe("Finance Officer");
-    expect(Rx.getServerValue(roleRx, registry)).toBe("Managing Partner");
+    expect(registry.get(settingsRx).firmName).toBe("Wanjiru & Co");
+    expect(Rx.getServerValue(settingsRx, registry).firmName).toBe(
+      "OKLaw Advocates",
+    );
   });
 
-  it("writes a chosen role through to the browser's store", async () => {
+  it("writes a chosen value through to the browser's store", async () => {
     const registry = Registry.make();
     await settled(registry);
 
-    registry.set(roleRx, "Finance Officer");
+    registry.set(settingsRx, { ...DEFAULT_SETTINGS, currency: "USD" });
 
-    await vi.waitUntil(() => window.localStorage.getItem(STORED) !== null);
-    expect(window.localStorage.getItem(STORED)).toBe('"Finance Officer"');
+    await vi.waitUntil(() =>
+      (window.localStorage.getItem(STORED) ?? "").includes("USD"),
+    );
+    expect(window.localStorage.getItem(STORED)).toContain('"currency":"USD"');
   });
 
   it("reads it back in a registry that has never seen it", async () => {
     const first = Registry.make();
     await settled(first);
-    first.set(roleRx, "Receptionist");
-    await vi.waitUntil(() => window.localStorage.getItem(STORED) !== null);
+    first.set(settingsRx, { ...DEFAULT_SETTINGS, timezone: "Africa/Kampala" });
+    await vi.waitUntil(() =>
+      (window.localStorage.getItem(STORED) ?? "").includes("Kampala"),
+    );
 
     // A second registry is a second tab, or the same one after a reload.
     const second = Registry.make();
     await settled(second);
 
-    expect(second.get(roleRx)).toBe("Receptionist");
+    expect(second.get(settingsRx).timezone).toBe("Africa/Kampala");
   });
 
   /**
    * The reason the store is decoded rather than trusted.
    *
-   * "Chief Justice" is not one of the seven roles, and a build that shipped it
-   * would put it in the masthead and hand it to `canAccessPath`, which answers
-   * for roles it knows. The schema refuses it at the boundary and the atom
-   * falls back to the default, which is the same thing a fresh browser does.
+   * A stored value from a build that had different fields is not a value this
+   * one can render — a missing `currency` would reach a formatter as
+   * `undefined`. The schema refuses it at the boundary and the atom falls back
+   * to the default, which is what a fresh browser does anyway.
    */
   it("refuses a stored value this build cannot make sense of", async () => {
-    window.localStorage.setItem(STORED, '"Chief Justice"');
+    window.localStorage.setItem(STORED, '{"firmName":"Wanjiru & Co"}');
 
     const registry = Registry.make();
     await settled(registry);
 
-    expect(registry.get(roleRx)).toBe("Managing Partner");
+    expect(registry.get(settingsRx).firmName).toBe("OKLaw Advocates");
   });
 
   it("survives a store that is not JSON at all", async () => {
@@ -119,18 +138,18 @@ describe("the session", () => {
     const registry = Registry.make();
     await settled(registry);
 
-    expect(registry.get(roleRx)).toBe("Managing Partner");
+    expect(registry.get(settingsRx).firmName).toBe("OKLaw Advocates");
   });
 
-  it("keeps the four values apart, so one bad key does not lose the rest", async () => {
-    window.localStorage.setItem("oklaw.settings.v1", "nonsense");
+  it("keeps the values apart, so one bad key does not lose the rest", async () => {
+    window.localStorage.setItem("oklaw.records.v1", "nonsense");
 
     const registry = Registry.make();
     await settled(registry);
-    registry.set(roleRx, "Legal Assistant/Paralegal");
+    registry.set(settingsRx, { ...DEFAULT_SETTINGS, currency: "GBP" });
 
-    expect(registry.get(roleRx)).toBe("Legal Assistant/Paralegal");
-    expect(registry.get(settingsRx).firmName).toBe("OKLaw Advocates");
+    expect(registry.get(settingsRx).currency).toBe("GBP");
+    expect(registry.get(recordsRx).clients).toEqual([]);
   });
 
   it("carries the records the forms create across a reload", async () => {

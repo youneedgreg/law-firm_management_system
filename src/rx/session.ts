@@ -1,14 +1,13 @@
 import { Result, Rx } from "@effect-rx/rx-react";
 import { KeyValueStore } from "@effect/platform";
 import { Effect, Option, type Schema } from "effect";
-import type { FirmSettings, Invoice, InvoiceStatus, Role } from "../lib/types";
+import type { FirmSettings, Invoice, InvoiceStatus } from "../lib/types";
 import { browserRuntime } from "./browser";
 import {
   CreatedRecords,
   DEFAULT_SETTINGS,
   InvoiceOverrides,
   NO_RECORDS,
-  RoleSchema,
   Settings,
 } from "./records";
 
@@ -21,11 +20,18 @@ import {
  * concerns in one file, and every screen took all four through one hook whether
  * it read one of them or all of them.
  *
- * As atoms they are four independent values. A component that reads the role
- * re-renders when the role changes and not when an invoice is marked paid,
- * which the single context object could not offer. Persistence is a
- * `KeyValueStore` call rather than a `try`/`catch` around `localStorage`, and
- * what comes back out is decoded through a schema instead of trusted.
+ * As atoms they are independent values. A component that reads the firm's
+ * settings does not re-render when an invoice is marked paid, which the single
+ * context object could not offer. Persistence is a `KeyValueStore` call rather
+ * than a `try`/`catch` around `localStorage`, and what comes back out is
+ * decoded through a schema instead of trusted.
+ *
+ * **The role is no longer among them.** Phase 5 held it here, as a value the
+ * browser chose, because there was nothing else to ask. Phase 6 has a session:
+ * the role comes from the principal the server resolved from a signed cookie,
+ * and it reaches the screens through `components/Session.tsx`. A role a browser
+ * can set is not a role, and keeping the atom beside the real one would leave
+ * two answers to "who is this" with only one of them true.
  */
 
 /**
@@ -100,19 +106,15 @@ const stored = <A, I>(
 /**
  * Keys are per value rather than one blob.
  *
- * The module this replaced wrote all four under `oklaw.appstate.v1`, which
+ * The module this replaced wrote them all under `oklaw.appstate.v1`, which
  * meant every set rewrote everything and a single unreadable field discarded
  * the lot. Nothing migrates the old key: it holds a prototype's session state,
  * and a migration would be code that exists to preserve four values nobody
- * would miss.
+ * would miss — and one of which, the role, would now be a lie.
  */
-const role = stored("oklaw.role.v1", RoleSchema, "Managing Partner" as Role);
 const settings = stored("oklaw.settings.v1", Settings, DEFAULT_SETTINGS);
 const records = stored("oklaw.records.v1", CreatedRecords, NO_RECORDS);
 const overrides = stored("oklaw.invoice-status.v1", InvoiceOverrides, {});
-
-/** Which of the seven roles the browser is currently playing (D-5). */
-export const roleRx: Rx.Writable<Role> = role.atom;
 
 /** The firm-wide preferences an administrator sets. */
 export const settingsRx: Rx.Writable<FirmSettings> = settings.atom;
@@ -126,17 +128,13 @@ export const invoiceOverridesRx: Rx.Writable<InvoiceOverrides> = overrides.atom;
 /**
  * False until every stored value has been read.
  *
- * Screens that would otherwise flash a wrong answer — the default role in the
- * masthead, "no such client" for one the intake form created — wait on this.
+ * Screens that would otherwise flash a wrong answer — "no such client" for one
+ * the intake form created — wait on this.
  * It is the conjunction rather than any one read, because a screen that waits
  * wants to be sure about all of it.
  */
 export const hydratedRx: Rx.Rx<boolean> = Rx.readable(
-  (get) =>
-    get(role.ready) &&
-    get(settings.ready) &&
-    get(records.ready) &&
-    get(overrides.ready),
+  (get) => get(settings.ready) && get(records.ready) && get(overrides.ready),
 ).pipe(Rx.withServerValue(() => false));
 
 /** The effective status of an invoice, override applied. */

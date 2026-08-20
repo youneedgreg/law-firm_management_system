@@ -44,6 +44,20 @@ export type HearingId = typeof HearingId.Type;
 export const TrustMovementId = entityId("TrustMovementId");
 export type TrustMovementId = typeof TrustMovementId.Type;
 
+/**
+ * A login, which is not the same thing as a person's staff or client record.
+ *
+ * Separate from `AdvocateId` and `ClientId` on purpose: an advocate who has
+ * never been given a login still exists and still carries matters, and a login
+ * that is disabled leaves the staff record it pointed at untouched. Collapsing
+ * the two would mean deleting a login deleted the advocate.
+ */
+export const UserId = entityId("UserId");
+export type UserId = typeof UserId.Type;
+
+export const AuditEntryId = entityId("AuditEntryId");
+export type AuditEntryId = typeof AuditEntryId.Type;
+
 // ── Formatted identifiers ─────────────────────────────────────────────────
 
 /**

@@ -1,7 +1,7 @@
 import { Rx } from "@effect-rx/rx-react";
 import { Data, Effect } from "effect";
 import type { CaseStatus } from "../domain/case/status";
-import type { CaseId } from "../domain/shared/ids";
+import type { AdvocateId, CaseId } from "../domain/shared/ids";
 import { Api, browserRuntime } from "./browser";
 
 /**
@@ -47,17 +47,45 @@ import { Api, browserRuntime } from "./browser";
  * the server renders the loading state, nothing is fetched from a process with
  * no session and no origin, and the first client render matches the HTML.
  */
-export const caseloadRx = Rx.family((status: CaseStatus | "all") =>
+export interface CaseloadFilter {
+  readonly status: CaseStatus | "all";
+  /**
+   * An advocate's own matters — the "My cases" view.
+   *
+   * Phase 5 filtered these in the browser against a hard-coded advocate name
+   * from the seed data, with a comment saying Phase 6 would move it once there
+   * was a signed-in user to filter by. This is that: the id comes from the
+   * session, and the filter is applied by the service in the query.
+   *
+   * Still presentation, not authorization. An advocate may read the whole
+   * caseload — `case:read` is not scoped by assignment, because a firm's staff
+   * cover each other's matters — so this decides what to *show*, and the two
+   * are not confused: the scope that is a security boundary belongs to portal
+   * users and lives in `services/policy.ts`.
+   */
+  readonly advocateId?: AdvocateId | undefined;
+}
+
+const caseloadFamily = Rx.family((filter: CaseloadFilter) =>
   browserRuntime
     .rx(
       Effect.flatMap(Api, (api) =>
         api.cases.caseload({
-          urlParams: status === "all" ? {} : { status },
+          urlParams: {
+            ...(filter.status === "all" ? {} : { status: filter.status }),
+            ...(filter.advocateId === undefined
+              ? {}
+              : { advocateId: filter.advocateId }),
+          },
         }),
       ),
     )
     .pipe(Rx.refreshOnWindowFocus, Rx.withServerValueInitial),
 );
+
+/** Keyed structurally, so the same filter is the same atom. */
+export const caseloadRx = (filter: CaseloadFilter) =>
+  caseloadFamily(Data.struct(filter));
 
 /**
  * Who a matter may be opened for, and who may carry it.

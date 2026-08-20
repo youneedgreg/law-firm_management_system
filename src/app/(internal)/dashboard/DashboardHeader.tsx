@@ -2,9 +2,11 @@
 
 import { useRxValue } from "@effect-rx/rx-react";
 import { useInvoiceStatus } from "@/rx/hooks";
-import { recordsRx, roleRx } from "@/rx/session";
+import { useSession } from "@/components/Session";
+import { roleLabel } from "@/domain/identity/principal";
+import { recordsRx } from "@/rx/session";
 import { Stat } from "@/components/ui";
-import { CASES, SIGNED_IN_ADVOCATE } from "@/lib/data/cases";
+import { CASES } from "@/lib/data/cases";
 import { HEARINGS } from "@/lib/data/hearings";
 import {
   INVOICES,
@@ -20,15 +22,16 @@ import { kes } from "@/lib/format";
  * server.
  */
 export function DashboardHeader() {
-  const role = useRxValue(roleRx);
-  const isAdvocate = role === "Advocate/Lawyer";
+  const { principal } = useSession();
+  const isAdvocate =
+    principal._tag === "Staff" && principal.role === "Advocate";
 
   return (
     <>
       <h1 className="page-title">
         {isAdvocate
-          ? `Good day, ${SIGNED_IN_ADVOCATE.replace("Adv. ", "")}`
-          : `${role} dashboard`}
+          ? `Good day, ${principal.name.replace("Adv. ", "")}`
+          : `${roleLabel(principal)} dashboard`}
       </h1>
       <p className="page-subtitle">
         {isAdvocate
@@ -40,10 +43,11 @@ export function DashboardHeader() {
 }
 
 export function DashboardStats() {
-  const role = useRxValue(roleRx);
+  const { principal } = useSession();
   const records = useRxValue(recordsRx);
   const statusOf = useInvoiceStatus();
-  const isAdvocate = role === "Advocate/Lawyer";
+  const isAdvocate =
+    principal._tag === "Staff" && principal.role === "Advocate";
 
   // Everything the forms have created counts towards the band too.
   const cases = CASES;
@@ -53,9 +57,16 @@ export function DashboardStats() {
     PENDING_TASK_COUNT +
     records.tasks.filter((task) => task.status !== "Done").length;
 
-  // An advocate's dashboard counts only their own matters.
+  /**
+   * An advocate's dashboard counts only their own matters.
+   *
+   * Matched on the signed-in advocate's name rather than on the seed data's
+   * `SIGNED_IN_ADVOCATE` constant, which was the prototype's stand-in for a
+   * session. The rows are still `lib/data` — this band is Phase 7's to move —
+   * but which of them are "mine" is now a fact about who signed in.
+   */
   const scoped = isAdvocate
-    ? cases.filter((legalCase) => legalCase.advocate === SIGNED_IN_ADVOCATE)
+    ? cases.filter((legalCase) => legalCase.advocate === principal.name)
     : cases;
 
   const activeCases = scoped.filter(

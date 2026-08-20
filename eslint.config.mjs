@@ -129,6 +129,14 @@ const layerBoundaries = [
       "src/api/failures.ts",
       "src/api/contract.ts",
       "src/api/client.ts",
+      /**
+       * Phase 6 added the authentication middleware's *definition* to the
+       * shared half. The contract carries it — every endpoint declares 401 —
+       * so the browser's generated client imports it. Its implementation is
+       * `handlers/authentication.ts`, which is the server half and is not
+       * listed here.
+       */
+      "src/api/authentication.ts",
     ],
     forbidden: [
       ...layer("infra"),

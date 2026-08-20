@@ -1,6 +1,6 @@
 import { PgClient } from "@effect/sql-pg";
 import { Effect, Layer, String as Str } from "effect";
-import { DatabaseConfig } from "../config";
+import { PgPool, PgPoolLive } from "./pool";
 
 /**
  * The Postgres connection, as a Layer.
@@ -14,14 +14,17 @@ import { DatabaseConfig } from "../config";
  * The name transforms let SQL read like SQL and TypeScript read like
  * TypeScript: `claim_value_cents` in a query arrives as `claimValueCents` in a
  * row, and neither side has to carry the other's convention.
+ *
+ * Built `fromPool` since Phase 6 rather than from a URL, because Better Auth
+ * needs a connection to the same database and taking it from `PgPool` is what
+ * keeps that from being a second pool. See `pool.ts`.
  */
 export const PgLive = Layer.unwrapEffect(
   Effect.gen(function* () {
-    const config = yield* DatabaseConfig;
+    const pool = yield* PgPool;
 
-    return PgClient.layer({
-      url: config.url,
-      maxConnections: config.maxConnections,
+    return PgClient.layerFromPool({
+      acquire: Effect.succeed(pool),
       /** Columns come back `snake_case`; fields are `camelCase`. */
       transformResultNames: Str.snakeToCamel,
       /** …and identifiers written `camelCase` go out as `snake_case`. */
@@ -30,4 +33,4 @@ export const PgLive = Layer.unwrapEffect(
       applicationName: "oklaw",
     });
   }),
-).pipe(Layer.provide(DatabaseConfig.Default));
+).pipe(Layer.provide(PgPoolLive));

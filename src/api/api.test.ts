@@ -2,6 +2,9 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, Either, Schema } from "effect";
 import { BASE_URL, runningApi, withApi } from "../../test/api-harness";
 import {
+  asFinance,
+  asReceptionist,
+  asWanjiku,
   closedMatter,
   daniel,
   filedMatter,
@@ -624,6 +627,7 @@ describe("the OpenAPI document", () => {
       "/api/clients/{clientId}/invoices",
       "/api/clients/{id}",
       "/api/invoices/{id}",
+      "/api/me",
     ]);
   });
 
@@ -634,9 +638,15 @@ describe("the OpenAPI document", () => {
    */
   it("carries the status code each refusal was annotated with", () => {
     const open = openApiSpec.paths["/api/cases"]?.post;
+
+    // 401 and 403 are on every operation since Phase 6: the first from the
+    // authentication middleware, which the whole API carries, and the second
+    // declared once on the API rather than per endpoint.
     expect(Object.keys(open?.responses ?? {}).sort()).toEqual([
       "201",
       "400",
+      "401",
+      "403",
       "404",
       "409",
       "422",
@@ -657,5 +667,328 @@ describe("the OpenAPI document", () => {
 
         yield* Effect.promise(() => api.dispose());
       }),
+    ));
+});
+
+/**
+ * Authentication and authorization, over HTTP.
+ *
+ * The service tests already assert these rules. What this file adds is that
+ * they survive the transport: an endpoint that forgot the middleware, a status
+ * code that annotates the wrong schema, a refusal that encodes into something
+ * the client cannot distinguish from success — none of that is visible from a
+ * service test, and all of it is what a caller would actually meet.
+ *
+ * The requests are made through the generated client, so a refusal arrives as
+ * the class the service failed with. `runningApi` is used directly where the
+ * *status code* is the assertion: a client that decodes 404 into `NotFound` is
+ * exactly why it is worth checking, separately, that the wire said 404.
+ */
+describe("who is asking", () => {
+  it("answers 401 to a request with no session", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const api = runningApi({ as: null });
+
+        const response = yield* Effect.promise(() =>
+          api.handler(new Request(`${BASE_URL}/api/cases`)),
+        );
+
+        expect(response.status).toBe(401);
+
+        // The body names the refusal and nothing else — no hint about which
+        // accounts exist, and no stack.
+        const body = yield* Effect.promise(() => response.json());
+        expect(body).toMatchObject({ _tag: "NotAuthenticated" });
+
+        yield* Effect.promise(() => api.dispose());
+      }),
+    ));
+
+  /**
+   * Every endpoint, not just the ones somebody remembered.
+   *
+   * The middleware is declared on the whole API rather than per group, and this
+   * is the assertion that says so: a group added in Phase 7 that quietly missed
+   * it would show up here as a 200.
+   */
+  it("answers 401 on every path the contract declares", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const api = runningApi({ as: null });
+
+        const paths = [
+          "/api/cases",
+          "/api/cases/intake-choices",
+          `/api/cases/${filedMatter.id}`,
+          "/api/clients",
+          `/api/clients/${wanjiku.id}`,
+          `/api/clients/${wanjiku.id}/invoices`,
+          "/api/me",
+        ];
+
+        const statuses = yield* Effect.forEach(paths, (path) =>
+          Effect.promise(async () => {
+            const response = await api.handler(
+              new Request(`${BASE_URL}${path}`),
+            );
+            return response.status;
+          }),
+        );
+
+        expect(statuses).toEqual(paths.map(() => 401));
+
+        yield* Effect.promise(() => api.dispose());
+      }),
+    ));
+
+  it("says who the caller is, and what they may do", () =>
+    withApi((client) =>
+      Effect.gen(function* () {
+        const me = yield* client.session.me({});
+
+        expect(me.principal._tag).toBe("Staff");
+        expect(me.permissions).toContain("case:open");
+        expect(me.permissions).not.toContain("trust:write");
+      }),
+    ));
+
+  /**
+   * The portal user's `/me` is a different *shape*, not a flag.
+   *
+   * `principal` is the domain's tagged union on the wire too, so a client
+   * reading `clientId` has to narrow on the tag first — there is no shape in
+   * which a staff member has a `clientId` to be read by mistake.
+   */
+  it("describes a portal user as a portal user", () =>
+    withApi(
+      (client) =>
+        Effect.gen(function* () {
+          const me = yield* client.session.me({});
+
+          expect(me.principal._tag).toBe("PortalUser");
+          if (me.principal._tag === "PortalUser") {
+            expect(me.principal.clientId).toBe(wanjiku.id);
+          }
+          expect(me.permissions).toEqual([
+            "case:read",
+            "client:read",
+            "invoice:read",
+          ]);
+        }),
+      { as: asWanjiku },
+    ));
+});
+
+describe("a portal user, trying", () => {
+  it("is served their own matter", () =>
+    withApi(
+      (client) =>
+        Effect.gen(function* () {
+          const file = yield* client.cases.file({
+            path: { id: filedMatter.id },
+          });
+
+          expect(file.matter.id).toBe(filedMatter.id);
+        }),
+      { as: asWanjiku },
+    ));
+
+  /**
+   * **The test this phase exists for.**
+   *
+   * Wanjiku's login asks for Zenith's matter by id. The answer is 404 — the
+   * same answer, with the same body shape, as an id that belongs to nothing at
+   * all. A 403 here would confirm the matter exists, and for a law firm the
+   * existence of a matter is itself confidential.
+   */
+  it("cannot reach another client's matter, and cannot tell it apart from one that does not exist", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const api = runningApi({ as: asWanjiku });
+
+        const [theirs, absent] = yield* Effect.forEach(
+          [unfiledMatter.id, ABSENT],
+          (id) =>
+            Effect.promise(async () => {
+              const response = await api.handler(
+                new Request(`${BASE_URL}/api/cases/${id}`),
+              );
+              return {
+                status: response.status,
+                body: (await response.json()) as { _tag?: string },
+              };
+            }),
+        );
+
+        expect(theirs?.status).toBe(404);
+        expect(absent?.status).toBe(404);
+        expect(theirs?.body._tag).toBe(absent?.body._tag);
+
+        yield* Effect.promise(() => api.dispose());
+      }),
+    ));
+
+  it("cannot reach another client's invoices", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const api = runningApi({ as: asWanjiku });
+
+        const response = yield* Effect.promise(() =>
+          api.handler(
+            new Request(`${BASE_URL}/api/clients/${zenith.id}/invoices`),
+          ),
+        );
+
+        expect(response.status).toBe(404);
+
+        yield* Effect.promise(() => api.dispose());
+      }),
+    ));
+
+  it("cannot reach another client's record", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const api = runningApi({ as: asWanjiku });
+
+        const response = yield* Effect.promise(() =>
+          api.handler(new Request(`${BASE_URL}/api/clients/${zenith.id}`)),
+        );
+
+        expect(response.status).toBe(404);
+
+        yield* Effect.promise(() => api.dispose());
+      }),
+    ));
+
+  /** The client directory is one row long, and it is their own. */
+  it("sees a client list containing only themselves", () =>
+    withApi(
+      (client) =>
+        Effect.gen(function* () {
+          const directory = yield* client.clients.directory({});
+
+          expect(directory.map((entry) => entry.client.id)).toEqual([
+            wanjiku.id,
+          ]);
+        }),
+      { as: asWanjiku },
+    ));
+
+  it("sees a caseload containing only their own matters", () =>
+    withApi(
+      (client) =>
+        Effect.gen(function* () {
+          const caseload = yield* client.cases.caseload({ urlParams: {} });
+
+          expect(
+            caseload.every((summary) => summary.matter.clientId === wanjiku.id),
+          ).toBe(true);
+        }),
+      { as: asWanjiku },
+    ));
+
+  /**
+   * A filter is not a way around the scope.
+   *
+   * Asking for another advocate's matters, or for a status, still answers
+   * within the caller's scope — the scope is in the query the service builds,
+   * not a filter applied to what a URL asked for.
+   */
+  it("cannot widen its own caseload with a filter", () =>
+    withApi(
+      (client) =>
+        Effect.gen(function* () {
+          const caseload = yield* client.cases.caseload({
+            urlParams: { advocateId: grace.id },
+          });
+
+          expect(
+            caseload.every((summary) => summary.matter.clientId === wanjiku.id),
+          ).toBe(true);
+        }),
+      { as: asWanjiku },
+    ));
+
+  it("is refused a write with 403, which signing in again will not fix", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const api = runningApi({ as: asWanjiku });
+
+        const response = yield* Effect.promise(() =>
+          api.handler(
+            new Request(`${BASE_URL}/api/cases/${filedMatter.id}/status`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ to: "Closed" }),
+            }),
+          ),
+        );
+
+        expect(response.status).toBe(403);
+
+        const body = (yield* Effect.promise(() => response.json())) as {
+          _tag?: string;
+          role?: string;
+        };
+        expect(body._tag).toBe("NotPermitted");
+        expect(body.role).toBe("Client Portal User");
+
+        yield* Effect.promise(() => api.dispose());
+      }),
+    ));
+});
+
+describe("a member of staff, refused", () => {
+  it("gets 403 and a reason the client can compose itself", () =>
+    withApi(
+      (client) =>
+        Effect.gen(function* () {
+          const refused = yield* Effect.flip(
+            client.cases.transition({
+              path: { id: filedMatter.id },
+              payload: { to: "Closed" },
+            }),
+          );
+
+          expect(refused._tag).toBe("NotPermitted");
+          if (refused._tag === "NotPermitted") {
+            // The sentence was never transmitted: `reason` is a getter on the
+            // class, and the client holds the class.
+            expect(refused.reason).toBe(
+              "A Finance Officer may not case transition",
+            );
+          }
+        }),
+      { as: asFinance },
+    ));
+
+  it("is still served the reads their role holds", () =>
+    withApi(
+      (client) =>
+        Effect.gen(function* () {
+          const invoices = yield* client.billing.forClient({
+            path: { clientId: wanjiku.id },
+          });
+
+          expect(invoices.length).toBeGreaterThan(0);
+        }),
+      { as: asFinance },
+    ));
+
+  it("refuses a Receptionist the money, by permission rather than by scope", () =>
+    withApi(
+      (client) =>
+        Effect.gen(function* () {
+          const refused = yield* Effect.flip(
+            client.billing.forClient({ path: { clientId: wanjiku.id } }),
+          );
+
+          // 403, not 404: everyone at the firm knows the fee notes exist.
+          // Concealment is for the portal, where the existence of a record is
+          // itself the confidential part.
+          expect(refused._tag).toBe("NotPermitted");
+        }),
+      { as: asReceptionist },
     ));
 });

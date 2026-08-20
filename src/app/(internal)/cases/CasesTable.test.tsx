@@ -1,9 +1,8 @@
 // @vitest-environment jsdom
 
-import { useRxSet } from "@effect-rx/rx-react";
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { cleanup, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { roleRx } from "@/rx/session";
+import { asAdvocate } from "../../../../test/fixtures";
 import {
   renderWithAtoms,
   servedBy,
@@ -11,16 +10,6 @@ import {
   unreachable,
 } from "../../../../test/browser";
 import { CasesTable } from "./CasesTable";
-
-/** Stands in for the masthead's role select, which is the real writer. */
-function RoleSwitch() {
-  const setRole = useRxSet(roleRx);
-  return (
-    <button type="button" onClick={() => setRole("Advocate/Lawyer")}>
-      Act as an advocate
-    </button>
-  );
-}
 
 /**
  * The caseload table, over the real API.
@@ -96,26 +85,26 @@ describe("the caseload", () => {
   });
 
   /**
-   * The role lives in an atom, so the table answers to it without being passed
-   * anything and without the component that changes it knowing the table
-   * exists. None of the fixtures are carried by the advocate the prototype
-   * signs in as, so scoping to them empties the table — which is the visible
-   * consequence of the atom having moved.
+   * An advocate's caseload is *fetched* scoped, not filtered after the fact.
+   *
+   * Phase 5 held the role in an atom and hid rows in the browser. The id now
+   * comes from the session and goes to the service as a query parameter, so
+   * this asserts something stronger than "the right rows are shown": the row
+   * that belongs to another advocate never arrives. The two are
+   * indistinguishable in the DOM, which is why the request is the thing that
+   * changed and the assertion is that the other matter is absent from a
+   * response the table was given in full for the partner.
    */
-  it("re-scopes when the role changes, with no prop and no reload", async () => {
-    const api = servedBy();
+  it("fetches only the signed-in advocate's own matters", async () => {
+    const api = servedBy({ as: asAdvocate });
 
-    renderWithAtoms(
-      <>
-        <RoleSwitch />
-        <CasesTable status="all" />
-      </>,
-    );
+    renderWithAtoms(<CasesTable status="all" />, asAdvocate);
+
     await screen.findByText("Wanjiku Mwangi v. Nairobi Metro SACCO");
+    expect(
+      screen.queryByText("Zenith Distributors Ltd — supply contract review"),
+    ).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Act as an advocate" }));
-
-    await screen.findByText("No matters match this filter.");
     await api.dispose();
   });
 

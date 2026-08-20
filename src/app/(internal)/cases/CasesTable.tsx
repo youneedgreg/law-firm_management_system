@@ -4,11 +4,12 @@ import { Result, useRxValue } from "@effect-rx/rx-react";
 import Link from "next/link";
 import { TableWrap } from "@/components/ui";
 import type { CaseStatus } from "@/domain/case/status";
-import { SIGNED_IN_ADVOCATE } from "@/lib/data/cases";
+import type { Principal } from "@/domain/identity/principal";
+import type { AdvocateId } from "@/domain/shared/ids";
+import { useSession } from "@/components/Session";
 import { caseStatusTag } from "@/lib/format";
 import { caseloadRx } from "@/rx/cases";
 import { explain } from "@/rx/failure";
-import { roleRx } from "@/rx/session";
 import { courtName } from "./display";
 
 /**
@@ -32,15 +33,19 @@ import { courtName } from "./display";
  * that is not a typed failure, so a bug reaches `error.tsx` — the same division
  * the server draws between a refusal it returns and a defect it dies on.
  *
- * **The role scoping is presentation, not authorization.** It hides rows an
- * Advocate/Lawyer has no reason to see; it does not stop anyone from reading
- * them, because the API served them. The service takes an `advocateId` filter
- * and applies it in the query, which is where this belongs and where Phase 6
- * moves it once there is a signed-in user to filter by.
+ * **An advocate's own matters are a default view, not a restriction.** Phase 5
+ * filtered the rows here, in the browser, against a hard-coded name from the
+ * seed data. The advocate id now comes from the session and goes to the
+ * service, which applies it in the query — so "my cases" fetches the matters it
+ * shows rather than fetching every matter and hiding most.
+ *
+ * That is still presentation. The scoping that is a security boundary is the
+ * portal's, it is decided in `services/policy.ts` from the signed-in
+ * principal, and no component is party to it.
  */
 export function CasesTable({ status }: { status: CaseStatus | "all" }) {
-  const role = useRxValue(roleRx);
-  const caseload = useRxValue(caseloadRx(status));
+  const mine = ownMatters(useSession().principal);
+  const caseload = useRxValue(caseloadRx({ status, advocateId: mine }));
 
   return Result.builder(caseload)
     .onInitial(() => <p className="dek">Reading the caseload…</p>)
@@ -50,12 +55,7 @@ export function CasesTable({ status }: { status: CaseStatus | "all" }) {
       </p>
     ))
     .onSuccess((caseload) => {
-      const rows =
-        role === "Advocate/Lawyer"
-          ? caseload.filter(
-              (summary) => summary.advocateName === SIGNED_IN_ADVOCATE,
-            )
-          : caseload;
+      const rows = caseload;
 
       if (rows.length === 0) {
         return <p className="dek">No matters match this filter.</p>;
@@ -109,10 +109,19 @@ export function CasesTable({ status }: { status: CaseStatus | "all" }) {
 }
 
 export function CasesTitle() {
-  const role = useRxValue(roleRx);
-  return (
-    <h1 className="page-title">
-      {role === "Advocate/Lawyer" ? "My cases" : "Cases"}
-    </h1>
-  );
+  const mine = ownMatters(useSession().principal);
+  return <h1 className="page-title">{mine ? "My cases" : "Cases"}</h1>;
 }
+
+/**
+ * Which advocate's matters to show, or every one of them.
+ *
+ * An Advocate lands on their own caseload because that is the working list they
+ * came for; a Managing Partner, a Finance Officer and a Receptionist all want
+ * the firm's. It is a default view rather than a restriction — the filter is a
+ * URL away, and the service would serve it.
+ */
+const ownMatters = (principal: Principal): AdvocateId | undefined =>
+  principal._tag === "Staff" && principal.role === "Advocate"
+    ? principal.advocateId
+    : undefined;

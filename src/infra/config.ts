@@ -66,3 +66,51 @@ export class DatabaseConfig extends Effect.Service<DatabaseConfig>()(
     }),
   },
 ) {}
+
+/**
+ * The secret every session cookie is signed with, and the origin they are
+ * issued for.
+ *
+ * Validated for length rather than merely for presence. Better Auth accepts any
+ * string and warns on a weak one at startup — a warning in a log nobody reads
+ * is not a control, and a 12-character secret is a forgeable session cookie,
+ * which is every account at once. 32 characters is the width of the hash it
+ * feeds, so anything shorter is a shortened key however it was generated.
+ *
+ * `baseURL` matters for a reason that is easy to miss: it is what the cookie's
+ * origin checks are made against. Left unset, Better Auth derives it from the
+ * incoming request, which means the application believes whatever `Host` header
+ * it is sent. On Vercel the deployment URL is known from the environment, so
+ * there is no reason to take the request's word for it.
+ */
+export class AuthConfig extends Effect.Service<AuthConfig>()("AuthConfig", {
+  effect: Effect.gen(function* () {
+    const secret = yield* Config.redacted("BETTER_AUTH_SECRET").pipe(
+      Config.validate({
+        message:
+          "BETTER_AUTH_SECRET must be at least 32 characters. " +
+          "Generate one with: openssl rand -base64 32",
+        validation: (value) => Redacted.value(value).length >= 32,
+      }),
+    );
+
+    /**
+     * Preview deployments each get their own hostname, which is why this falls
+     * back to `VERCEL_URL` — the deployment's own URL — rather than to the
+     * production one. A preview signing cookies for the production origin
+     * would issue cookies the browser refuses to send back, and the symptom is
+     * a login that appears to succeed and then does nothing.
+     */
+    const deploymentUrl = yield* Config.string("VERCEL_URL").pipe(
+      Config.map((host) => `https://${host}`),
+      Config.withDefault("http://localhost:3000"),
+    );
+
+    return {
+      secret,
+      baseUrl: yield* Config.string("BETTER_AUTH_URL").pipe(
+        Config.withDefault(deploymentUrl),
+      ),
+    };
+  }),
+}) {}

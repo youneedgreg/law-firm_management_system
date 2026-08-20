@@ -36,15 +36,20 @@
   "overrides": {
     "@effect-rx/rx": {
       "@effect/platform": "$@effect/platform"
+    },
+    "@sveltejs/kit": {
+      "@sveltejs/vite-plugin-svelte": "6.2.1"
     }
   },
   "dependencies": {
+    "@better-auth/core": "^1.7.1",
     "@effect-rx/rx-react": "0.42.4",
     "@effect/platform": "0.97.1",
     "@effect/platform-node": "0.108.1",
     "@effect/sql": "0.52.1",
     "@effect/sql-pg": "0.53.0",
     "@phosphor-icons/web": "^2.1.2",
+    "better-auth": "^1.7.1",
     "effect": "3.22.1",
     "next": "16.3.1",
     "react": "19.2.8",
@@ -57,6 +62,7 @@
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^20",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^5.2.0",

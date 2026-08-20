@@ -8,18 +8,21 @@ to end, a domain modelled from actual Kenyan statute rather than a generic CRUD
 schema, and an architecture whose layering is enforced by the linter rather than
 by good intentions.
 
-**[▸ Live demo](https://law-firmmanagementsystem.vercel.app/dashboard)** — no
-login yet; the role switcher in the top bar changes what the app shows.
+**[▸ Live demo](https://law-firmmanagementsystem.vercel.app/sign-in)** — sign in
+as `sarah.wanjiru@oklaw.co.ke` (managing partner) or
+`pkamau@geninnovations.co.ke` (client portal); the password for every seeded
+account is on the sign-in page.
 
 [![CI](https://github.com/youneedgreg/law-firm_management_system/actions/workflows/ci.yml/badge.svg)](https://github.com/youneedgreg/law-firm_management_system/actions/workflows/ci.yml)
 
 > **Status: in development.** The interface is complete and interactive across
-> 27 routes. The Effect backend is being built module by module: matters are
+> 28 routes. The Effect backend is being built module by module: matters are
 > real — Postgres, a typed domain model, a generated HTTP API, and Rx atoms in
-> the browser — and every other module still runs on seed data. Auth and
-> authorization are next, phase by phase, in [`ROADMAP.md`](ROADMAP.md). This
-> README describes what is true today and marks what is not. See
-> [Honest status](#honest-status).
+> the browser — and so is identity: real sessions, a permission table the
+> services enforce, and a client portal that answers _not found_ for every other
+> client's records. Every other module still runs on seed data, phase by phase,
+> in [`ROADMAP.md`](ROADMAP.md). This README describes what is true today and
+> marks what is not. See [Honest status](#honest-status).
 
 ---
 
@@ -141,7 +144,7 @@ The full reasoning, including the costs, is in
 | ● Styling           | Hand-written CSS                 | A deliberate choice — see [ADR 0007](docs/adr/0007-keep-the-hand-written-design-system.md) |
 | ○ Validation        | `effect/Schema`                  | One schema for parsing, types, and DB mapping                                              |
 | ○ Database          | Neon Postgres + `@effect/sql-pg` | Relational domain; invariants as constraints                                               |
-| ○ Auth              | Better Auth, self-hosted         | Sessions as rows we own and can join against                                               |
+| ● Auth              | Better Auth, self-hosted         | Sessions as rows we own and can join against                                               |
 | ○ Files             | Vercel Blob, private             | Legal documents are confidential by default                                                |
 | ○ Integration tests | Testcontainers                   | Throwaway Postgres per run; no shared state                                                |
 
@@ -222,17 +225,21 @@ domain modelled from statute, Neon Postgres behind repositories, `CaseService`,
 an `HttpApi` contract from which the router, the client and the OpenAPI document
 are all derived, and — in the browser — `@effect-rx/rx-react` atoms that read the
 caseload through that generated client and move a matter through its lifecycle
-optimistically. 433 unit tests and 39 integration tests, architecture boundaries
-enforced by the linter, CI on every push, and nine ADRs.
+optimistically. **Identity is real too**: sessions in Postgres, a `CurrentUser`
+that every service _requires in its type_ — so an unauthorized read does not
+compile — permissions as data rather than as checks scattered through
+components, and an audit trail written inside each mutation's own transaction
+into a table Postgres refuses to let anybody update. 517 unit tests and 39
+integration tests, architecture boundaries enforced by the linter, CI on every
+push, and ten ADRs.
 
 Every other module still runs on the wireframe's seed arrays, with its create
 flow persisting to the browser through an Effect `KeyValueStore`: clients,
 hearings, tasks, time entries, appointments, documents, invoices and
-communications. Role switching across seven roles, filtering, search, and a
-client portal.
+communications. Filtering, search, and the portal's document and message
+screens.
 
-**Not built yet:** authentication and authorization, and the eight modules
-listed above. Their data lives in `src/lib/data/*.ts` as seed arrays, so those
+**Not built yet:** the eight modules listed above. Their data lives in `src/lib/data/*.ts` as seed arrays, so those
 screens are per-browser on the live demo: what you create there is yours alone
 and disappears when you clear site data. Every import of those files raises an
 ESLint warning — 54 today — which doubles as the migration checklist.
@@ -244,7 +251,7 @@ the reasoning is in [ADR 0003](docs/adr/0003-single-firm-scope.md).
 ## Documentation
 
 - [`ROADMAP.md`](ROADMAP.md) — the plan, phase by phase, with progress
-- [`docs/adr/`](docs/adr/) — nine architecture decision records, including the
+- [`docs/adr/`](docs/adr/) — ten architecture decision records, including the
   arguments against each choice
 
 ---

@@ -1,4 +1,19 @@
-import type { Role } from "./types";
+import type { Role } from "@/domain/firm/advocate";
+
+/**
+ * The menu, and who sees what of it.
+ *
+ * `Role` is the *domain's* role since Phase 6, not the prototype's — the two
+ * lists differed ("Advocate/Lawyer" against "Advocate") and only one of them is
+ * now attached to a real staff record. There is no "Client Portal User" among
+ * them, because a portal user is a different variant of `Principal` rather than
+ * a seventh role, and has its own surface with its own navigation.
+ *
+ * These allow-lists are **presentation**. The modules that have a service
+ * behind them — cases, clients, billing — are gated properly by permissions in
+ * `services/`, checked on every read; this decides what to put in a menu. The
+ * two agree today and the service is the one that decides.
+ */
 
 export interface NavItem {
   href: string;
@@ -37,8 +52,8 @@ export const NAV_SECTIONS: NavSection[] = [
         roles: [
           "System Administrator",
           "Managing Partner",
-          "Advocate/Lawyer",
-          "Legal Assistant/Paralegal",
+          "Advocate",
+          "Legal Assistant",
           "Receptionist",
         ],
       },
@@ -49,8 +64,8 @@ export const NAV_SECTIONS: NavSection[] = [
         roles: [
           "System Administrator",
           "Managing Partner",
-          "Advocate/Lawyer",
-          "Legal Assistant/Paralegal",
+          "Advocate",
+          "Legal Assistant",
         ],
       },
       {
@@ -60,8 +75,8 @@ export const NAV_SECTIONS: NavSection[] = [
         roles: [
           "System Administrator",
           "Managing Partner",
-          "Advocate/Lawyer",
-          "Legal Assistant/Paralegal",
+          "Advocate",
+          "Legal Assistant",
           "Receptionist",
         ],
       },
@@ -72,8 +87,8 @@ export const NAV_SECTIONS: NavSection[] = [
         roles: [
           "System Administrator",
           "Managing Partner",
-          "Advocate/Lawyer",
-          "Legal Assistant/Paralegal",
+          "Advocate",
+          "Legal Assistant",
         ],
       },
       {
@@ -83,8 +98,8 @@ export const NAV_SECTIONS: NavSection[] = [
         roles: [
           "System Administrator",
           "Managing Partner",
-          "Advocate/Lawyer",
-          "Legal Assistant/Paralegal",
+          "Advocate",
+          "Legal Assistant",
         ],
       },
       {
@@ -93,8 +108,8 @@ export const NAV_SECTIONS: NavSection[] = [
         icon: "ph-duotone ph-clock",
         roles: [
           "Managing Partner",
-          "Advocate/Lawyer",
-          "Legal Assistant/Paralegal",
+          "Advocate",
+          "Legal Assistant",
           "Finance Officer",
         ],
       },
@@ -118,7 +133,7 @@ export const NAV_SECTIONS: NavSection[] = [
         href: "/appointments",
         label: "Appointments",
         icon: "ph-duotone ph-calendar-plus",
-        roles: ["Managing Partner", "Advocate/Lawyer", "Receptionist"],
+        roles: ["Managing Partner", "Advocate", "Receptionist"],
       },
       {
         href: "/communications",
@@ -143,8 +158,8 @@ export const NAV_SECTIONS: NavSection[] = [
         icon: "ph-duotone ph-book-open-text",
         roles: [
           "Managing Partner",
-          "Advocate/Lawyer",
-          "Legal Assistant/Paralegal",
+          "Advocate",
+          "Legal Assistant",
           "System Administrator",
         ],
       },
@@ -184,8 +199,6 @@ export const NAV_SECTIONS: NavSection[] = [
 const ALL_ITEMS = NAV_SECTIONS.flatMap((section) => section.items);
 
 export function roleCanSee(item: NavItem, role: Role): boolean {
-  // The portal role has no internal navigation at all.
-  if (role === "Client Portal User") return false;
   return item.roles === "all" || item.roles.includes(role);
 }
 
@@ -212,12 +225,22 @@ export function canAccessPath(pathname: string, role: Role): boolean {
   return item ? roleCanSee(item, role) : true;
 }
 
-/** What each role may reach — shown on the Users & Permissions screen. */
-export const ROLE_ACCESS: Record<Role, string> = {
-  "System Administrator": "Full system access",
+/**
+ * What each role may reach, in a sentence — shown on the Users & Permissions
+ * screen.
+ *
+ * Prose, and prose is all it is. The list of permissions each role actually
+ * holds is `BY_ROLE` in `domain/identity/permissions.ts`, and that is the one
+ * the services enforce; this summarises it for a reader. The Users screen is
+ * still a mock module (Phase 7), which is why it is keyed loosely enough to
+ * survive the prototype's own role names — a row it cannot describe gets no
+ * description rather than crashing the page.
+ */
+export const ROLE_ACCESS: Partial<Record<string, string>> = {
+  "System Administrator": "Logins and the audit trail",
   "Managing Partner": "All cases, firm reports",
-  "Advocate/Lawyer": "Assigned cases only",
-  "Legal Assistant/Paralegal": "Filings, documents, hearings",
+  Advocate: "Cases, clients, fee notes",
+  "Legal Assistant": "Filings, documents, hearings",
   "Finance Officer": "Billing & trust accounts",
   Receptionist: "Client intake, appointments",
   "Client Portal User": "Own cases & invoices only",

@@ -1,7 +1,7 @@
 import { Effect, Either, Schema } from "effect";
 import { notFound } from "next/navigation";
 import { CaseId } from "@/domain/shared/ids";
-import { run } from "@/runtime";
+import { runAs } from "@/runtime/session";
 import { CaseService } from "@/services/case-service";
 import { CaseDetail } from "./CaseDetail";
 
@@ -38,7 +38,7 @@ export default async function CaseDetailPage({
    * boundary instead of the 404 it asked for. Turning the absence into a value
    * first keeps the throw where Next can see it.
    */
-  const file = await run(
+  const file = await runAs(
     Effect.gen(function* () {
       const service = yield* CaseService;
       return yield* service.file(matterId.right);

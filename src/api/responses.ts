@@ -1,6 +1,8 @@
 import { Schema } from "effect";
 import * as Billing from "../domain/billing/invoice";
 import * as Status from "../domain/case/status";
+import * as Permissions from "../domain/identity/permissions";
+import * as Identity from "../domain/identity/principal";
 import { AdvocateId, ClientId } from "../domain/shared/ids";
 import * as Money from "../domain/shared/money";
 import type * as BillingService from "../services/billing-service";
@@ -205,6 +207,30 @@ export const ClientFile = Schema.Struct({
 }).annotations({
   identifier: "ClientFile",
   description: "A client and the matters on their file",
+});
+
+// ── Session ───────────────────────────────────────────────────────────────
+
+/**
+ * The signed-in principal, and what they may do.
+ *
+ * `principal` is the domain union unchanged — every field on it is already a
+ * string, so unlike the entities in `wire.ts` there is no date to restate and
+ * nothing to derive a wire copy from. Sending the union rather than flattening
+ * it to `{ role, clientId? }` is the point: the browser gets the same shape the
+ * server reasons about, and a screen that reads `clientId` has to narrow on the
+ * tag first.
+ *
+ * `permissions` is computed rather than stored, from the same table the
+ * services enforce with. It is the caller's own list; it says nothing about
+ * anybody else's.
+ */
+export const Me = Schema.Struct({
+  principal: Identity.Principal,
+  permissions: Schema.Array(Permissions.Permission),
+}).annotations({
+  identifier: "Me",
+  description: "Who the caller is, and the permissions their role holds",
 });
 
 // ── Billing ───────────────────────────────────────────────────────────────

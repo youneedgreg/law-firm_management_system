@@ -4,7 +4,7 @@
 > production TypeScript: Effect end to end, Postgres, full test coverage, CI/CD,
 > and documented architectural reasoning.
 
-**Target:** portfolio-ready in 6–12 weeks · **Status:** Phase 5 complete
+**Target:** portfolio-ready in 6–12 weeks · **Status:** Phase 6 complete
 
 ---
 
@@ -343,7 +343,7 @@ if server and client drift.
 
 ---
 
-### Phase 5 — Effect on the client · 3–4 weeks
+### Phase 5 — Effect on the client · 3–4 days
 
 The part you specifically asked for. Retire `AppState.tsx`.
 
@@ -383,14 +383,45 @@ client state.
 The legal domain makes this genuinely interesting: seven roles, and a client
 portal that must _never_ leak another client's data.
 
-- [ ] Better Auth with sessions in Postgres (D-2)
-- [ ] Login, logout, password reset, session refresh
-- [ ] `CurrentUser` as an Effect service, provided per request
-- [ ] RBAC as a typed policy layer — permissions checked in services, not in components
-- [ ] **Row-level authorization:** portal users see only their own cases. Test this adversarially: write tests that _attempt_ the leak and assert failure
-- [ ] `proxy.ts` for optimistic route protection (not the real gate)
-- [ ] Audit log: every mutation records actor, action, entity, timestamp, before/after
-- [ ] Wire the existing `/compliance` and audit UI to real audit data
+- [x] Better Auth 1.7.1 with sessions as rows in Postgres (D-2), behind a `SessionGateway` interface declared in `services/`. Its four tables are written by **migration 0005**, not by the library's CLI — `users` is not only its table, it is where a login is tied to a member of staff or a client. The shape is verified rather than assumed: `auth-schema.test.ts` asks `getSchema` which columns the configured instance needs and compares them against the DDL in a real Postgres, so a field added by a future version (`account.issuer` arrived in 1.7) fails a test instead of the first sign-in
+- [x] **One pool, not two.** Better Auth needs its own connection and a connection _string_ would have doubled the pool — the same failure Phase 4 avoided with a shared `memoMap`, arriving the same way. `PgPool` is now a service; `PgClient.layerFromPool` and `betterAuth({ database: pool })` are handed the same object. The `pool.on("error")` handler came with it: `pg` emits on an idle client dropping, which Neon does routinely, and an unhandled `error` event takes the process down
+- [x] Sign-in, sign-out and password reset. Sign-in and sign-out are **Server Actions**, so the form works without JavaScript and a refusal is the same typed `ActionState` every other form uses; the `/api/auth` catch-all _refuses_ those two paths, because both are audited in `IdentityService` and a second route to the same session machinery would be a way in that leaves no trace. Session refresh is Better Auth's, capped at one write a day. Reset has no mail transport yet (Phase 7 owns communications) so the link is logged — a real gap, stated in the code as one
+- [x] `CurrentUser` as a `Context.Tag`, provided per request — and this is the load-bearing decision. It is in the `R` channel of every operation that checks a permission, so **an effect cannot be run without a principal**: forgetting the check is a compile error at the call site rather than a review comment. Provided by `runAs`/`attemptAs` for pages and actions, and by an `HttpApiMiddleware` for every endpoint at once
+- [x] RBAC as data: `subject:verb` permissions in a closed union, one table from role to grants, in `domain/identity/permissions.ts`. Read for the absences — a Receptionist sees no figure of the firm's money, a Finance Officer cannot move a matter through its lifecycle, and the System Administrator is deliberately **not** a superuser. Nobody holds `trust:write`, because there is no operation behind it yet
+- [x] **`Principal` is a tagged union.** `Staff` carries a role and an advocate id; `PortalUser` carries a client id and no role at all. There is no value that is both, so no check can be written against the wrong half — and `users_exactly_one_subject` says the same thing in Postgres, attacked in `schema.test.ts` from both directions
+- [x] **Row-level authorization, and the scope is in the query.** A portal user's caseload is `forClient`, so the rows they may not see are never read — there is no array for a later `.filter` to be forgotten from. Permission says which verbs; scope says over which rows; both are required and they are checked separately
+- [x] **An out-of-scope record is reported as absent.** `withinScope` fails with `NotFound`, not `NotPermitted`: a truthful "you may not see this matter" confirms the matter exists, and with it the client, and that this firm acts for them. Staff are treated the other way — a Receptionist refused the fee notes gets a 403 with the reason, because everyone at the firm knows they exist. Scope conceals; permission explains
+- [x] **Tested adversarially, at two layers.** Wanjiku's portal login asks for Zenith's matter — as a _valid signed-in user_, which is the shape of the real attack — and gets the same answer, byte for byte, as for an id that belongs to nothing. Once against the service with arrays, once over HTTP through the generated client, plus the mirror case with Zenith's login so the scope demonstrably comes from the principal
+- [x] `proxy.ts` for optimistic redirects, documented in the file as **not a security boundary** — it checks that a cookie is _present_, verifies nothing, and excludes `/api` so an unauthenticated fetch gets a 401 in JSON rather than a page of HTML with a 200 on it
+- [x] Audit log: actor, action, entity, timestamp, before and after, **inside the mutation's transaction**. A trail written afterwards produces exactly the gap it exists to close, so `Transactor` is an interface in `services/` and the in-memory one rolls back the same stores — the test that breaks the audit write and asserts the matter does not survive it is mutation-verified. The actor is _copied_, not joined: staff leave and roles are reassigned, and an entry is a statement about the past
+- [x] `audit_log` is append-only in Postgres. A trigger refuses `UPDATE` and `DELETE` outright, so the refusal holds for a cleanup script and a psql session as well as for this application
+- [x] `/compliance` reads the real trail, showing the fields that moved rather than two blobs of JSON. It is the one refusal a screen renders rather than throws — arriving without `audit:read` means a typed URL, which deserves a sentence
+- [x] **The role switcher is gone.** `roleRx` let the browser choose a role, which was right for a wireframe and wrong the moment there was a session; the principal is resolved on the server and reaches the screens through `components/Session.tsx`. `lib/nav.ts` now speaks the domain's role names, and its allow-lists are documented as presentation
+- [x] Logins for the demo (D-5): one per member of staff and one client, provisioned by the seed through `UserRepository` — never through a sign-up endpoint, which is disabled. Better Auth is asked only for the password hash and the `accounts` row that holds it
+- [x] Verified against Neon in the browser: a signed-out visit to `/cases` redirects with `?next=`, the API answers 401 with no cookie, a wrong password is refused as a sentence beside the form _and recorded_ as `session.refused`, signing in lands on the page originally asked for, a status move appears in the trail as `status: New → Active`, the portal shows one client's matters and one client's fee notes, `/api/cases/{another client's matter}` answers `NotFound`, `/api/clients` returns exactly one row, and a Finance Officer is refused the audit trail
+
+> **The bug the browser found that the tests did not.** The audit row→entry
+> mapping decoded through `AuditEntry` rather than `Schema.typeSchema(…)`, so it
+> expected the _encoded_ form of an `Option` — `{"_tag":"Some"}` — where a row
+> holds a nullable column. Writes were unaffected because they go the other way,
+> the in-memory repository has no mapping at all, and the schema tests attack
+> constraints rather than round trips: a one-directional mapping tested in one
+> direction passes. `audit-model.test.ts` now runs a row through both.
+
+> **What is deliberately still outstanding.** Two things, both stated rather
+> than quietly skipped. **A password reset link is logged, not emailed** —
+> there is no mail transport until Phase 7, and on a deployment where logs are
+> read by more people than mailboxes are, that is a reset anybody with log
+> access could complete; it is acceptable here and would not be anywhere real.
+> **`BETTER_AUTH_SECRET` is set for production and development on Vercel and
+> not for preview**, because the installed CLI (54.3.0) refuses the
+> all-branches form and will not scope a preview variable to `main`. Trunk-based
+> development means there are no preview deployments today; the first branch
+> that creates one needs the variable, or `vercel@latest` and one command.
+>
+> Documents, hearings, tasks and the rest of the portal's own screens are still
+> the wireframe's mock data. That is Phase 7's, and the seam still says so in
+> the UI.
 
 **Done when:** a portal user cannot reach another client's data by any route,
 proven by tests, and every mutation is audited.
@@ -551,38 +582,46 @@ that existed locally but not in a clean checkout. The substitutes:
 Append as decisions are made. This becomes the raw material for your ADRs and
 the most interesting thing an interviewer can read.
 
-| Date       | Decision                                   | Reasoning                                                                                                                                                                        |
-| ---------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-08-18 | Effect 3.22.x, not 4.0-rc                  | `@effect-rx/rx-react` peer-deps on `effect@^3.17` with no v4 track; choosing v4 today would cost the client-side Effect layer                                                    |
-| 2026-08-18 | Effect end to end, including React         | Deliberate: the client-side story is the differentiator vs. typical Effect backends                                                                                              |
-| 2026-08-18 | Neon Postgres + Vercel                     | Free at portfolio scale, clean `@effect/sql-pg` fit, one-click live demo                                                                                                         |
-| 2026-08-18 | D-1 Single firm                            | Multi-tenancy is plumbing, not signal; a stated scope boundary reads as judgment                                                                                                 |
-| 2026-08-18 | D-2 Better Auth, self-hosted               | Own the interesting parts (sessions, roles, audit) without hand-rolling crypto                                                                                                   |
-| 2026-08-18 | D-3 Deep Kenyan domain                     | Researched jurisdictional detail is the cheapest way to look senior                                                                                                              |
-| 2026-08-18 | D-4 Vercel Blob, private                   | Private-by-default matters for legal documents; no infra overhead                                                                                                                |
-| 2026-08-18 | D-5 Seeded accounts + role switcher        | Zero friction to a full dashboard; doubles as an RBAC showcase                                                                                                                   |
-| 2026-08-18 | D-6 Keep hand-written CSS                  | Distinctive beats default shadcn; rewriting working CSS buys nothing                                                                                                             |
-| 2026-08-18 | D-7 Testcontainers                         | Hermetic and identical locally and in CI; no quota, no CI secrets                                                                                                                |
-| 2026-08-19 | Docker verification → Phase 12             | Installing Docker blocks nothing early; deferring keeps Phase 0 shippable. Pull forward if Phase 2 needs the feedback loop                                                       |
-| 2026-08-19 | D-9 Trunk-based, `main` only               | PR review is self-review on a solo project; pre-push hook and `verify:clean` replace the lost CI gate                                                                            |
-| 2026-08-18 | D-8 Public repo from day one               | Forces commit hygiene now; the wireframe → system progression is the story                                                                                                       |
-| 2026-08-19 | Row↔domain mapping as a schema             | A `transformOrFail` has an encode side, so reads and writes cannot drift apart the way two hand-written functions do                                                             |
-| 2026-08-19 | Ordering columns for domain lists          | `contacts[0]` and an invoice's line order carry meaning; a `SELECT` with no `ORDER BY` has no first element                                                                      |
-| 2026-08-19 | `sslmode` pinned in code, not env          | Vercel owns `DATABASE_URL` and `vercel env pull` overwrites hand-edits; one line covers every environment                                                                        |
-| 2026-08-19 | In-memory repositories, not mocks          | A second implementation of an interface that already existed. No framework, no stubbed method names to keep in sync — and the fakes enforce what the schema enforces             |
-| 2026-08-19 | Certificate checked on filing only         | The domain holds the _current_ certificate and no history, so re-checking on every edit would block historic files over a year the system cannot speak to                        |
-| 2026-08-19 | Reference race left to the index           | A database sequence would remove the race and hand out gaps on every rollback; a client-visible reference is the wrong place for gaps. `UNIQUE` + retry instead                  |
-| 2026-08-19 | Courts chosen whole, not assembled         | Four free inputs can build a `MagistratesCourt` with no rank; a keyed list cannot, and a firm files in a known set of stations anyway                                            |
-| 2026-08-19 | Wire schemas separate from domain          | `DateFromSelf` encodes to a `Date`, which JSON cannot carry. Derived from the domain's own `fields`, so only the dates are restated, and guarded twice so neither half can drift |
-| 2026-08-19 | No `documents` endpoint group              | No repository, no mapping, nothing seeded. A generated client is only worth having if the contract is true; an endpoint over an empty table to tick a box spends exactly that    |
-| 2026-08-19 | Errors are the domain's own classes        | Re-declaring them in `api/` would hand the client a different class with the same name. Sharing them means `reason` is reconstituted on the client rather than transmitted       |
-| 2026-08-19 | API shares the runtime's `memoMap`         | Otherwise `toWebHandler` builds `PgLive` a second time: two pools in one process, each sized for the whole process, against a database with a connection limit                   |
-| 2026-08-19 | `RepositoryFailure` dies, not fails        | It carries the driver's message, which can carry the query. A defect gets an empty 500 — there is no body, so there is no encoder to be talked into including the detail         |
-| 2026-08-19 | Rx over TanStack Query + Zustand           | The atom runs an `Effect`, so a refusal arrives as the class the service failed with rather than as whatever a `fetch` wrapper threw. One dependency the stack already carried   |
-| 2026-08-19 | `rx/session.ts` reimplements `Rx.kvs`      | The library collapses the read into `getOrElse(default)`, so "nothing stored" and "not read yet" are one value. A screen that waits on hydration needs to tell them apart        |
-| 2026-08-19 | Every browser atom declares a server value | Next renders client components on the server first. Without it a `localStorage` read runs there and the first client render disagrees with the HTML                              |
-| 2026-08-19 | Caseload client-fetched, matter file not   | Filtering is interaction and belongs to the browser; a file is a document you land on and link to, and stays a Server Component read with no HTTP hop                            |
-| 2026-08-19 | `overrides` to dedupe `@effect/platform`   | `@effect-rx/rx` peer-depends on ^0.90 and npm nested a second copy. The `KeyValueStore` module is identical between them; two copies in one browser bundle is not                |
+| Date       | Decision                                      | Reasoning                                                                                                                                                                                         |
+| ---------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-18 | Effect 3.22.x, not 4.0-rc                     | `@effect-rx/rx-react` peer-deps on `effect@^3.17` with no v4 track; choosing v4 today would cost the client-side Effect layer                                                                     |
+| 2026-08-18 | Effect end to end, including React            | Deliberate: the client-side story is the differentiator vs. typical Effect backends                                                                                                               |
+| 2026-08-18 | Neon Postgres + Vercel                        | Free at portfolio scale, clean `@effect/sql-pg` fit, one-click live demo                                                                                                                          |
+| 2026-08-18 | D-1 Single firm                               | Multi-tenancy is plumbing, not signal; a stated scope boundary reads as judgment                                                                                                                  |
+| 2026-08-18 | D-2 Better Auth, self-hosted                  | Own the interesting parts (sessions, roles, audit) without hand-rolling crypto                                                                                                                    |
+| 2026-08-18 | D-3 Deep Kenyan domain                        | Researched jurisdictional detail is the cheapest way to look senior                                                                                                                               |
+| 2026-08-18 | D-4 Vercel Blob, private                      | Private-by-default matters for legal documents; no infra overhead                                                                                                                                 |
+| 2026-08-18 | D-5 Seeded accounts + role switcher           | Zero friction to a full dashboard; doubles as an RBAC showcase                                                                                                                                    |
+| 2026-08-18 | D-6 Keep hand-written CSS                     | Distinctive beats default shadcn; rewriting working CSS buys nothing                                                                                                                              |
+| 2026-08-18 | D-7 Testcontainers                            | Hermetic and identical locally and in CI; no quota, no CI secrets                                                                                                                                 |
+| 2026-08-19 | Docker verification → Phase 12                | Installing Docker blocks nothing early; deferring keeps Phase 0 shippable. Pull forward if Phase 2 needs the feedback loop                                                                        |
+| 2026-08-19 | D-9 Trunk-based, `main` only                  | PR review is self-review on a solo project; pre-push hook and `verify:clean` replace the lost CI gate                                                                                             |
+| 2026-08-18 | D-8 Public repo from day one                  | Forces commit hygiene now; the wireframe → system progression is the story                                                                                                                        |
+| 2026-08-19 | Row↔domain mapping as a schema                | A `transformOrFail` has an encode side, so reads and writes cannot drift apart the way two hand-written functions do                                                                              |
+| 2026-08-19 | Ordering columns for domain lists             | `contacts[0]` and an invoice's line order carry meaning; a `SELECT` with no `ORDER BY` has no first element                                                                                       |
+| 2026-08-19 | `sslmode` pinned in code, not env             | Vercel owns `DATABASE_URL` and `vercel env pull` overwrites hand-edits; one line covers every environment                                                                                         |
+| 2026-08-19 | In-memory repositories, not mocks             | A second implementation of an interface that already existed. No framework, no stubbed method names to keep in sync — and the fakes enforce what the schema enforces                              |
+| 2026-08-19 | Certificate checked on filing only            | The domain holds the _current_ certificate and no history, so re-checking on every edit would block historic files over a year the system cannot speak to                                         |
+| 2026-08-19 | Reference race left to the index              | A database sequence would remove the race and hand out gaps on every rollback; a client-visible reference is the wrong place for gaps. `UNIQUE` + retry instead                                   |
+| 2026-08-19 | Courts chosen whole, not assembled            | Four free inputs can build a `MagistratesCourt` with no rank; a keyed list cannot, and a firm files in a known set of stations anyway                                                             |
+| 2026-08-19 | Wire schemas separate from domain             | `DateFromSelf` encodes to a `Date`, which JSON cannot carry. Derived from the domain's own `fields`, so only the dates are restated, and guarded twice so neither half can drift                  |
+| 2026-08-19 | No `documents` endpoint group                 | No repository, no mapping, nothing seeded. A generated client is only worth having if the contract is true; an endpoint over an empty table to tick a box spends exactly that                     |
+| 2026-08-19 | Errors are the domain's own classes           | Re-declaring them in `api/` would hand the client a different class with the same name. Sharing them means `reason` is reconstituted on the client rather than transmitted                        |
+| 2026-08-19 | API shares the runtime's `memoMap`            | Otherwise `toWebHandler` builds `PgLive` a second time: two pools in one process, each sized for the whole process, against a database with a connection limit                                    |
+| 2026-08-19 | `RepositoryFailure` dies, not fails           | It carries the driver's message, which can carry the query. A defect gets an empty 500 — there is no body, so there is no encoder to be talked into including the detail                          |
+| 2026-08-19 | Rx over TanStack Query + Zustand              | The atom runs an `Effect`, so a refusal arrives as the class the service failed with rather than as whatever a `fetch` wrapper threw. One dependency the stack already carried                    |
+| 2026-08-19 | `rx/session.ts` reimplements `Rx.kvs`         | The library collapses the read into `getOrElse(default)`, so "nothing stored" and "not read yet" are one value. A screen that waits on hydration needs to tell them apart                         |
+| 2026-08-19 | Every browser atom declares a server value    | Next renders client components on the server first. Without it a `localStorage` read runs there and the first client render disagrees with the HTML                                               |
+| 2026-08-19 | Caseload client-fetched, matter file not      | Filtering is interaction and belongs to the browser; a file is a document you land on and link to, and stays a Server Component read with no HTTP hop                                             |
+| 2026-08-20 | Authorization as a requirement in the type    | `CurrentUser` in the `R` channel means an unauthorized read does not compile. A `getSession()` returning `User \| null` is advisory, and nothing marks the call sites that ignored it             |
+| 2026-08-20 | Out-of-scope reads answer `NotFound`          | "You may not see this matter" confirms the matter, the client, and that the firm acts for them. Staff still get a 403 with the reason: scope conceals, permission explains                        |
+| 2026-08-20 | Permission and scope are separate checks      | A portal user genuinely holds `case:read` — the scope is what protects the other clients. Conflating them yields either a portal that reads nothing or a check that passes over an unscoped query |
+| 2026-08-20 | Audit entry inside the mutation's transaction | A trail written afterwards leaves a change nobody made, on the one occasion something failed. `Transactor` is an interface so the guarantee is testable without a database                        |
+| 2026-08-20 | Auth tables in our migrations, not the CLI    | `users` carries the staff/client link the whole phase rests on. Hand-written and then checked against `getSchema`, so a library upgrade fails a test rather than the first sign-in                |
+| 2026-08-20 | One pool shared with Better Auth              | A connection string would have opened a second pool against a database with a connection limit — the Phase 4 `memoMap` problem in a new place                                                     |
+| 2026-08-20 | Sign-in as a Server Action, not a fetch       | The form works without JavaScript, the refusal is the same `ActionState` every other form uses, and there is one door — so the audit entry cannot be gone around                                  |
+| 2026-08-20 | `roleRx` deleted                              | A role the browser can set is not a role. The principal is resolved on the server from a signed cookie and passed down; two answers to "who is this" is one too many                              |
+| 2026-08-19 | `overrides` to dedupe `@effect/platform`      | `@effect-rx/rx` peer-depends on ^0.90 and npm nested a second copy. The `KeyValueStore` module is identical between them; two copies in one browser bundle is not                                 |
 
 ---
 
@@ -590,12 +629,13 @@ the most interesting thing an interviewer can read.
 
 One line per session. Keeps momentum visible across a long project.
 
-| Date       | Phase | What moved                                                                                                                                                                            |
-| ---------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-08-18 | —     | Wireframe committed; roadmap written; all eight architectural decisions settled                                                                                                       |
-| 2026-08-19 | 2     | Row↔domain mapping, case/client/invoice repositories, the trust settlement transaction, migrations 0002–0003. 263 unit tests, 34 integration                                          |
-| 2026-08-19 | 2     | Seed script: the wireframe's fixtures decoded into Postgres through the domain schemas, idempotent on derived ids. 309 unit tests, 39 integration                                     |
-| 2026-08-19 | 2     | Closed the two gaps the seed surfaced: `KenyanPhone` widened to fixed lines (migration 0004), intake dates supplied per matter. 336 unit tests                                        |
-| 2026-08-19 | 3     | `CaseService`, the runtime, and the Cases slice end to end: Server Components read Neon, Server Actions decode through Schema, refusals render as sentences. 385 unit tests           |
-| 2026-08-19 | 4     | Typed HTTP API: one contract, from which the router, the client and the OpenAPI document are all derived. Cases, clients and billing; documents deferred to Phase 7. 415 unit tests   |
-| 2026-08-19 | 5     | Effect on the client: `AppState.tsx` retired into atoms, the caseload and intake choices read through the generated client, an optimistic status move that rolls back. 433 unit tests |
+| Date       | Phase | What moved                                                                                                                                                                                          |
+| ---------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-18 | —     | Wireframe committed; roadmap written; all eight architectural decisions settled                                                                                                                     |
+| 2026-08-19 | 2     | Row↔domain mapping, case/client/invoice repositories, the trust settlement transaction, migrations 0002–0003. 263 unit tests, 34 integration                                                        |
+| 2026-08-19 | 2     | Seed script: the wireframe's fixtures decoded into Postgres through the domain schemas, idempotent on derived ids. 309 unit tests, 39 integration                                                   |
+| 2026-08-19 | 2     | Closed the two gaps the seed surfaced: `KenyanPhone` widened to fixed lines (migration 0004), intake dates supplied per matter. 336 unit tests                                                      |
+| 2026-08-19 | 3     | `CaseService`, the runtime, and the Cases slice end to end: Server Components read Neon, Server Actions decode through Schema, refusals render as sentences. 385 unit tests                         |
+| 2026-08-19 | 4     | Typed HTTP API: one contract, from which the router, the client and the OpenAPI document are all derived. Cases, clients and billing; documents deferred to Phase 7. 415 unit tests                 |
+| 2026-08-19 | 5     | Effect on the client: `AppState.tsx` retired into atoms, the caseload and intake choices read through the generated client, an optimistic status move that rolls back. 433 unit tests               |
+| 2026-08-20 | 6     | Identity, authorization and audit: `CurrentUser` in every service's type, permissions as data, portal isolation proven adversarially, every mutation audited in its own transaction. 517 unit tests |

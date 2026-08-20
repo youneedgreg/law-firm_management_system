@@ -11,6 +11,9 @@ import invoiceLineAndPaymentOrder, {
 import widenPhoneNumbers, {
   statements as phoneStatements,
 } from "./0004_widen_phone_numbers";
+import identityAndAudit, {
+  statements as identityStatements,
+} from "./0005_identity_and_audit";
 
 /**
  * The migration set, listed explicitly.
@@ -28,6 +31,7 @@ export const migrations = Migrator.fromRecord({
   "0002_filing_dates_and_contact_order": filingDatesAndContactOrder,
   "0003_invoice_line_and_payment_order": invoiceLineAndPaymentOrder,
   "0004_widen_phone_numbers": widenPhoneNumbers,
+  "0005_identity_and_audit": identityAndAudit,
 });
 
 /**
@@ -42,4 +46,5 @@ export const allStatements: readonly string[] = [
   ...filingStatements,
   ...invoiceOrderStatements,
   ...phoneStatements,
+  ...identityStatements,
 ];

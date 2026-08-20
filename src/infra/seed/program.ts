@@ -8,12 +8,15 @@ import {
   InvoiceRepository,
   TrustRepository,
 } from "../../services/repositories";
+import { AuthLive } from "../auth/auth";
 import { AdvocateRepositoryLive } from "../sql/advocate-repository";
 import { CaseRepositoryLive } from "../sql/case-repository";
 import { PgLive } from "../sql/client";
 import { ClientRepositoryLive } from "../sql/client-repository";
 import { InvoiceRepositoryLive } from "../sql/invoice-repository";
 import { TrustRepositoryLive } from "../sql/trust-repository";
+import { UserRepositoryLive } from "../sql/user-repository";
+import { provisionLogins } from "./logins";
 import {
   advocates,
   clientIdsByPrototypeKey,
@@ -44,6 +47,16 @@ import {
  * breaches Rule 10 stops the import, because a demo that ships with a rule
  * violation baked in is a demo that teaches the wrong thing.
  */
+
+/**
+ * The one client with a portal login.
+ *
+ * The prototype's `lib/data/portal.ts` picked the same client for the same
+ * reason — it has the fullest file — and hard-coded it because there was no
+ * session to read one from. There is now, so this is the number the login is
+ * provisioned against rather than a stand-in for authentication.
+ */
+const PORTAL_CLIENT_NUMBER = "CLT-2001";
 
 const report = (stage: string, problems: readonly SeedProblem[]) =>
   Effect.fail(
@@ -81,6 +94,11 @@ const wipe = Effect.gen(function* () {
   yield* sql`DELETE FROM invoice_lines`;
   yield* sql`DELETE FROM invoices`;
   yield* sql`DELETE FROM cases`;
+  // Logins point at the two tables below, so they go first. `sessions` and
+  // `accounts` cascade from `users`; the audit trail deliberately does not —
+  // it outlives the accounts it names, which is the whole point of copying the
+  // actor's name into it rather than joining.
+  yield* sql`DELETE FROM users`;
   yield* sql`DELETE FROM client_contacts`;
   yield* sql`DELETE FROM clients`;
   yield* sql`DELETE FROM advocates`;
@@ -147,6 +165,16 @@ export const seed = Effect.gen(function* () {
       : trustRepo.recordWithdrawal(movement),
   );
 
+  yield* Effect.logInfo("Provisioning logins…");
+  const logins = yield* provisionLogins(
+    staff,
+    firmClients,
+    PORTAL_CLIENT_NUMBER,
+  );
+  yield* Effect.logInfo(
+    `${logins.staff} staff logins, and ${logins.portal} for the portal.`,
+  );
+
   // ── Verify ─────────────────────────────────────────────────────────────
 
   const overdrawn = yield* trustRepo.overdrawn();
@@ -172,8 +200,9 @@ export const seed = Effect.gen(function* () {
 
 export const SeedLayer = Layer.mergeAll(
   AdvocateRepositoryLive,
+  UserRepositoryLive,
   CaseRepositoryLive,
   ClientRepositoryLive,
   InvoiceRepositoryLive,
   TrustRepositoryLive,
-).pipe(Layer.provideMerge(PgLive));
+).pipe(Layer.provideMerge(PgLive), Layer.merge(AuthLive));

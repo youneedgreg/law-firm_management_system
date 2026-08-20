@@ -1,7 +1,9 @@
 import { DateTime, Effect } from "effect";
 import * as Billing from "../domain/billing/invoice";
+import type { NotPermitted } from "../domain/identity/permissions";
 import type * as Money from "../domain/shared/money";
 import type { ClientId, InvoiceId } from "../domain/shared/ids";
+import { type CurrentUser, permitted, withinScope } from "./policy";
 import {
   ClientRepository,
   InvoiceRepository,
@@ -60,12 +62,23 @@ export class BillingService extends Effect.Service<BillingService>()(
         /** One fee note, with its derived figures. */
         invoice: (
           id: InvoiceId,
-        ): Effect.Effect<InvoiceView, NotFound | RepositoryFailure> =>
+        ): Effect.Effect<
+          InvoiceView,
+          NotPermitted | NotFound | RepositoryFailure,
+          CurrentUser
+        > =>
           Effect.gen(function* () {
+            yield* permitted("invoice:read");
+
             const [invoice, asAt] = yield* Effect.all([
               invoices.byId(id),
               DateTime.nowAsDate,
             ]);
+
+            // A fee note names the client it was raised against, so the same
+            // scope check that guards a matter guards this.
+            yield* withinScope("invoice", id, invoice.clientId);
+
             return view(invoice, asAt);
           }),
 
@@ -81,9 +94,13 @@ export class BillingService extends Effect.Service<BillingService>()(
           clientId: ClientId,
         ): Effect.Effect<
           readonly InvoiceView[],
-          NotFound | RepositoryFailure
+          NotPermitted | NotFound | RepositoryFailure,
+          CurrentUser
         > =>
           Effect.gen(function* () {
+            yield* permitted("invoice:read");
+            yield* withinScope("client", clientId, clientId);
+
             yield* clients.byId(clientId);
 
             const [raised, asAt] = yield* Effect.all([

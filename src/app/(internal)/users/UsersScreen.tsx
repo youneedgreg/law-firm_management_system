@@ -48,7 +48,7 @@ export function UserTable() {
             <tr key={account.name}>
               <td>{account.name}</td>
               <td>{account.role}</td>
-              <td>{ROLE_ACCESS[account.role]}</td>
+              <td>{ROLE_ACCESS[account.role] ?? "—"}</td>
               <td>
                 <span
                   className={

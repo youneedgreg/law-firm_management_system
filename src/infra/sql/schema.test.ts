@@ -64,7 +64,9 @@ describe("the schema applies at all", () => {
     );
 
     expect(result.rows.map((row) => row.table_name)).toStrictEqual([
+      "accounts",
       "advocates",
+      "audit_log",
       "cases",
       "client_contacts",
       "clients",
@@ -74,8 +76,11 @@ describe("the schema applies at all", () => {
       "invoice_lines",
       "invoices",
       "payments",
+      "sessions",
       "time_entries",
       "trust_movements",
+      "users",
+      "verifications",
     ]);
   });
 
@@ -474,6 +479,179 @@ describe("filing dates and contact order", () => {
       await refuses(`
         INSERT INTO client_contacts (id, client_id, name, role, ordinal)
         VALUES (gen_random_uuid(), '${client}', 'Mary Njeri', 'Director', -1)`),
+    ).toBe(true);
+  });
+});
+
+/**
+ * Identity, attacked at the database.
+ *
+ * Every rule below is also enforced in TypeScript — `Principal` is a union, so
+ * a login that is both staff and client is not expressible, and
+ * `UserRepository.provision` takes a tagged subject so it cannot write one.
+ * These tests are about the *other* ways in: a migration, an import, a psql
+ * session at two in the morning, and whatever Phase 7 adds. A constraint that
+ * only the application enforces is a convention.
+ */
+describe("a login points at exactly one subject", () => {
+  it("accepts a login for a member of staff", async () => {
+    expect(
+      await refuses(`
+        INSERT INTO users (id, name, email, advocate_id)
+        VALUES (gen_random_uuid(), 'Sarah Wanjiru', 'sarah@oklaw.co.ke', '${advocate}')`),
+    ).toBe(false);
+  });
+
+  it("accepts a login for a client", async () => {
+    expect(
+      await refuses(`
+        INSERT INTO users (id, name, email, client_id)
+        VALUES (gen_random_uuid(), 'Wanjiku Mwangi', 'wanjiku@example.co.ke', '${client}')`),
+    ).toBe(false);
+  });
+
+  /**
+   * The row that would break every authorization check in the system.
+   *
+   * A login carrying both links is a person the code would have to *choose* how
+   * to treat: staff, with the run of the firm, or a client scoped to their own
+   * file. `users_exactly_one_subject` means the choice never arises.
+   */
+  it("refuses a login that is both staff and client", async () => {
+    expect(
+      await refuses(`
+        INSERT INTO users (id, name, email, advocate_id, client_id)
+        VALUES (gen_random_uuid(), 'Both', 'both@oklaw.co.ke', '${advocate}', '${client}')`),
+    ).toBe(true);
+  });
+
+  it("refuses a login that authenticates to nobody", async () => {
+    expect(
+      await refuses(`
+        INSERT INTO users (id, name, email)
+        VALUES (gen_random_uuid(), 'Nobody', 'nobody@oklaw.co.ke')`),
+    ).toBe(true);
+  });
+
+  /**
+   * Two logins onto one client would both be "the client" in the audit trail,
+   * and nothing afterwards could say which person acted.
+   */
+  it("refuses a second login for the same client", async () => {
+    expect(
+      await refuses(`
+        INSERT INTO users (id, name, email, client_id)
+        VALUES (gen_random_uuid(), 'Wanjiku again', 'second@example.co.ke', '${client}')`),
+    ).toBe(true);
+  });
+
+  it("refuses a second login for the same member of staff", async () => {
+    expect(
+      await refuses(`
+        INSERT INTO users (id, name, email, advocate_id)
+        VALUES (gen_random_uuid(), 'Sarah again', 'second@oklaw.co.ke', '${advocate}')`),
+    ).toBe(true);
+  });
+
+  it("refuses two logins on one email address", async () => {
+    expect(
+      await refuses(`
+        INSERT INTO users (id, name, email, advocate_id)
+        VALUES (gen_random_uuid(), 'Someone', 'sarah@oklaw.co.ke', NULL)`),
+    ).toBe(true);
+  });
+
+  /**
+   * A session belongs to a login and dies with it.
+   *
+   * `ON DELETE CASCADE` is the half of "sign everyone out" that has to be true
+   * in the database: deleting a login must not leave a session that keeps
+   * working until its cookie happens to expire.
+   */
+  it("takes a login's sessions with it when the login goes", async () => {
+    const user = "33333333-3333-4333-8333-333333333333";
+
+    await db.exec(`
+      INSERT INTO clients (id, number, kind, name, email, phone, onboarded_on)
+      VALUES ('44444444-4444-4444-8444-444444444444', 'CLT-9001', 'Individual',
+              'Temp Client', 'temp@example.co.ke', '+254722445100', '2026-01-10');
+
+      INSERT INTO users (id, name, email, client_id)
+      VALUES ('${user}', 'Temp', 'temp@oklaw.co.ke',
+              '44444444-4444-4444-8444-444444444444');
+
+      INSERT INTO sessions (id, user_id, token, expires_at)
+      VALUES (gen_random_uuid(), '${user}', 'tok-1', now() + interval '7 days');
+    `);
+
+    await db.query(`DELETE FROM users WHERE id = '${user}'`);
+
+    const left = await db.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM sessions WHERE user_id = '${user}'`,
+    );
+
+    expect(left.rows[0]?.count).toBe("0");
+  });
+});
+
+describe("the audit trail is append-only", () => {
+  const entry = "55555555-5555-4555-8555-555555555555";
+
+  it("accepts an entry", async () => {
+    expect(
+      await refuses(`
+        INSERT INTO audit_log (id, actor_user_id, actor_name, actor_role, action, entity, entity_id, after)
+        VALUES ('${entry}', NULL, 'Sarah Wanjiru', 'Advocate', 'case.opened',
+                'case', '${advocate}', '{"status":"New"}'::jsonb)`),
+    ).toBe(false);
+  });
+
+  /**
+   * The trigger, not a permission.
+   *
+   * An audit trail the application can edit is a record of what somebody was
+   * willing to leave behind. This does not defend against an attacker holding
+   * the database owner's credentials — they can drop the trigger — but it does
+   * defend against the likely thing: a cleanup script, an ORM cascade, or a
+   * future service "correcting" an entry.
+   */
+  it("refuses an update to an entry", async () => {
+    expect(
+      await refuses(
+        `UPDATE audit_log SET actor_name = 'Somebody else' WHERE id = '${entry}'`,
+      ),
+    ).toBe(true);
+  });
+
+  it("refuses a delete", async () => {
+    expect(await refuses(`DELETE FROM audit_log WHERE id = '${entry}'`)).toBe(
+      true,
+    );
+  });
+
+  it("refuses an entry that records neither a subject nor a session event", async () => {
+    expect(
+      await refuses(`
+        INSERT INTO audit_log (id, actor_name, actor_role, action, entity)
+        VALUES (gen_random_uuid(), 'X', 'Advocate', 'case.opened', 'case')`),
+    ).toBe(true);
+  });
+
+  /** A refused sign-in has no user behind it and no record it acted on. */
+  it("accepts a session event with no subject", async () => {
+    expect(
+      await refuses(`
+        INSERT INTO audit_log (id, actor_name, actor_role, action, entity)
+        VALUES (gen_random_uuid(), 'someone@example.co.ke', 'Not signed in',
+                'session.refused', 'user')`),
+    ).toBe(false);
+  });
+
+  it("refuses an action outside the enumerated set", async () => {
+    expect(
+      await refuses(`
+        INSERT INTO audit_log (id, actor_name, actor_role, action, entity, entity_id)
+        VALUES (gen_random_uuid(), 'X', 'Advocate', 'case.deleted', 'case', 'x')`),
     ).toBe(true);
   });
 });

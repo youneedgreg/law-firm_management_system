@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { itemForPath, visibleSections } from "@/lib/nav";
-import type { Role } from "@/lib/types";
+import type { Role } from "@/domain/firm/advocate";
 
 interface SidebarProps {
   role: Role;

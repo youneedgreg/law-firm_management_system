@@ -5,7 +5,10 @@ import * as Status from "../domain/case/status";
 import * as Client from "../domain/client/client";
 import * as Court from "../domain/court/court";
 import * as Firm from "../domain/firm/advocate";
+import type { NotPermitted } from "../domain/identity/permissions";
 import { AdvocateId, CaseId, CaseNumber, ClientId } from "../domain/shared/ids";
+import { AuditLog } from "./audit-service";
+import { type CurrentUser, permitted, scope, withinScope } from "./policy";
 import {
   AdvocateRepository,
   type CaseNumberTaken,
@@ -13,6 +16,7 @@ import {
   ClientRepository,
   type NotFound,
   type RepositoryFailure,
+  Transactor,
 } from "./repositories";
 
 /**
@@ -216,6 +220,7 @@ export class MatterReferencesExhausted extends Schema.TaggedError<MatterReferenc
 
 /** Everything `open` can fail with, as one name. */
 export type CannotOpenMatter =
+  | NotPermitted
   | AdvocateNotInPractice
   | AdvocateMayNotFile
   | MatterReferencesExhausted
@@ -326,6 +331,8 @@ export class CaseService extends Effect.Service<CaseService>()("CaseService", {
     const cases = yield* CaseRepository;
     const clients = yield* ClientRepository;
     const advocates = yield* AdvocateRepository;
+    const audit = yield* AuditLog;
+    const transactor = yield* Transactor;
 
     /**
      * Checks the assigned advocate, and the court, against the matter as it
@@ -376,8 +383,32 @@ export class CaseService extends Effect.Service<CaseService>()("CaseService", {
      */
     const caseload = (filter: CaseloadFilter = {}) =>
       Effect.gen(function* () {
+        yield* permitted("case:read");
+        const visible = yield* scope;
+
+        /**
+         * The scope is in the *query*, not in a filter afterwards.
+         *
+         * A portal user's caseload is `forClient`, so the rows they may not see
+         * are never read — there is no array holding another client's matters
+         * for a later `.filter` to be forgotten from, and no join that has to
+         * be remembered when this function is next edited. The same reasoning
+         * applies to the client list beside it: reading every client's name to
+         * label one client's matters would be a read the principal has no
+         * business making, however carefully the result was then discarded.
+         */
         const [matters, everyClient, everyAdvocate] = yield* Effect.all(
-          [cases.all(), clients.all(), advocates.all()],
+          [
+            visible._tag === "WholeFirm"
+              ? cases.all()
+              : cases.forClient(visible.clientId),
+            visible._tag === "WholeFirm"
+              ? clients.all()
+              : Effect.map(clients.byId(visible.clientId), (client) => [
+                  client,
+                ]),
+            advocates.all(),
+          ],
           { concurrency: "unbounded" },
         );
 
@@ -414,9 +445,18 @@ export class CaseService extends Effect.Service<CaseService>()("CaseService", {
     return {
       caseload,
 
-      /** Who a matter may be opened for, and who may carry it. */
+      /**
+       * Who a matter may be opened for, and who may carry it.
+       *
+       * Gated on `case:open` rather than on `case:read`, because that is what
+       * this is for. It is also the read that would hand a portal user the
+       * firm's entire client list, which is the kind of endpoint that gets
+       * added for a dropdown and forgotten.
+       */
       intakeChoices: () =>
         Effect.gen(function* () {
+          yield* permitted("case:open");
+
           const [everyClient, everyAdvocate, today] = yield* Effect.all([
             clients.all(),
             advocates.all(),
@@ -444,10 +484,21 @@ export class CaseService extends Effect.Service<CaseService>()("CaseService", {
           } satisfies IntakeChoices;
         }),
 
-      /** The matter file: the matter, the two records it names, and the clock. */
+      /**
+       * The matter file: the matter, the two records it names, and the clock.
+       *
+       * A read by id cannot be scoped in the query — the id is the query — so
+       * the check happens on the row that comes back, and a matter belonging to
+       * another client is reported as `NotFound`. See `withinScope`: telling a
+       * portal user that a matter exists but is not theirs would confirm that
+       * the firm acts for whoever it belongs to.
+       */
       file: (id: CaseId) =>
         Effect.gen(function* () {
+          yield* permitted("case:read");
           const matter = yield* cases.byId(id);
+          yield* withinScope("case", id, matter.clientId);
+
           const [client, advocate, today] = yield* Effect.all([
             clients.byId(matter.clientId),
             advocates.byId(matter.advocateId),
@@ -472,8 +523,11 @@ export class CaseService extends Effect.Service<CaseService>()("CaseService", {
        * the winner and computes the next number along. Three attempts, because
        * a fourth consecutive collision is not contention any more.
        */
-      open: (input: OpenMatter): Effect.Effect<Matter.Case, CannotOpenMatter> =>
+      open: (
+        input: OpenMatter,
+      ): Effect.Effect<Matter.Case, CannotOpenMatter, CurrentUser> =>
         Effect.gen(function* () {
+          yield* permitted("case:open");
           yield* clients.byId(input.clientId);
 
           const issued = yield* cases.all();
@@ -487,7 +541,28 @@ export class CaseService extends Effect.Service<CaseService>()("CaseService", {
           };
 
           yield* vet(matter, { filing: matter.filedOn !== undefined });
-          return yield* cases.save(matter);
+
+          /**
+           * The write and its audit entry, atomically.
+           *
+           * A matter that exists with no record of who opened it is precisely
+           * the gap an audit trail is for, and it is what a crash between two
+           * separate statements produces. `Transactor` is an interface, so the
+           * in-memory implementation the tests use rolls both back together and
+           * the guarantee is testable without Postgres.
+           */
+          return yield* transactor.transaction(
+            Effect.gen(function* () {
+              const saved = yield* cases.save(matter);
+              yield* audit.record({
+                action: "case.opened",
+                entity: "case",
+                entityId: saved.id,
+                after: saved,
+              });
+              return saved;
+            }),
+          );
         }).pipe(
           Effect.retry({
             times: 3,
@@ -498,7 +573,10 @@ export class CaseService extends Effect.Service<CaseService>()("CaseService", {
       /** Edits a matter's particulars. Status moves through `transition`. */
       amend: (id: CaseId, edits: AmendMatter) =>
         Effect.gen(function* () {
+          yield* permitted("case:amend");
           const current = yield* cases.byId(id);
+          yield* withinScope("case", id, current.clientId);
+
           const amended = applyAmendment(current, edits);
 
           yield* vet(amended, {
@@ -508,7 +586,19 @@ export class CaseService extends Effect.Service<CaseService>()("CaseService", {
               current.filedOn === undefined && amended.filedOn !== undefined,
           });
 
-          return yield* cases.save(amended);
+          return yield* transactor.transaction(
+            Effect.gen(function* () {
+              const saved = yield* cases.save(amended);
+              yield* audit.record({
+                action: "case.amended",
+                entity: "case",
+                entityId: saved.id,
+                before: current,
+                after: saved,
+              });
+              return saved;
+            }),
+          );
         }),
 
       /**
@@ -520,9 +610,32 @@ export class CaseService extends Effect.Service<CaseService>()("CaseService", {
        */
       transition: (id: CaseId, to: Status.CaseStatus) =>
         Effect.gen(function* () {
+          yield* permitted("case:transition");
           const matter = yield* cases.byId(id);
+          yield* withinScope("case", id, matter.clientId);
+
           const moved = yield* enforce(Matter.changeStatus(matter, to));
-          return yield* cases.save(moved);
+
+          return yield* transactor.transaction(
+            Effect.gen(function* () {
+              const saved = yield* cases.save(moved);
+              yield* audit.record({
+                action: "case.transitioned",
+                entity: "case",
+                entityId: saved.id,
+                /**
+                 * The whole matter rather than just the status, so that
+                 * `changes` reports the one field that moved by comparing two
+                 * complete records. A snapshot of `{ status }` alone would be
+                 * smaller and would quietly lose the ability to answer "what
+                 * else was true about this matter at the time".
+                 */
+                before: matter,
+                after: saved,
+              });
+              return saved;
+            }),
+          );
         }),
     };
   }),

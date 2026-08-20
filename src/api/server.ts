@@ -2,9 +2,11 @@ import { HttpApiBuilder, HttpApiScalar, HttpServer } from "@effect/platform";
 import { Layer } from "effect";
 import { AppLayer, runtime } from "../runtime";
 import { OkLawApi } from "./contract";
+import { AuthenticationLive } from "./handlers/authentication";
 import { BillingHandlers } from "./handlers/billing";
 import { CasesHandlers } from "./handlers/cases";
 import { ClientsHandlers } from "./handlers/clients";
+import { SessionHandlers } from "./handlers/session";
 import { OpenApiRoute } from "./openapi";
 
 /**
@@ -31,7 +33,19 @@ import { OpenApiRoute } from "./openapi";
  */
 
 const ApiLive = HttpApiBuilder.api(OkLawApi).pipe(
-  Layer.provide([CasesHandlers, ClientsHandlers, BillingHandlers]),
+  Layer.provide([
+    CasesHandlers,
+    ClientsHandlers,
+    BillingHandlers,
+    SessionHandlers,
+    /**
+     * The middleware is a Layer like the handler groups, and is provided the
+     * same way. It supplies `CurrentUser`, which every handler above requires —
+     * so removing this line does not quietly open the API up, it stops the
+     * whole thing compiling.
+     */
+    AuthenticationLive,
+  ]),
   Layer.provide(AppLayer),
 );
 

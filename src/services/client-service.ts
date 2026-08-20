@@ -1,7 +1,9 @@
 import { Effect } from "effect";
 import * as Matter from "../domain/case/case";
 import * as ClientDomain from "../domain/client/client";
+import type { NotPermitted } from "../domain/identity/permissions";
 import type { ClientId } from "../domain/shared/ids";
+import { type CurrentUser, permitted, scope, withinScope } from "./policy";
 import {
   CaseRepository,
   ClientRepository,
@@ -61,11 +63,31 @@ export class ClientService extends Effect.Service<ClientService>()(
          */
         directory: (): Effect.Effect<
           readonly ClientSummary[],
-          RepositoryFailure
+          NotPermitted | NotFound | RepositoryFailure,
+          CurrentUser
         > =>
           Effect.gen(function* () {
+            yield* permitted("client:read");
+            const visible = yield* scope;
+
+            /**
+             * A portal user's "directory" is one row: themselves.
+             *
+             * Answering with a list rather than refusing outright is what lets
+             * the portal reuse this operation, and it is safe because the list
+             * is built by scoped queries rather than filtered afterwards. The
+             * alternative — a second, nearly identical `myDetails` operation —
+             * is a second place for the rule to be got right.
+             */
             const [everyClient, everyMatter] = yield* Effect.all(
-              [clients.all(), cases.all()],
+              visible._tag === "WholeFirm"
+                ? [clients.all(), cases.all()]
+                : [
+                    Effect.map(clients.byId(visible.clientId), (client) => [
+                      client,
+                    ]),
+                    cases.forClient(visible.clientId),
+                  ],
               { concurrency: "unbounded" },
             );
 
@@ -88,8 +110,21 @@ export class ClientService extends Effect.Service<ClientService>()(
         /** One client, with their matters. */
         file: (
           id: ClientId,
-        ): Effect.Effect<ClientFile, NotFound | RepositoryFailure> =>
+        ): Effect.Effect<
+          ClientFile,
+          NotPermitted | NotFound | RepositoryFailure,
+          CurrentUser
+        > =>
           Effect.gen(function* () {
+            yield* permitted("client:read");
+            /**
+             * Checked before the read rather than after it. For a client the
+             * scope *is* the id, so there is nothing to learn from the row
+             * first — and refusing early means another client's record is
+             * never loaded into a process that might log it.
+             */
+            yield* withinScope("client", id, id);
+
             const client = yield* clients.byId(id);
             const matters = yield* cases.forClient(id);
 

@@ -2,6 +2,11 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Ref, Schema, TestClock } from "effect";
 import {
   advocates,
+  asFinance,
+  asPartner,
+  asReceptionist,
+  asWanjiku,
+  asZenith,
   clients,
   closedMatter,
   filedMatter,
@@ -18,9 +23,14 @@ import {
 } from "../../test/fixtures";
 import {
   inMemoryAdvocates,
+  inMemoryAudit,
   inMemoryCases,
   inMemoryClients,
+  inMemoryTransactor,
 } from "../../test/in-memory-repositories";
+import type { Principal } from "../domain/identity/principal";
+import { AuditLog } from "./audit-service";
+import { CurrentUser } from "./policy";
 import type * as Matter from "../domain/case/case";
 import { CaseId, CaseNumber, ClientId } from "../domain/shared/ids";
 import { CaseService, type OpenMatter } from "./case-service";
@@ -38,6 +48,11 @@ import { CaseNumberTaken, CaseRepository } from "./repositories";
  * The clock is set to a fixed day before anything runs. `mayAppearInCourt`
  * compares a certificate year against today, so a suite on the default
  * `TestClock` would be asking whether these advocates were in practice in 1970.
+ *
+ * Since Phase 6 every scenario also names *who is asking*. `CurrentUser` is in
+ * the `R` channel of every operation below, so this is not a convention the
+ * suite adopted — it is the only way the effects can be run at all, which is
+ * the property the design was chosen for.
  */
 
 const firm = (seed: readonly Matter.Case[] = matters) =>
@@ -45,18 +60,25 @@ const firm = (seed: readonly Matter.Case[] = matters) =>
     inMemoryCases(seed),
     inMemoryClients(clients),
     inMemoryAdvocates(advocates),
+    inMemoryAudit().layer,
+    inMemoryTransactor(),
   );
 
 const withFirm = (seed?: readonly Matter.Case[]) =>
-  CaseService.Default.pipe(Layer.provideMerge(firm(seed)));
+  Layer.mergeAll(CaseService.Default, AuditLog.Default).pipe(
+    Layer.provideMerge(AuditLog.Default),
+    Layer.provideMerge(firm(seed)),
+  );
 
 /** Sets the clock, then runs the body against a freshly seeded firm. */
 const scenario = <A, E>(
-  body: Effect.Effect<A, E, CaseService | CaseRepository>,
+  body: Effect.Effect<A, E, CaseService | CaseRepository | CurrentUser>,
   seed?: readonly Matter.Case[],
+  who: Principal = asPartner,
 ) =>
   TestClock.setTime(TODAY).pipe(
     Effect.andThen(body),
+    Effect.provideService(CurrentUser, who),
     Effect.provide(withFirm(seed)),
   );
 
@@ -142,13 +164,17 @@ describe("reading the caseload", () => {
 
       expect(caseload[0]?.advocateName).toBe("Unassigned");
     }).pipe(
+      Effect.provideService(CurrentUser, asPartner),
       Effect.provide(
-        CaseService.Default.pipe(
+        Layer.mergeAll(CaseService.Default, AuditLog.Default).pipe(
+          Layer.provideMerge(AuditLog.Default),
           Layer.provideMerge(
             Layer.mergeAll(
               inMemoryCases([filedMatter]),
               inMemoryClients(clients),
               inMemoryAdvocates([]),
+              inMemoryAudit().layer,
+              inMemoryTransactor(),
             ),
           ),
         ),
@@ -522,13 +548,17 @@ describe("two intakes racing for the same reference", () => {
           expect(opened.title).toBe(intake.title);
         }),
       ),
+      Effect.provideService(CurrentUser, asPartner),
       Effect.provide(
-        CaseService.Default.pipe(
+        Layer.mergeAll(CaseService.Default, AuditLog.Default).pipe(
+          Layer.provideMerge(AuditLog.Default),
           Layer.provideMerge(
             Layer.mergeAll(
               contended,
               inMemoryClients(clients),
               inMemoryAdvocates(advocates),
+              inMemoryAudit().layer,
+              inMemoryTransactor(),
             ),
           ),
         ),
@@ -727,4 +757,208 @@ describe("what an intake form may offer", () => {
       }),
     ),
   );
+});
+
+/**
+ * Authorization, tested by attempting the thing that must not work.
+ *
+ * The roadmap's bar for this phase is "a portal user cannot reach another
+ * client's data by any route, proven by tests" — and the only proof of a
+ * negative is to try it. Every test below performs an operation that a real
+ * attacker would perform, with a principal a real attacker could hold, and
+ * asserts on the refusal.
+ *
+ * Wanjiku and Zenith both have matters in the fixtures, and both have portal
+ * logins. That is what makes these adversarial rather than decorative: the
+ * attacker is not an anonymous stranger, they are a *valid signed-in user of
+ * this system* asking for a record that is not theirs — which is the shape of
+ * almost every real breach of this kind.
+ */
+describe("what a portal user can reach", () => {
+  it("shows a client only their own matters", () =>
+    scenario(
+      Effect.gen(function* () {
+        const service = yield* CaseService;
+        const caseload = yield* service.caseload();
+
+        expect(caseload.map((summary) => summary.matter.clientId)).toEqual([
+          wanjiku.id,
+          wanjiku.id,
+        ]);
+        expect(
+          caseload.some((summary) => summary.matter.id === unfiledMatter.id),
+        ).toBe(false);
+      }),
+      undefined,
+      asWanjiku,
+    ));
+
+  /**
+   * The refusal is `NotFound`, not `NotPermitted`, and the assertion is that
+   * the two cases are **indistinguishable**.
+   *
+   * A truthful "you may not see this matter" confirms the matter exists — and
+   * with it the client, and the fact that this firm acts for them. For a law
+   * firm that is itself confidential: whether a person is a client of a divorce
+   * practice should not be derivable from the difference between two responses.
+   */
+  it("answers for another client's matter exactly as for one that does not exist", () =>
+    scenario(
+      Effect.gen(function* () {
+        const service = yield* CaseService;
+        const nobodys = Schema.decodeSync(CaseId)(
+          "20000000-0000-4000-8000-0000000000ff",
+        );
+
+        const theirs = yield* Effect.flip(service.file(unfiledMatter.id));
+        const missing = yield* Effect.flip(service.file(nobodys));
+
+        expect(theirs._tag).toBe("NotFound");
+        expect(missing._tag).toBe("NotFound");
+        expect(theirs.reason.replace(unfiledMatter.id, "")).toBe(
+          missing.reason.replace(nobodys, ""),
+        );
+      }),
+      undefined,
+      asWanjiku,
+    ));
+
+  it("lets them read their own matter", () =>
+    scenario(
+      Effect.gen(function* () {
+        const service = yield* CaseService;
+        const file = yield* service.file(filedMatter.id);
+
+        expect(file.matter.id).toBe(filedMatter.id);
+      }),
+      undefined,
+      asWanjiku,
+    ));
+
+  /**
+   * The other client's login is a real one, and is refused the same way.
+   *
+   * Two portal users pointed at two clients, each refused the other's matter,
+   * is the assertion that the scope comes from the principal rather than from
+   * anything ambient — a check keyed on "is this a portal user" would pass the
+   * test above and fail this one.
+   */
+  it("refuses the mirror case too", () =>
+    scenario(
+      Effect.gen(function* () {
+        const service = yield* CaseService;
+        const refused = yield* Effect.flip(service.file(filedMatter.id));
+
+        expect(refused._tag).toBe("NotFound");
+      }),
+      undefined,
+      asZenith,
+    ));
+
+  it("refuses them the intake form's client list outright", () =>
+    scenario(
+      Effect.gen(function* () {
+        const service = yield* CaseService;
+        const refused = yield* Effect.flip(service.intakeChoices());
+
+        expect(refused._tag).toBe("NotPermitted");
+      }),
+      undefined,
+      asWanjiku,
+    ));
+
+  it("refuses them a write to their own matter", () =>
+    scenario(
+      Effect.gen(function* () {
+        const service = yield* CaseService;
+        const refused = yield* Effect.flip(
+          service.amend(filedMatter.id, { title: "Struck out" }),
+        );
+
+        expect(refused._tag).toBe("NotPermitted");
+      }),
+      undefined,
+      asWanjiku,
+    ));
+
+  it("refuses them a transition on their own matter", () =>
+    scenario(
+      Effect.gen(function* () {
+        const service = yield* CaseService;
+        const refused = yield* Effect.flip(
+          service.transition(filedMatter.id, "Closed"),
+        );
+
+        expect(refused._tag).toBe("NotPermitted");
+      }),
+      undefined,
+      asWanjiku,
+    ));
+});
+
+describe("what each role at the firm may do", () => {
+  it("refuses a Receptionist an intake", () =>
+    scenario(
+      Effect.gen(function* () {
+        const service = yield* CaseService;
+        const refused = yield* Effect.flip(service.open(intake));
+
+        expect(refused._tag).toBe("NotPermitted");
+      }),
+      undefined,
+      asReceptionist,
+    ));
+
+  it("refuses a Finance Officer a status move", () =>
+    scenario(
+      Effect.gen(function* () {
+        const service = yield* CaseService;
+        const refused = yield* Effect.flip(
+          service.transition(filedMatter.id, "Closed"),
+        );
+
+        expect(refused._tag).toBe("NotPermitted");
+      }),
+      undefined,
+      asFinance,
+    ));
+
+  /**
+   * A Receptionist may still read the caseload, which is the point of having a
+   * table rather than an on/off switch: they answer the telephone to clients
+   * and need to know which matters exist.
+   */
+  it("still lets a Receptionist read the caseload", () =>
+    scenario(
+      Effect.gen(function* () {
+        const service = yield* CaseService;
+        const caseload = yield* service.caseload();
+
+        expect(caseload).toHaveLength(3);
+      }),
+      undefined,
+      asReceptionist,
+    ));
+
+  it("refuses the permission before the record is read", () =>
+    scenario(
+      Effect.gen(function* () {
+        const service = yield* CaseService;
+        const missing = Schema.decodeSync(CaseId)(
+          "20000000-0000-4000-8000-0000000000ff",
+        );
+
+        // A Finance Officer asking to transition a matter that does not exist
+        // is refused for want of the permission, not told the matter is
+        // absent — the check that costs nothing runs first, and it is also the
+        // one that must not leak whether the id resolves.
+        const refused = yield* Effect.flip(
+          service.transition(missing, "Closed"),
+        );
+
+        expect(refused._tag).toBe("NotPermitted");
+      }),
+      undefined,
+      asFinance,
+    ));
 });

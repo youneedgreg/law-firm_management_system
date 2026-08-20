@@ -3,6 +3,7 @@ import type * as Billing from "@/domain/billing/invoice";
 import type * as Matter from "@/domain/case/case";
 import type * as Client from "@/domain/client/client";
 import type * as Firm from "@/domain/firm/advocate";
+import * as Identity from "@/domain/identity/principal";
 import {
   AdvocateId,
   CaseId,
@@ -10,6 +11,7 @@ import {
   ClientId,
   InvoiceId,
   KenyanPhone,
+  UserId,
 } from "@/domain/shared/ids";
 
 /**
@@ -257,3 +259,71 @@ export const partPaidInvoice: Billing.Invoice = {
 };
 
 export const invoices = [settledInvoice, overdueInvoice, partPaidInvoice];
+
+// ── Principals ────────────────────────────────────────────────────────────
+
+/**
+ * Who is asking, for the tests that care — which, since Phase 6, is all of
+ * them: `CurrentUser` is in the type of every service operation, so a test
+ * cannot run one without saying who ran it.
+ *
+ * One per interesting role rather than one generic "user". The point of the
+ * permission table is that the roles differ, and a suite with a single
+ * all-powerful principal would exercise exactly none of that.
+ */
+const userId = (n: number) =>
+  Schema.decodeSync(UserId)(`70000000-0000-4000-8000-00000000000${n}`);
+
+export const asPartner: Identity.Staff = Identity.Staff.make({
+  userId: userId(1),
+  advocateId: sarah.id,
+  name: "Adv. Amina Okwiri",
+  email: "amina@oklaw.co.ke",
+  role: "Managing Partner",
+});
+
+/** Sarah's own login: an Advocate, who may open and amend but not everything. */
+export const asAdvocate: Identity.Staff = Identity.Staff.make({
+  userId: userId(2),
+  advocateId: sarah.id,
+  name: sarah.name,
+  email: sarah.email,
+  role: "Advocate",
+});
+
+/** May see the money and may not touch a matter's lifecycle. */
+export const asFinance: Identity.Staff = Identity.Staff.make({
+  userId: userId(3),
+  advocateId: grace.id,
+  name: "Peter Njoroge",
+  email: "peter.njoroge@oklaw.co.ke",
+  role: "Finance Officer",
+});
+
+/** The least-privileged member of staff. */
+export const asReceptionist: Identity.Staff = Identity.Staff.make({
+  userId: userId(4),
+  advocateId: grace.id,
+  name: "Ann Mueni",
+  email: "ann@oklaw.co.ke",
+  role: "Receptionist",
+});
+
+/**
+ * Wanjiku, signed in to the portal — and the reason every adversarial test in
+ * this suite exists. Her client id is the only one she may see anything of.
+ */
+export const asWanjiku: Identity.PortalUser = Identity.PortalUser.make({
+  userId: userId(5),
+  clientId: wanjiku.id,
+  name: wanjiku.name,
+  email: wanjiku.email,
+});
+
+/** Zenith's portal login, so "the other client" is a real principal too. */
+export const asZenith: Identity.PortalUser = Identity.PortalUser.make({
+  userId: userId(6),
+  clientId: zenith.id,
+  name: zenith.name,
+  email: zenith.email,
+});
