@@ -91,6 +91,42 @@ export const fromPayment = (
 });
 
 /**
+ * A payment as a **row**, ready for `sql.insert`.
+ *
+ * `fromPayment` above returns the *decoded* side of `PaymentBody.insert` — a
+ * `Date` for `receivedOn`, an `Option` for `reference` — which is the right
+ * shape for `InvoiceFromRow`, whose own encoder finishes the job. It is the
+ * wrong shape to hand to `sql.insert` directly, and two write paths were doing
+ * exactly that.
+ *
+ * Both bugs are worth naming, because they fail differently and only one of
+ * them is loud:
+ *
+ * 1. **`reference` is an `Option`.** `sql.insert` serialises the value it is
+ *    given, so a `Some("QGH7XYZ12A")` goes to Postgres as an object and the
+ *    statement fails. Loud — but only when a reference is present, which is why
+ *    it survived: `settleFromTrust` writes a payment with no reference at all,
+ *    so every existing test passed with `Option.none()` and the defect waited
+ *    for the first payment that carried one.
+ *
+ * 2. **`receivedOn` is a `Date`.** `payments.received_on` is a `date` column,
+ *    and `CalendarDate` exists precisely because the driver sends a `Date` as a
+ *    timestamp which Postgres then truncates in *local* time. This one is
+ *    silent: it stores a real date, one day out, for anybody east or west of
+ *    UTC. Phase 2 wrote `CalendarDate` for this and these two paths went round
+ *    it.
+ *
+ * Encoding through the schema fixes both at once, which is the argument for
+ * having one mapping rather than a pair of hand-written functions — restated
+ * here because this is what it looks like when a write path quietly opts out of
+ * it.
+ */
+export const paymentRow: (
+  payment: Billing.Payment,
+) => typeof PaymentBody.insert.Encoded = (payment) =>
+  Schema.encodeSync(PaymentBody.insert)(fromPayment(payment));
+
+/**
  * Rows ↔ `Invoice`.
  *
  * One refusal on the way in, and it is the counterpart of the corporate-client

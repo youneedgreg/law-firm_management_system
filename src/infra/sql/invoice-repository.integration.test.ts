@@ -324,6 +324,103 @@ describeIfDb("InvoiceRepository against Postgres", () => {
     }
   });
 
+  /**
+   * The duplicate M-Pesa confirmation, translated — and the bug this test
+   * exists because of.
+   *
+   * `recordPayment` writes inside `sql.withTransaction`, and the transaction
+   * wrapper raises its *own* `SqlError` around the driver's. The first version
+   * of `isUniqueViolation` read `error.cause` one level down, which is right for
+   * `CaseRepository.save` (no transaction) and wrong here — so a duplicate
+   * confirmation came back as a bare `RepositoryFailure` saying "the database
+   * refused the write" instead of naming the code that had already been banked.
+   *
+   * Nothing in the unit suite could catch it: the in-memory repository raises
+   * `PaymentAlreadyRecorded` directly and never produces a `SqlError` at all,
+   * so the translation it is standing in for was untested. It took posting the
+   * same code twice in a browser to see it. This is that, as a test.
+   */
+  it("translates a repeated M-Pesa confirmation, from inside a transaction", async () => {
+    const confirmation = "ZZ99TESTAA";
+
+    const first = await run(
+      Effect.flatMap(InvoiceRepository, (repo) =>
+        repo.recordPayment(invoiceId, {
+          amountCents: 1_000_00,
+          method: "M-Pesa",
+          receivedOn: new Date("2026-08-20T00:00:00.000Z"),
+          reference: confirmation,
+        }),
+      ),
+    );
+    expect(Exit.isSuccess(first)).toBe(true);
+
+    const again = await run(
+      Effect.flatMap(InvoiceRepository, (repo) =>
+        repo.recordPayment(invoiceId, {
+          amountCents: 1_000_00,
+          method: "M-Pesa",
+          receivedOn: new Date("2026-08-21T00:00:00.000Z"),
+          reference: confirmation,
+        }),
+      ),
+    );
+
+    expect(Exit.isFailure(again)).toBe(true);
+    const error = Exit.isFailure(again)
+      ? (
+          again.cause as {
+            error?: { _tag?: string; confirmation?: string; reason?: string };
+          }
+        ).error
+      : undefined;
+
+    // The domain's error, not the driver's — and it names the code.
+    expect(error?._tag).toBe("PaymentAlreadyRecorded");
+    expect(error?.confirmation).toBe(confirmation);
+    expect(error?.reason).toContain("credit the client twice");
+
+    // Exactly one payment carries it: the refused write left nothing behind.
+    const rows = await raw<{ readonly n: string }>(
+      `SELECT count(*) AS n FROM payments WHERE reference = $1`,
+      [confirmation],
+    );
+    expect(Number(rows[0]?.n)).toBe(1);
+  });
+
+  it("appends a payment rather than replacing the invoice's payments", async () => {
+    /**
+     * The property `save` cannot offer.
+     *
+     * `save` replaces an invoice's payments wholesale, so two clerks banking
+     * two cheques at once would each write their own list and the second would
+     * discard the first. An append cannot lose one, and this asserts the count
+     * goes up rather than being set.
+     */
+    const before = await raw<{ readonly n: string }>(
+      `SELECT count(*) AS n FROM payments WHERE invoice_id = $1`,
+      [invoiceId],
+    );
+
+    const exit = await run(
+      Effect.flatMap(InvoiceRepository, (repo) =>
+        repo.recordPayment(invoiceId, {
+          amountCents: 2_000_00,
+          method: "Cheque",
+          receivedOn: new Date("2026-08-22T00:00:00.000Z"),
+          reference: "004821",
+        }),
+      ),
+    );
+    expect(Exit.isSuccess(exit)).toBe(true);
+
+    const after = await raw<{ readonly n: string }>(
+      `SELECT count(*) AS n FROM payments WHERE invoice_id = $1`,
+      [invoiceId],
+    );
+    expect(Number(after[0]?.n)).toBe(Number(before[0]?.n) + 1);
+  });
+
   it("leaves no client overdrawn", async () => {
     const exit = await run(
       Effect.flatMap(TrustRepository, (trust) => trust.overdrawn()),

@@ -42,10 +42,36 @@ export const failure = (operation: string) => (error: QueryFailure) =>
 export const isUniqueViolation = (
   error: QueryFailure,
   constraint: string,
-): boolean => {
-  const cause: unknown = "cause" in error ? error.cause : undefined;
-  if (typeof cause !== "object" || cause === null) return false;
+): boolean => unique(error, constraint, 0);
 
-  const detail = cause as { code?: unknown; constraint?: unknown };
-  return detail.code === "23505" && detail.constraint === constraint;
+/**
+ * The cause chain is walked rather than read one level down, and that is not
+ * defensiveness — it is a bug this had.
+ *
+ * A statement run directly puts the driver's error on `SqlError.cause`, which
+ * is what the original one-level version assumed. A statement run inside
+ * `sql.withTransaction` does not: the transaction wrapper catches the inner
+ * failure and raises its own `SqlError`, so the driver's error is one level
+ * further down and `cause.code` is `undefined`.
+ *
+ * The symptom was specific and would have been very annoying to find in
+ * production: `CaseRepository.save` translated its unique violation correctly
+ * because it writes outside a transaction, and `InvoiceRepository.recordPayment`
+ * silently did not because it writes inside one — so a duplicate M-Pesa
+ * confirmation came back as "the database refused the write" instead of naming
+ * the code that had already been banked. Found in the browser, on the first
+ * duplicate posted.
+ *
+ * The depth cap is there so a cyclic `cause` cannot spin. Five is well beyond
+ * anything `@effect/sql` nests.
+ */
+const unique = (error: unknown, constraint: string, depth: number): boolean => {
+  if (depth > 5 || typeof error !== "object" || error === null) return false;
+
+  const detail = error as { code?: unknown; constraint?: unknown };
+  if (detail.code === "23505" && detail.constraint === constraint) return true;
+
+  return "cause" in error
+    ? unique((error as { cause: unknown }).cause, constraint, depth + 1)
+    : false;
 };

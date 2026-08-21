@@ -1,16 +1,17 @@
 import { SqlClient } from "@effect/sql";
 import { Effect, Layer, Option, Schema } from "effect";
-import type * as Billing from "../../domain/billing/invoice";
+import * as Billing from "../../domain/billing/invoice";
 import type { ClientId, InvoiceId } from "../../domain/shared/ids";
 import * as Money from "../../domain/shared/money";
 import * as Ledger from "../../domain/trust/ledger";
 import {
+  InvoiceNumberTaken,
   InvoiceRepository,
   NotFound,
   type RepositoryFailure,
 } from "../../services/repositories";
-import { failure } from "./failure";
-import { fromPayment, InvoiceFromRow } from "./invoice-model";
+import { failure, isUniqueViolation } from "./failure";
+import { InvoiceFromRow, paymentRow } from "./invoice-model";
 import { isRule10Violation } from "./rule10";
 
 /**
@@ -132,6 +133,12 @@ export const InvoiceRepositoryLive = Layer.effect(
           SELECT * FROM invoices WHERE client_id = ${clientId} ORDER BY number
         `.pipe(Effect.flatMap(assemble), Effect.mapError(failure("forClient"))),
 
+      all: () =>
+        sql<RawRow>`SELECT * FROM invoices ORDER BY number`.pipe(
+          Effect.flatMap(assemble),
+          Effect.mapError(failure("all")),
+        ),
+
       /**
        * Upsert the invoice and replace its lines and payments, atomically.
        *
@@ -177,8 +184,97 @@ export const InvoiceRepositoryLive = Layer.effect(
             ),
           ),
           Effect.as(invoice),
-          Effect.mapError(failure("save")),
-        ) satisfies Effect.Effect<Billing.Invoice, RepositoryFailure>,
+          Effect.catchAll(
+            (
+              error,
+            ): Effect.Effect<never, InvoiceNumberTaken | RepositoryFailure> =>
+              isUniqueViolation(error, "invoices_number_key")
+                ? Effect.fail(
+                    new InvoiceNumberTaken({ number: invoice.number }),
+                  )
+                : Effect.fail(failure("save")(error)),
+          ),
+        ) satisfies Effect.Effect<
+          Billing.Invoice,
+          InvoiceNumberTaken | RepositoryFailure
+        >,
+
+      /**
+       * One payment, appended.
+       *
+       * The ordinal is computed inside the transaction for the same reason
+       * `settleFromTrust` computes it there: `payments_ordinal_unique` is the
+       * backstop, and reading the maximum outside the transaction that inserts
+       * against it is a race with itself.
+       *
+       * The invoice is checked first so that a payment against a fee note that
+       * does not exist is `NotFound` rather than a foreign-key violation
+       * reported as a repository failure. A caller can do something with the
+       * first and nothing with the second.
+       */
+      recordPayment: (invoiceId, payment) =>
+        sql
+          .withTransaction(
+            Effect.gen(function* () {
+              const invoice = yield* sql<{ readonly id: string }>`
+                SELECT id FROM invoices WHERE id = ${invoiceId}
+              `;
+
+              if (invoice.length === 0) {
+                return yield* Effect.fail(
+                  new NotFound({ entity: "Invoice", id: invoiceId }),
+                );
+              }
+
+              const next = yield* sql<{ readonly nextOrdinal: string }>`
+                SELECT coalesce(max(ordinal), -1) + 1 AS next_ordinal
+                  FROM payments WHERE invoice_id = ${invoiceId}
+              `;
+
+              yield* sql`
+                INSERT INTO payments ${sql.insert({
+                  id: crypto.randomUUID(),
+                  invoiceId,
+                  ordinal: Number(next[0]?.nextOrdinal ?? 0),
+                  ...paymentRow(payment),
+                })}
+              `;
+            }),
+          )
+          .pipe(
+            /**
+             * The partial unique index's refusal, as the domain's own error.
+             *
+             * Identical in shape to the Rule 10 translation above: Postgres is
+             * the arbiter because the check and the write have to be one
+             * operation, and the repository's job is to recognise *which*
+             * refusal it was. Matching the index by name rather than on
+             * SQLSTATE alone matters here — `payments` will grow a second
+             * unique index eventually, and a translation that ignored which
+             * one fired would then report a duplicate confirmation for
+             * something else entirely.
+             */
+            Effect.catchTag(
+              "SqlError",
+              (
+                error,
+              ): Effect.Effect<
+                never,
+                Billing.PaymentAlreadyRecorded | RepositoryFailure
+              > => {
+                const confirmation = Billing.confirmationOf(payment);
+                return isUniqueViolation(
+                  error,
+                  "payments_mpesa_confirmation",
+                ) && confirmation !== undefined
+                  ? Effect.fail(
+                      new Billing.PaymentAlreadyRecorded({ confirmation }),
+                    )
+                  : Effect.fail(failure("recordPayment")(error));
+              },
+            ),
+            Effect.asVoid,
+          ),
 
       /**
        * The one operation that genuinely needs a transaction.
@@ -218,7 +314,7 @@ export const InvoiceRepositoryLive = Layer.effect(
                   id: crypto.randomUUID(),
                   invoiceId,
                   ordinal: Number(next[0]?.nextOrdinal ?? 0),
-                  ...fromPayment(payment),
+                  ...paymentRow(payment),
                 })}
               `;
 

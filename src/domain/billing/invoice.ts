@@ -54,15 +54,113 @@ export const PAYMENT_METHODS = [
 export const PaymentMethod = Schema.Literal(...PAYMENT_METHODS);
 export type PaymentMethod = typeof PaymentMethod.Type;
 
-export const Payment = Schema.Struct({
+/**
+ * A Safaricom M-Pesa confirmation code.
+ *
+ * Ten characters, letters and digits, upper case — `QGH7XYZ12A`. Safaricom
+ * sends one with every transaction and it is the only identifier both the firm
+ * and the client hold, which makes it the thing a bank statement is reconciled
+ * against.
+ *
+ * Branded rather than left as a string because of what the next section does
+ * with it: this value is *unique per transaction*, and the system relies on
+ * that to refuse a double post. A field that anything string-shaped could be
+ * assigned to is a field somebody eventually assigns an invoice number to.
+ */
+export const MpesaConfirmation = Schema.String.pipe(
+  Schema.pattern(/^[A-Z0-9]{10}$/),
+  Schema.brand("MpesaConfirmation"),
+).annotations({
+  identifier: "MpesaConfirmation",
+  description: "A Safaricom M-Pesa confirmation code, e.g. QGH7XYZ12A",
+});
+
+export type MpesaConfirmation = typeof MpesaConfirmation.Type;
+
+/**
+ * The fields of a payment, exported so that the wire schema can restate the
+ * dates without restating anything else. See `api/wire.ts`.
+ */
+export const PaymentFields = {
   amountCents: Schema.Int.pipe(Schema.positive()),
   method: PaymentMethod,
   receivedOn: Schema.DateFromSelf,
   /** M-Pesa code, cheque number, bank reference — whatever reconciles it. */
   reference: Schema.optional(Schema.String),
-});
+};
+
+/**
+ * Whether a payment can be traced back to the transaction that made it.
+ *
+ * The rule is about M-Pesa specifically, and it is not bureaucracy. Cash has a
+ * receipt book, a cheque has a number on the cheque, a bank transfer appears on
+ * a statement with the payer's name on it — each is identifiable from something
+ * outside this system. An M-Pesa payment is identifiable from its confirmation
+ * code and from nothing else: the money arrives in a till number with a
+ * telephone number beside it, and by the end of the month there are two hundred
+ * of them. A recorded M-Pesa payment with no code is a payment that cannot be
+ * matched to the statement, which means at the end of the quarter the firm's
+ * books and Safaricom's disagree and nobody can say which is wrong.
+ *
+ * Exported as a predicate rather than inlined into the schema below, because
+ * the wire schema in `api/wire.ts` has to enforce the identical rule and a
+ * second copy of it is a second thing to keep true.
+ */
+export const isReconcilable = (payment: {
+  readonly method: PaymentMethod;
+  readonly reference?: string | undefined;
+}): boolean =>
+  payment.method !== "M-Pesa" ||
+  (payment.reference !== undefined &&
+    Schema.is(MpesaConfirmation)(payment.reference));
+
+export const RECONCILABLE_MESSAGE =
+  "An M-Pesa payment must carry its confirmation code (ten characters, " +
+  "e.g. QGH7XYZ12A). It is the only thing the M-Pesa statement can be " +
+  "reconciled against";
+
+export const Payment = Schema.Struct(PaymentFields).pipe(
+  Schema.filter((payment) =>
+    isReconcilable(payment) ? undefined : RECONCILABLE_MESSAGE,
+  ),
+);
 
 export type Payment = typeof Payment.Type;
+
+/** The confirmation code on a payment, where it has one. */
+export const confirmationOf = (
+  payment: Payment,
+): MpesaConfirmation | undefined =>
+  payment.method === "M-Pesa" && payment.reference !== undefined
+    ? (payment.reference as MpesaConfirmation)
+    : undefined;
+
+/**
+ * This confirmation code has already been banked.
+ *
+ * The failure it prevents is the double post, which is the single most common
+ * way a client is credited twice: the confirmation SMS is forwarded to the
+ * firm, somebody enters it, the client forwards it again a week later chasing a
+ * receipt, and somebody enters it again. Both entries look completely
+ * legitimate on their own.
+ *
+ * Uniqueness is enforced by a partial unique index in Postgres and translated
+ * back to this error by the repository, exactly as the Rule 10 trigger becomes
+ * `TrustAccountUnderfunded`. The database is the arbiter because the check and
+ * the write have to be atomic; recognising the refusal is the repository's job.
+ */
+export class PaymentAlreadyRecorded extends Schema.TaggedError<PaymentAlreadyRecorded>()(
+  "PaymentAlreadyRecorded",
+  { confirmation: Schema.String },
+) {
+  get reason(): string {
+    return (
+      `M-Pesa confirmation ${this.confirmation} has already been recorded ` +
+      `against a fee note. Entering it again would credit the client twice — ` +
+      `check the statement before overriding`
+    );
+  }
+}
 
 // ── The invoice ───────────────────────────────────────────────────────────
 
