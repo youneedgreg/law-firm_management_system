@@ -2,7 +2,6 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, TestClock } from "effect";
 import {
   advocates,
-  asAdvocate,
   asFinance,
   asPartner,
   asReceptionist,

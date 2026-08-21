@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { signOut } from "@/app/(auth)/sign-in/actions";
 import { useSession } from "@/components/Session";
 import { roleLabel } from "@/domain/identity/principal";
-import { NOTIFICATIONS } from "@/lib/data/firm";
 import { initials } from "@/lib/format";
 
 /**
@@ -29,7 +29,22 @@ import { initials } from "@/lib/format";
  * action beside each shell — would be two doors to the thing the audit trail
  * is watching.
  */
-export function Topbar({ onToggleNav }: { onToggleNav: () => void }) {
+export function Topbar({
+  onToggleNav,
+  needsAttention,
+}: {
+  onToggleNav: () => void;
+  needsAttention: number;
+}) {
+  /**
+   * The current term, so the box keeps what was searched.
+   *
+   * A box that empties itself after a search is one people retype into, and
+   * refining a search is the commonest thing anybody does with one.
+   */
+  const term = useSearchParams().get("q") ?? "";
+  const pressing = needsAttention;
+
   const { principal } = useSession();
   const role = roleLabel(principal);
 
@@ -59,26 +74,50 @@ export function Topbar({ onToggleNav }: { onToggleNav: () => void }) {
 
       <span className="topbar-spacer" />
 
-      <input
-        className="input topbar-search"
-        type="search"
-        placeholder="Search cases, clients, documents…"
-        aria-label="Search cases, clients and documents"
-      />
+      {/*
+        A GET form, not an input with an `onChange`.
+        
+        Submitting navigates to `/search?q=…`, which makes a search a *place*:
+        linkable, in the back-stack, and readable at leisure. A type-ahead
+        panel under the box is nicer for the case where the first hit is the
+        right one and worse for every other — it cannot be sent to a colleague,
+        it vanishes when the mouse moves, and it costs a request per keystroke
+        against four tables.
+
+        `method="get"` also means it works before hydration, which is the same
+        reason sign-out is a form.
+      */}
+      <form action="/search" className="topbar-search-form">
+        <input
+          className="input topbar-search"
+          type="search"
+          name="q"
+          defaultValue={term}
+          placeholder="Search cases, clients, documents…"
+          aria-label="Search cases, clients and documents"
+        />
+      </form>
 
       <Link
         href="/notifications"
         className="topbar-icon-btn"
-        aria-label={`Notifications (${NOTIFICATIONS.length} unread)`}
+        aria-label={
+          pressing === 0
+            ? "Notifications"
+            : `Notifications (${String(pressing)} need attention)`
+        }
       >
         <i
           className="ph-duotone ph-bell"
           style={{ fontSize: 22 }}
           aria-hidden
         />
-        <span className="badge" aria-hidden>
-          {NOTIFICATIONS.length}
-        </span>
+        {/* No badge at all when there is nothing, rather than a "0". */}
+        {pressing === 0 ? null : (
+          <span className="badge" aria-hidden>
+            {pressing}
+          </span>
+        )}
       </Link>
 
       <div className="topbar-identity">

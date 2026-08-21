@@ -26,9 +26,12 @@ import { canAccessPath, itemForPath } from "@/lib/nav";
  */
 export function InternalShell({
   session,
+  needsAttention,
   children,
 }: {
   session: Session;
+  /** How many notices are overdue, for the masthead badge. */
+  needsAttention: number;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -40,7 +43,10 @@ export function InternalShell({
   return (
     <SessionProvider session={session}>
       <div className="shell">
-        <Topbar onToggleNav={() => setNavOpen((open) => !open)} />
+        <Topbar
+          onToggleNav={() => setNavOpen((open) => !open)}
+          needsAttention={needsAttention}
+        />
         <div className="shell-body">
           {role !== undefined && (
             <Sidebar

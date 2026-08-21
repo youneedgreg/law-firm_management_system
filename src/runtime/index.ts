@@ -10,6 +10,7 @@ import { DocumentRepositoryLive } from "../infra/sql/document-repository";
 import { TaskRepositoryLive } from "../infra/sql/task-repository";
 import { MessageRepositoryLive } from "../infra/sql/message-repository";
 import { ReportRepositoryLive } from "../infra/sql/report-repository";
+import { SearchRepositoryLive } from "../infra/sql/search-repository";
 import {
   ContactRepositoryLive,
   PrecedentRepositoryLive,
@@ -32,6 +33,7 @@ import { NoticeService } from "../services/notice-service";
 import { FirmService } from "../services/firm-service";
 import { LibraryService } from "../services/library-service";
 import { ReportService } from "../services/report-service";
+import { SearchService } from "../services/search-service";
 import { HearingService } from "../services/hearing-service";
 import { TimeService } from "../services/time-service";
 
@@ -66,6 +68,7 @@ const repositories = Layer.mergeAll(
   ContactRepositoryLive,
   PrecedentRepositoryLive,
   ReportRepositoryLive,
+  SearchRepositoryLive,
   TransactorLive,
 ).pipe(Layer.provide(PgLive));
 
@@ -125,6 +128,7 @@ const derived = Layer.mergeAll(
   FirmService.Default,
   LibraryService.Default,
   ReportService.Default,
+  SearchService.Default,
   AuditLog.Default,
   IdentityService.Default,
 ).pipe(

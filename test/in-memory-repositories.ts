@@ -10,6 +10,7 @@ import * as Correspondence from "@/domain/message/message";
 import type * as Log from "@/domain/firm/contact";
 import type * as Library from "@/domain/firm/precedent";
 import { ReportRepository } from "@/services/reports";
+import { SearchRepository } from "@/services/search";
 import type * as Documents from "@/domain/document/document";
 import type * as Matter from "@/domain/case/case";
 import type * as Client from "@/domain/client/client";
@@ -1024,6 +1025,114 @@ const tally = (values: readonly string[]): readonly [string, number][] => {
     counts.set(value, (counts.get(value) ?? 0) + 1);
   }
   return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+};
+
+/**
+ * Search, over arrays.
+ *
+ * **The scope is applied here too, and that is the point of the fake.** A stub
+ * that returned everything regardless of `visibleTo` would let a service test
+ * assert "a portal user finds only their own matters" and pass for the wrong
+ * reason — the assertion would be checking the fake rather than the code. So
+ * the filtering is reproduced, and the tests that matter would fail if
+ * `SearchService` stopped passing the scope down.
+ */
+export const inMemorySearch = (firm: {
+  readonly matters: readonly Matter.Case[];
+  readonly clients: readonly Client.Client[];
+  readonly documents: readonly Documents.Document[];
+  readonly invoices: readonly Billing.Invoice[];
+}): Layer.Layer<SearchRepository> => {
+  const has = (haystack: string | undefined, term: string) =>
+    (haystack ?? "").toLowerCase().includes(term.toLowerCase());
+
+  const clientOf = (caseId: string) =>
+    firm.matters.find((matter) => matter.id === caseId)?.clientId;
+
+  return Layer.succeed(
+    SearchRepository,
+    SearchRepository.of({
+      matters: (term, visibleTo, limit) =>
+        Effect.succeed(
+          firm.matters
+            .filter(
+              (matter) =>
+                (visibleTo === undefined || matter.clientId === visibleTo) &&
+                (has(matter.number, term) ||
+                  has(matter.title, term) ||
+                  has(matter.causeNumber, term) ||
+                  matter.opposingParties.some((party) => has(party, term))),
+            )
+            .slice(0, limit)
+            .map((matter) => ({
+              kind: "Matter" as const,
+              href: `/cases/${matter.id}`,
+              reference: matter.number,
+              title: matter.title,
+              detail: "",
+              rank: matter.number.toLowerCase() === term.toLowerCase() ? 3 : 1,
+            })),
+        ),
+
+      clients: (term, visibleTo, limit) =>
+        Effect.succeed(
+          firm.clients
+            .filter(
+              (client) =>
+                (visibleTo === undefined || client.id === visibleTo) &&
+                (has(client.name, term) || has(client.number, term)),
+            )
+            .slice(0, limit)
+            .map((client) => ({
+              kind: "Client" as const,
+              href: `/clients/${client.id}`,
+              reference: client.number,
+              title: client.name,
+              detail: "",
+              rank: 1,
+            })),
+        ),
+
+      documents: (term, visibleTo, limit) =>
+        Effect.succeed(
+          firm.documents
+            .filter(
+              (document) =>
+                (visibleTo === undefined ||
+                  clientOf(document.caseId) === visibleTo) &&
+                has(document.name, term),
+            )
+            .slice(0, limit)
+            .map((document) => ({
+              kind: "Document" as const,
+              href: `/documents/${document.id}`,
+              reference: "",
+              title: document.name,
+              detail: "",
+              rank: 1,
+            })),
+        ),
+
+      invoices: (term, visibleTo, limit) =>
+        Effect.succeed(
+          firm.invoices
+            .filter(
+              (invoice) =>
+                (visibleTo === undefined || invoice.clientId === visibleTo) &&
+                has(invoice.number, term),
+            )
+            .slice(0, limit)
+            .map((invoice) => ({
+              kind: "Invoice" as const,
+              href: `/billing/invoices/${invoice.id}`,
+              reference: invoice.number,
+              title: "",
+              detail: "",
+              rank: 2,
+            })),
+        ),
+    }),
+  );
 };
 
 export const inMemoryPrecedents = (

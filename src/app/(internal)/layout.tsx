@@ -1,7 +1,9 @@
+import { Effect } from "effect";
 import { redirect } from "next/navigation";
 import { InternalShell } from "@/components/InternalShell";
 import { permissionsOf } from "@/domain/identity/permissions";
-import { signedIn } from "@/runtime/session";
+import { runAs, signedIn } from "@/runtime/session";
+import { NoticeService, pressing } from "@/services/notice-service";
 
 // A route group adds no URL segment, so this layout sits at "/" alongside the
 // root layout and nests inside it, wrapping every staff-facing route.
@@ -24,9 +26,25 @@ export default async function InternalLayout({ children }: LayoutProps<"/">) {
 
   if (principal._tag === "PortalUser") redirect("/portal");
 
+  /**
+   * The badge count, read here because the masthead is on every page.
+   *
+   * It is the *derived* notice feed rather than a stored unread count — see
+   * `notice-service.ts` for why there is no notifications table. The cost is
+   * that this runs on every internal page load; the benefit is that the number
+   * cannot be wrong, which a cached count eventually is.
+   */
+  const needsAttention = await runAs(
+    Effect.map(
+      Effect.flatMap(NoticeService, (service) => service.feed()),
+      pressing,
+    ),
+  );
+
   return (
     <InternalShell
       session={{ principal, permissions: permissionsOf(principal) }}
+      needsAttention={needsAttention}
     >
       {children}
     </InternalShell>
