@@ -209,6 +209,28 @@ that has built recently and fails on a fresh checkout.
 That failure mode — green locally, red in CI, because of state a clean checkout
 does not have — is what `verify:clean` exists to catch before pushing.
 
+### Configuration
+
+Three variables are required — `DATABASE_URL`, `BETTER_AUTH_SECRET` and
+`BLOB_READ_WRITE_TOKEN` — and every one of them is read once, at startup,
+through a validated schema in `src/infra/config.ts`. A malformed connection
+string fails immediately and says what is wrong, rather than failing at the
+first query with a message about `undefined`.
+
+The rest are optional and have defaults that suit where they run:
+
+| Variable                      | Default                                | What it changes                                          |
+| ----------------------------- | -------------------------------------- | -------------------------------------------------------- |
+| `LOG_LEVEL`                   | `Info`                                 | Anything Effect's `LogLevel` accepts. A typo is refused  |
+| `LOG_FORMAT`                  | `json` when deployed, `pretty` locally | A drain parses one and cannot filter the other           |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | unset                                  | Where traces go. Unset, spans are created and dropped    |
+| `OTEL_EXPORTER_OTLP_HEADERS`  | unset                                  | The backend's auth header, if it wants one               |
+| `DATABASE_MAX_CONNECTIONS`    | `5`                                    | Neon pools at the proxy, so a small local pool is plenty |
+
+`GET /api/health` reports whether the database answered, how long it took, and
+which commit is serving. It is unauthenticated and says nothing about _why_ a
+dependency failed; that goes to the log.
+
 This repository is trunk-based: all work lands on `main`, with no feature
 branches or pull requests. Two hooks stand in for the review gate — pre-commit
 runs Prettier and ESLint on staged files, and pre-push runs the lockfile check,
@@ -219,30 +241,37 @@ the build, on every push to `main`, which also deploys.
 
 The distinction between built and planned matters, so here it is plainly.
 
-**Working today:** all 27 routes, ~16,000 lines of TypeScript beside ~6,500
-lines of tests and ~1,550 lines of CSS, deployed to Vercel. **Matters are real end to end**: a Kenyan legal
-domain modelled from statute, Neon Postgres behind repositories, `CaseService`,
-an `HttpApi` contract from which the router, the client and the OpenAPI document
-are all derived, and — in the browser — `@effect-rx/rx-react` atoms that read the
-caseload through that generated client and move a matter through its lifecycle
-optimistically. **Identity is real too**: sessions in Postgres, a `CurrentUser`
-that every service _requires in its type_ — so an unauthorized read does not
-compile — permissions as data rather than as checks scattered through
-components, and an audit trail written inside each mutation's own transaction
-into a table Postgres refuses to let anybody update. 517 unit tests and 39
-integration tests, architecture boundaries enforced by the linter, CI on every
-push, and ten ADRs.
+**Working today:** every route reads Postgres. Twenty modules — matters,
+clients, billing, trust, time, the court diary, documents, tasks,
+correspondence, the client portal, reports, search, appointments and the
+dashboard — go through a service, a repository and a migration, and the
+wireframe's seed arrays survive only as the demonstration dataset's source,
+decoded through the domain schemas by the seed script. **Identity is real**:
+sessions in Postgres, a `CurrentUser` that every service _requires in its type_
+— so an unauthorized read does not compile — permissions as data rather than as
+checks scattered through components, and an audit trail written inside each
+mutation's own transaction into a table Postgres refuses to let anybody update.
+An `HttpApi` contract from which the router, the generated client and the
+OpenAPI document are all derived, and `@effect-rx/rx-react` atoms that read
+through that client and move a matter through its lifecycle optimistically.
 
-Every other module still runs on the wireframe's seed arrays, with its create
-flow persisting to the browser through an Effect `KeyValueStore`: clients,
-hearings, tasks, time entries, appointments, documents, invoices and
-communications. Filtering, search, and the portal's document and message
-screens.
+**And it can be diagnosed.** Effect's spans nest inside Next's, so a slow
+request reads top to bottom — the route, the boundary, the repository operation,
+the statements underneath it. Every log line inside a request carries the trace
+id, because the logger reads it from the fiber rather than being handed it.
+Transient database failures are retried by what the previous attempt _did_, so a
+read replays where a write refuses to; every call that leaves the process has a
+time budget; and the authentication endpoints are throttled by a counter that
+cannot be turned into a lockout. 1,000 unit tests and 49 integration tests,
+architecture boundaries enforced by the linter, CI on every push, and eleven
+ADRs.
 
-**Not built yet:** the eight modules listed above. Their data lives in `src/lib/data/*.ts` as seed arrays, so those
-screens are per-browser on the live demo: what you create there is yours alone
-and disappears when you clear site data. Every import of those files raises an
-ESLint warning — 54 today — which doubles as the migration checklist.
+**Not built yet:** accessibility and responsive work, loading and empty states,
+Playwright end-to-end coverage, and the portfolio packaging — screenshots, an
+architecture diagram, a one-click demo login. Phases 9 and 10 in the roadmap.
+One thing in Phase 8 is configuration rather than code: traces are exported only
+once an OTLP endpoint is set, and no account has been provisioned for the live
+demo.
 
 **Deliberately out of scope:** multi-tenancy. One firm, seven roles. Adding
 `firm_id` to every table and every query would be plumbing rather than signal;
@@ -251,8 +280,8 @@ the reasoning is in [ADR 0003](docs/adr/0003-single-firm-scope.md).
 ## Documentation
 
 - [`ROADMAP.md`](ROADMAP.md) — the plan, phase by phase, with progress
-- [`docs/adr/`](docs/adr/) — ten architecture decision records, including the
-  arguments against each choice
+- [`docs/adr/`](docs/adr/) — eleven architecture decision records, including
+  the arguments against each choice
 
 ---
 

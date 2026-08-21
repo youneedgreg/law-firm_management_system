@@ -221,6 +221,16 @@ export type AppStartupFailure = Layer.Layer.Error<typeof AppLayer>;
  * In production this is a plain singleton; the indirection costs one property
  * lookup and removes a class of local-only failure that is miserable to
  * diagnose, because it only appears after twenty edits.
+ *
+ * **It has a cost, found in Phase 8: editing the wiring in this file needs a
+ * dev-server restart.** The runtime is built from whatever `AppLayer` was on
+ * the first request and is then kept, so a service added below is not in the
+ * graph the running process holds — and the symptom is `Service not found` for
+ * a tag that is plainly right there in the source. Rebuilding on every
+ * re-evaluation would fix it and reintroduce the leaked pool, because
+ * `AppLayer` is a new object on every module reload. The restart is the
+ * cheaper half of that trade, written down here because the error message
+ * points at the wrong file.
  */
 const RUNTIME = Symbol.for("oklaw.runtime");
 
