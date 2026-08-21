@@ -1,4 +1,4 @@
-import { Context, Effect, Option, Schema } from "effect";
+import { Context, type Duration, Effect, Option, Schema } from "effect";
 import type * as Audit from "../domain/audit/entry";
 import type * as Billing from "../domain/billing/invoice";
 import type * as Identity from "../domain/identity/principal";
@@ -919,3 +919,22 @@ export interface AttemptLimiter {
 
 export const AttemptLimiter =
   Context.GenericTag<AttemptLimiter>("AttemptLimiter");
+
+/**
+ * Whether the store is answering, and how quickly.
+ *
+ * Declared beside the repositories because it is one — the smallest possible
+ * one — and it exists so that `/api/health` can ask the question without
+ * reaching for `SqlClient` directly. A route that imported `@effect/sql` would
+ * be a route that knows the application is stored in Postgres, which is the one
+ * thing this layering has spent seven phases keeping out of `app/`.
+ *
+ * It answers with the round trip rather than with a boolean, because a database
+ * that replies in nine hundred milliseconds is a fact worth putting on a
+ * dashboard, and "up" cannot express it.
+ */
+export interface DatabaseProbe {
+  readonly ping: () => Effect.Effect<Duration.Duration, RepositoryFailure>;
+}
+
+export const DatabaseProbe = Context.GenericTag<DatabaseProbe>("DatabaseProbe");

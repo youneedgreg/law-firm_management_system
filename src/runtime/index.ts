@@ -5,6 +5,7 @@ import { AdvocateRepositoryLive } from "../infra/sql/advocate-repository";
 import { AppointmentRepositoryLive } from "../infra/sql/appointment-repository";
 import { AttemptLimiterLive } from "../infra/sql/attempt-repository";
 import { AuditRepositoryLive } from "../infra/sql/audit-repository";
+import { DatabaseProbeLive } from "../infra/sql/probe";
 import { CaseRepositoryLive } from "../infra/sql/case-repository";
 import { PgLive } from "../infra/sql/client";
 import { ClientRepositoryLive } from "../infra/sql/client-repository";
@@ -104,6 +105,24 @@ const sessions = SessionGatewayLive;
 const blob = DocumentStoreLive;
 
 /**
+ * The one store a route may reach directly, and the reason it is separate.
+ *
+ * Every repository above is *provided* to the services and never exposed, which
+ * is what stops a page reading `CaseRepository` and skipping the authorization
+ * in `CaseService`. `/api/health` has no service to go through and needs no
+ * authorization to bypass: the question is "is Postgres answering", and there
+ * is no rule about who may ask it.
+ *
+ * So it is merged rather than provided, and it is the only one. Its interface
+ * is a single `SELECT 1`, so the exception costs nothing — there is no
+ * business logic it could be used to go around.
+ *
+ * `PgLive` is the same layer value the repositories are built from, so Effect's
+ * memoisation hands both branches the one pool.
+ */
+const probe = DatabaseProbeLive.pipe(Layer.provide(PgLive));
+
+/**
  * Everything a route may ask for.
  *
  * Deliberately only what is wired. A layer listed here that nothing uses is a
@@ -171,6 +190,7 @@ const derived = Layer.mergeAll(
 export const AppLayer = Layer.mergeAll(
   NoticeService.Default,
   DashboardService.Default,
+  probe,
 ).pipe(
   Layer.provideMerge(derived),
   Layer.merge(LoggingLive),

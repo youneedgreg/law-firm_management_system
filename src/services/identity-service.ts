@@ -20,7 +20,30 @@ import {
  * Auth, in `infra/auth/`) answers "is this cookie a live session, and whose".
  * This service answers "and who is that", which is a join to `advocates` or
  * `clients` that Better Auth knows nothing about — and it is the layer where a
- * sign-in becomes an audit entry.
+ * sign-in becomes an audit entry, and since Phase 8 the layer where an attempt
+ * is counted.
+ *
+ * ## Better Auth has a limiter of its own, and it does not cover the thing that
+ * matters
+ *
+ * Worth knowing before reading the throttle below, because it looks redundant
+ * until you check. Better Auth enables rate limiting by default *in production*
+ * — three requests per sixty seconds on `/request-password-reset`, three per
+ * ten on `/sign-in`. Found by running the reset endpoint seven times and
+ * getting a `429` on the fourth, from a limiter this codebase did not write.
+ *
+ * Two things follow, and they point the same way.
+ *
+ * **It does not protect sign-in here.** This application signs in through a
+ * Server Action, and `handle` refuses `/sign-in/email` outright so that there
+ * is one audited door. Better Auth's rule matches a path nothing reaches.
+ *
+ * **It is stored in memory.** Which on serverless is the control described in
+ * `domain/identity/throttle.ts` as not being one: several instances, several
+ * heaps, all of it forgotten on the next deploy.
+ *
+ * So it is left enabled — a per-instance limit costs nothing and is a
+ * reasonable second line — and the durable limit is the one below.
  */
 
 /**
