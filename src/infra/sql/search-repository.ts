@@ -6,7 +6,7 @@ import {
   SearchRepository,
   type VisibleTo,
 } from "../../services/search";
-import { failure } from "./failure";
+import { reading } from "./resilience";
 
 /**
  * Global search, in Postgres.
@@ -113,7 +113,7 @@ export const SearchRepositoryLive = Layer.effect(
            LIMIT ${limit}
         `.pipe(
           Effect.map((rows) => rows.map(hit("Matter", (id) => `/cases/${id}`))),
-          Effect.mapError(failure("searchMatters")),
+          reading("SearchRepository.searchMatters"),
         );
       },
 
@@ -145,7 +145,7 @@ export const SearchRepositoryLive = Layer.effect(
           Effect.map((rows) =>
             rows.map(hit("Client", (id) => `/clients/${id}`)),
           ),
-          Effect.mapError(failure("searchClients")),
+          reading("SearchRepository.searchClients"),
         );
       },
 
@@ -182,7 +182,7 @@ export const SearchRepositoryLive = Layer.effect(
           Effect.map((rows) =>
             rows.map(hit("Document", (id) => `/documents/${id}`)),
           ),
-          Effect.mapError(failure("searchDocuments")),
+          reading("SearchRepository.searchDocuments"),
         );
       },
 
@@ -210,7 +210,7 @@ export const SearchRepositoryLive = Layer.effect(
           Effect.map((rows) =>
             rows.map(hit("Invoice", (id) => `/billing/invoices/${id}`)),
           ),
-          Effect.mapError(failure("searchInvoices")),
+          reading("SearchRepository.searchInvoices"),
         );
       },
     });

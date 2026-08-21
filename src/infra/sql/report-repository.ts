@@ -10,7 +10,7 @@ import {
   ReportRepository,
 } from "../../services/reports";
 import { CalendarDate } from "./columns";
-import { failure } from "./failure";
+import { reading } from "./resilience";
 
 /**
  * The reporting aggregates, in SQL.
@@ -138,7 +138,7 @@ export const ReportRepositoryLive = Layer.effect(
               };
             });
           }),
-          Effect.mapError(failure("ageing")),
+          reading("ReportRepository.ageing"),
         ),
 
       /**
@@ -188,7 +188,7 @@ export const ReportRepositoryLive = Layer.effect(
               collected: cents(row.collected),
             })),
           ),
-          Effect.mapError(failure("monthly")),
+          reading("ReportRepository.monthly"),
         ),
 
       /**
@@ -243,7 +243,7 @@ export const ReportRepositoryLive = Layer.effect(
               billed: cents(row.billed),
             })),
           ),
-          Effect.mapError(failure("productivity")),
+          reading("ReportRepository.productivity"),
         ),
 
       /** Who owes the firm money, most first. */
@@ -287,7 +287,7 @@ export const ReportRepositoryLive = Layer.effect(
               invoices: Number(row.invoices),
             })),
           ),
-          Effect.mapError(failure("debtors")),
+          reading("ReportRepository.debtors"),
         ),
 
       mattersByStatus: () =>
@@ -303,7 +303,7 @@ export const ReportRepositoryLive = Layer.effect(
               count: Number(row.count),
             })),
           ),
-          Effect.mapError(failure("mattersByStatus")),
+          reading("ReportRepository.mattersByStatus"),
         ),
 
       mattersByType: () =>
@@ -316,7 +316,7 @@ export const ReportRepositoryLive = Layer.effect(
           Effect.map((rows) =>
             rows.map((row) => ({ type: row.type, count: Number(row.count) })),
           ),
-          Effect.mapError(failure("mattersByType")),
+          reading("ReportRepository.mattersByType"),
         ),
     });
   }),

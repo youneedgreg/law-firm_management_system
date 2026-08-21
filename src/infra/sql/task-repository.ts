@@ -7,7 +7,7 @@ import {
   type RepositoryFailure,
   TaskRepository,
 } from "../../services/repositories";
-import { failure } from "./failure";
+import { reading, writing } from "./resilience";
 import { TaskFromRow, taskRow } from "./task-model";
 
 /**
@@ -51,7 +51,7 @@ export const TaskRepositoryLive = Layer.effect(
     return TaskRepository.of({
       byId: (id) =>
         findById(id).pipe(
-          Effect.mapError(failure("byId")),
+          reading("TaskRepository.byId"),
           Effect.flatMap(
             Option.match({
               onNone: () => Effect.fail(new NotFound({ entity: "Task", id })),
@@ -61,9 +61,9 @@ export const TaskRepositoryLive = Layer.effect(
         ),
 
       forCase: (caseId) =>
-        forCase(caseId).pipe(Effect.mapError(failure("forCase"))),
+        forCase(caseId).pipe(reading("TaskRepository.forCase")),
 
-      open: () => open().pipe(Effect.mapError(failure("open"))),
+      open: () => open().pipe(reading("TaskRepository.open")),
 
       openCount: (caseId) =>
         sql<{ count: string }>`
@@ -73,7 +73,7 @@ export const TaskRepositoryLive = Layer.effect(
         `.pipe(
           // `count(*)` is a bigint, and the driver hands those back as strings.
           Effect.map((rows) => Number(rows[0]?.count ?? 0)),
-          Effect.mapError(failure("openCount")),
+          reading("TaskRepository.openCount"),
         ),
 
       save: (task) =>
@@ -85,7 +85,7 @@ export const TaskRepositoryLive = Layer.effect(
             `,
           ),
           Effect.as(task),
-          Effect.mapError(failure("save")),
+          writing("TaskRepository.save"),
         ) satisfies Effect.Effect<Work.Task, RepositoryFailure>,
     });
   }),

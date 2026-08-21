@@ -8,7 +8,7 @@ import {
   type RepositoryFailure,
 } from "../../services/repositories";
 import { ClientFromRow } from "./client-model";
-import { failure } from "./failure";
+import { reading, writing } from "./resilience";
 
 /**
  * Clients, in Postgres — a client and its contacts, across two tables.
@@ -74,14 +74,14 @@ export const ClientRepositoryLive = Layer.effect(
     const all = () =>
       sql<RawRow>`SELECT * FROM clients ORDER BY number`.pipe(
         Effect.flatMap(assemble),
-        Effect.mapError(failure("all")),
+        reading("ClientRepository.all"),
       );
 
     const findById = (id: ClientId) =>
       sql<RawRow>`SELECT * FROM clients WHERE id = ${id}`.pipe(
         Effect.flatMap(assemble),
         Effect.map((clients) => Option.fromNullable(clients[0])),
-        Effect.mapError(failure("findById")),
+        reading("ClientRepository.findById"),
       );
 
     return ClientRepository.of({
@@ -137,7 +137,7 @@ export const ClientRepositoryLive = Layer.effect(
             ),
           ),
           Effect.as(client),
-          Effect.mapError(failure("save")),
+          writing("ClientRepository.save"),
         ) satisfies Effect.Effect<Client.Client, RepositoryFailure>,
     });
   }),

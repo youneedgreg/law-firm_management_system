@@ -7,7 +7,7 @@ import {
   TimeRepository,
   type RepositoryFailure,
 } from "../../services/repositories";
-import { failure } from "./failure";
+import { reading, writing } from "./resilience";
 import { TimeEntryFromRow } from "./time-model";
 
 /**
@@ -91,7 +91,7 @@ export const TimeRepositoryLive = Layer.effect(
     return TimeRepository.of({
       byId: (id) =>
         findById(id).pipe(
-          Effect.mapError(failure("byId")),
+          reading("TimeRepository.byId"),
           Effect.flatMap(
             Option.match({
               onNone: () =>
@@ -102,18 +102,18 @@ export const TimeRepositoryLive = Layer.effect(
         ),
 
       forCase: (caseId) =>
-        forCase(caseId).pipe(Effect.mapError(failure("forCase"))),
+        forCase(caseId).pipe(reading("TimeRepository.forCase")),
 
       forAdvocate: (advocateId) =>
-        forAdvocate(advocateId).pipe(Effect.mapError(failure("forAdvocate"))),
+        forAdvocate(advocateId).pipe(reading("TimeRepository.forAdvocate")),
 
       unbilled: (caseId) =>
         (caseId === undefined
           ? unbilledEverywhere()
           : unbilledForCase(caseId)
-        ).pipe(Effect.mapError(failure("unbilled"))),
+        ).pipe(reading("TimeRepository.unbilled")),
 
-      recent: (limit) => recent(limit).pipe(Effect.mapError(failure("recent"))),
+      recent: (limit) => recent(limit).pipe(reading("TimeRepository.recent")),
 
       save: (entry) =>
         Schema.encode(TimeEntryFromRow)(entry).pipe(
@@ -124,7 +124,7 @@ export const TimeRepositoryLive = Layer.effect(
             `,
           ),
           Effect.as(entry),
-          Effect.mapError(failure("save")),
+          writing("TimeRepository.save"),
         ) satisfies Effect.Effect<Time.TimeEntry, RepositoryFailure>,
 
       /**
@@ -162,7 +162,7 @@ export const TimeRepositoryLive = Layer.effect(
               RETURNING id
             `.pipe(
               Effect.map((rows) => rows.length),
-              Effect.mapError(failure("carryOnto")),
+              writing("TimeRepository.carryOnto"),
             ),
     });
   }),

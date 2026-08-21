@@ -8,7 +8,7 @@ import {
   PrecedentRepository,
   type RepositoryFailure,
 } from "../../services/repositories";
-import { failure } from "./failure";
+import { reading, writing } from "./resilience";
 import {
   ContactFromRow,
   contactRow,
@@ -55,18 +55,19 @@ export const ContactRepositoryLive = Layer.effect(
 
     return ContactRepository.of({
       forClient: (clientId) =>
-        forClient(clientId).pipe(Effect.mapError(failure("forClient"))),
+        forClient(clientId).pipe(reading("ContactRepository.forClient")),
 
-      recent: (limit) => recent(limit).pipe(Effect.mapError(failure("recent"))),
+      recent: (limit) =>
+        recent(limit).pipe(reading("ContactRepository.recent")),
 
       latestPerClient: () =>
-        latestPerClient().pipe(Effect.mapError(failure("latestPerClient"))),
+        latestPerClient().pipe(reading("ContactRepository.latestPerClient")),
 
       log: (contact) =>
         Effect.sync(() => contactRow(contact)).pipe(
           Effect.flatMap((row) => sql`INSERT INTO contacts ${sql.insert(row)}`),
           Effect.as(contact),
-          Effect.mapError(failure("log")),
+          writing("ContactRepository.log"),
         ) satisfies Effect.Effect<Log.Contact, RepositoryFailure>,
     });
   }),
@@ -96,7 +97,7 @@ export const PrecedentRepositoryLive = Layer.effect(
     });
 
     return PrecedentRepository.of({
-      all: () => all().pipe(Effect.mapError(failure("all"))),
+      all: () => all().pipe(reading("PrecedentRepository.all")),
 
       save: (precedent) =>
         Effect.sync(() => precedentRow(precedent)).pipe(
@@ -107,7 +108,7 @@ export const PrecedentRepositoryLive = Layer.effect(
             `,
           ),
           Effect.as(precedent),
-          Effect.mapError(failure("save")),
+          writing("PrecedentRepository.save"),
         ) satisfies Effect.Effect<Library.Precedent, RepositoryFailure>,
     });
   }),

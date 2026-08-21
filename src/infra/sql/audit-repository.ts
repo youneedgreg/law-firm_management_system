@@ -2,7 +2,7 @@ import { SqlClient } from "@effect/sql";
 import { Effect, Layer, Option, ParseResult, Schema } from "effect";
 import * as Audit from "../../domain/audit/entry";
 import { AuditRepository } from "../../services/repositories";
-import { failure } from "./failure";
+import { reading, writing } from "./resilience";
 
 /**
  * The audit trail, in Postgres.
@@ -126,20 +126,20 @@ export const AuditRepositoryLive = Layer.effect(
               })}`,
           ),
           Effect.as(entry),
-          Effect.mapError(failure("record")),
+          writing("AuditRepository.record"),
         ),
 
       recent: (limit) =>
         sql<Record<string, unknown>>`
           SELECT * FROM audit_log ORDER BY at DESC, id LIMIT ${limit}
-        `.pipe(Effect.flatMap(read), Effect.mapError(failure("recent"))),
+        `.pipe(Effect.flatMap(read), reading("AuditRepository.recent")),
 
       forEntity: (entity, id) =>
         sql<Record<string, unknown>>`
           SELECT * FROM audit_log
            WHERE entity = ${entity} AND entity_id = ${id}
            ORDER BY at DESC, id
-        `.pipe(Effect.flatMap(read), Effect.mapError(failure("forEntity"))),
+        `.pipe(Effect.flatMap(read), reading("AuditRepository.forEntity")),
     });
   }),
 );

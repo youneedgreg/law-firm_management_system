@@ -6,7 +6,7 @@ import {
   MessageRepository,
   type RepositoryFailure,
 } from "../../services/repositories";
-import { failure } from "./failure";
+import { reading, writing } from "./resilience";
 import { MessageFromRow, messageRow } from "./message-model";
 
 /**
@@ -70,21 +70,21 @@ export const MessageRepositoryLive = Layer.effect(
 
     return MessageRepository.of({
       forClient: (clientId) =>
-        forClient(clientId).pipe(Effect.mapError(failure("forClient"))),
+        forClient(clientId).pipe(reading("MessageRepository.forClient")),
 
       unanswered: () =>
         unanswered().pipe(
           Effect.map((rows) =>
             [...rows].sort((a, b) => a.sentAt.getTime() - b.sentAt.getTime()),
           ),
-          Effect.mapError(failure("unanswered")),
+          reading("MessageRepository.unanswered"),
         ),
 
       send: (message) =>
         Effect.sync(() => messageRow(message)).pipe(
           Effect.flatMap((row) => sql`INSERT INTO messages ${sql.insert(row)}`),
           Effect.as(message),
-          Effect.mapError(failure("send")),
+          writing("MessageRepository.send"),
         ) satisfies Effect.Effect<Correspondence.Message, RepositoryFailure>,
 
       markRead: (ids, at) =>
@@ -105,7 +105,7 @@ export const MessageRepositoryLive = Layer.effect(
                * statement and leave nothing marked.
                */
               Effect.map((rows) => rows.length),
-              Effect.mapError(failure("markRead")),
+              writing("MessageRepository.markRead"),
             ),
     });
   }),

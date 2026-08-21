@@ -7,7 +7,7 @@ import {
   type RepositoryFailure,
 } from "../../services/repositories";
 import { AppointmentFromRow, appointmentRow } from "./appointment-model";
-import { failure } from "./failure";
+import { reading, writing } from "./resilience";
 
 /**
  * Appointments, in Postgres.
@@ -49,11 +49,12 @@ export const AppointmentRepositoryLive = Layer.effect(
     });
 
     return AppointmentRepository.of({
-      upcoming: () => upcoming().pipe(Effect.mapError(failure("upcoming"))),
+      upcoming: () =>
+        upcoming().pipe(reading("AppointmentRepository.upcoming")),
 
       forAdvocateOn: (advocateId, day) =>
         forAdvocateOn({ advocateId, day }).pipe(
-          Effect.mapError(failure("forAdvocateOn")),
+          reading("AppointmentRepository.forAdvocateOn"),
         ),
 
       save: (appointment) =>
@@ -65,7 +66,7 @@ export const AppointmentRepositoryLive = Layer.effect(
             `,
           ),
           Effect.as(appointment),
-          Effect.mapError(failure("save")),
+          writing("AppointmentRepository.save"),
         ) satisfies Effect.Effect<Diary.Appointment, RepositoryFailure>,
     });
   }),

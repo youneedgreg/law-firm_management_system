@@ -42,11 +42,32 @@ export const failure = (operation: string) => (error: QueryFailure) =>
 export const isUniqueViolation = (
   error: QueryFailure,
   constraint: string,
-): boolean => unique(error, constraint, 0);
+): boolean =>
+  chain(error).some(
+    (link) => link.code === "23505" && link.constraint === constraint,
+  );
 
 /**
- * The cause chain is walked rather than read one level down, and that is not
- * defensiveness — it is a bug this had.
+ * The SQLSTATE and socket codes anywhere in the chain, outermost first.
+ *
+ * What `resilience.ts` decides retryability from. It is a list rather than a
+ * single value because the driver's code and the transaction wrapper's are at
+ * different depths, and which one is present depends on how the statement was
+ * run — see `chain`.
+ */
+export const codesIn = (error: unknown): readonly string[] =>
+  chain(error)
+    .map((link) => link.code)
+    .filter((code): code is string => typeof code === "string");
+
+interface Link {
+  readonly code?: unknown;
+  readonly constraint?: unknown;
+}
+
+/**
+ * The cause chain, walked rather than read one level down — and that is not
+ * defensiveness, it is a bug this had.
  *
  * A statement run directly puts the driver's error on `SqlError.cause`, which
  * is what the original one-level version assumed. A statement run inside
@@ -65,13 +86,17 @@ export const isUniqueViolation = (
  * The depth cap is there so a cyclic `cause` cannot spin. Five is well beyond
  * anything `@effect/sql` nests.
  */
-const unique = (error: unknown, constraint: string, depth: number): boolean => {
-  if (depth > 5 || typeof error !== "object" || error === null) return false;
+const chain = (error: unknown): readonly Link[] => {
+  const links: Link[] = [];
+  let current = error;
 
-  const detail = error as { code?: unknown; constraint?: unknown };
-  if (detail.code === "23505" && detail.constraint === constraint) return true;
+  for (let depth = 0; depth <= 5; depth++) {
+    if (typeof current !== "object" || current === null) break;
 
-  return "cause" in error
-    ? unique((error as { cause: unknown }).cause, constraint, depth + 1)
-    : false;
+    links.push(current as Link);
+    if (!("cause" in current)) break;
+    current = (current as { cause: unknown }).cause;
+  }
+
+  return links;
 };

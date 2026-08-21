@@ -1,6 +1,6 @@
 import { isAPIError } from "better-auth/api";
 import { parseSetCookieHeader, toCookieOptions } from "better-auth/cookies";
-import { Effect, Layer, Option, Schema } from "effect";
+import { Duration, Effect, Layer, Option, Schema } from "effect";
 import { UserId } from "../../domain/shared/ids";
 import {
   InvalidCredentials,
@@ -8,6 +8,7 @@ import {
   type SessionCookie,
   SessionGateway,
 } from "../../services/repositories";
+import { within } from "../budget";
 import { Auth, AuthLive } from "./auth";
 
 /**
@@ -64,6 +65,37 @@ const userIdIn = (body: unknown): unknown =>
     ? body.user.id
     : undefined;
 
+/**
+ * Budgets for the four calls, and the first one is the one that matters.
+ *
+ * `identify` runs on **every request** — every page, every action, every API
+ * call reads the cookie before it does anything else. A hang there is not a
+ * slow sign-in, it is the whole application unresponsive, so it gets the
+ * tightest budget of the four: it is a single indexed read plus a signature
+ * check, and five seconds is already an eternity for that.
+ *
+ * `signIn` gets longer because password hashing is *supposed* to be slow. That
+ * is the entire security property, and a budget tuned to a database read would
+ * fail every login on a cold function.
+ *
+ * All four fail as `RepositoryFailure`, which is what this gateway already says
+ * when the store will not answer — the caller does not learn a new word because
+ * the reason was a clock rather than a socket.
+ */
+const BUDGET = {
+  identify: Duration.seconds(5),
+  signIn: Duration.seconds(10),
+  signOut: Duration.seconds(5),
+  handle: Duration.seconds(10),
+} as const;
+
+const budgeted = <E>(operation: keyof typeof BUDGET) =>
+  within<E | RepositoryFailure>({
+    operation: `SessionGateway.${operation}`,
+    duration: BUDGET[operation],
+    onTimeout: (detail) => new RepositoryFailure({ operation, detail }),
+  });
+
 export const SessionGatewayLive = Layer.effect(
   SessionGateway,
   Effect.gen(function* () {
@@ -92,6 +124,7 @@ export const SessionGatewayLive = Layer.effect(
                 detail: error.message,
               }),
           ),
+          budgeted("identify"),
         ),
 
       /**
@@ -158,6 +191,7 @@ export const SessionGatewayLive = Layer.effect(
                 detail: error.message,
               }),
           ),
+          budgeted<InvalidCredentials>("signIn"),
         ),
 
       /**
@@ -178,7 +212,15 @@ export const SessionGatewayLive = Layer.effect(
             }),
         }).pipe(
           Effect.map(cookiesOf),
-          Effect.orElseSucceed(() => []),
+          budgeted("signOut"),
+          /**
+           * After the budget, not before it. `orElseSucceed` swallows every
+           * failure, so a timeout placed outside it would be swallowed too —
+           * and a sign-out that hung for five seconds and then reported success
+           * is the worst available outcome, because the browser keeps a cookie
+           * nobody knows it still has.
+           */
+          Effect.orElseSucceed((): readonly SessionCookie[] => []),
         ),
 
       /**
@@ -197,7 +239,7 @@ export const SessionGatewayLive = Layer.effect(
               operation: "auth handler",
               detail: String(cause),
             }),
-        }),
+        }).pipe(budgeted("handle")),
     });
   }),
 ).pipe(Layer.provide(AuthLive));

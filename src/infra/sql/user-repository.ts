@@ -2,7 +2,7 @@ import { SqlClient } from "@effect/sql";
 import { Effect, Layer, Option, ParseResult, Schema } from "effect";
 import * as Identity from "../../domain/identity/principal";
 import { NotFound, UserRepository } from "../../services/repositories";
-import { failure } from "./failure";
+import { reading, writing } from "./resilience";
 
 /**
  * Logins, in Postgres.
@@ -132,7 +132,7 @@ export const UserRepositoryLive = Layer.effect(
             ? Effect.succeedNone
             : Effect.map(decode(rows[0]), Option.some),
         ),
-        Effect.mapError(failure(`principal by ${where}`)),
+        reading(`UserRepository.principalBy${where === "id" ? "Id" : "Email"}`),
       );
 
     return UserRepository.of({
@@ -177,7 +177,7 @@ export const UserRepositoryLive = Layer.effect(
             client_id   = EXCLUDED.client_id,
             updated_at  = now()
         `.pipe(
-          Effect.mapError(failure("provision")),
+          writing("UserRepository.provision"),
           Effect.zipRight(lookup("email", login.email)),
           Effect.flatMap(
             Option.match({

@@ -5,6 +5,7 @@ import * as Money from "../../domain/shared/money";
 import * as Ledger from "../../domain/trust/ledger";
 import { TrustRepository } from "../../services/repositories";
 import { failure } from "./failure";
+import { guarded, reading, writing } from "./resilience";
 import { isRule10Violation } from "./rule10";
 
 /**
@@ -34,7 +35,7 @@ export const TrustRepositoryLive = Layer.effect(
         Effect.map((rows) =>
           Money.fromCents(Number(rows[0]?.balanceCents ?? 0)),
         ),
-        Effect.mapError(failure("balanceFor")),
+        reading("TrustRepository.balanceFor"),
       );
 
     const insert = (movement: Ledger.TrustMovement) => sql`
@@ -76,13 +77,13 @@ export const TrustRepositoryLive = Layer.effect(
               ...(row.reference === null ? {} : { reference: row.reference }),
             })),
           ),
-          Effect.mapError(failure("movementsFor")),
+          reading("TrustRepository.movementsFor"),
         ),
 
       recordDeposit: (movement) =>
         insert(movement).pipe(
           Effect.as(movement),
-          Effect.mapError(failure("recordDeposit")),
+          writing("TrustRepository.recordDeposit"),
         ),
 
       /**
@@ -97,6 +98,7 @@ export const TrustRepositoryLive = Layer.effect(
       recordWithdrawal: (movement) =>
         insert(movement).pipe(
           Effect.as(movement),
+          guarded("TrustRepository.recordWithdrawal", { replayable: false }),
           Effect.catchAll((error) =>
             isRule10Violation(error)
               ? balanceFor(movement.clientId).pipe(
@@ -110,7 +112,7 @@ export const TrustRepositoryLive = Layer.effect(
                     ),
                   ),
                 )
-              : Effect.fail(failure("recordWithdrawal")(error)),
+              : Effect.fail(failure("TrustRepository.recordWithdrawal")(error)),
           ),
         ),
 
@@ -119,7 +121,7 @@ export const TrustRepositoryLive = Layer.effect(
           SELECT client_id FROM client_trust_balances WHERE balance_cents < 0
         `.pipe(
           Effect.map((rows) => rows.map((row) => row.clientId as ClientId)),
-          Effect.mapError(failure("overdrawn")),
+          reading("TrustRepository.overdrawn"),
         ),
     });
   }),

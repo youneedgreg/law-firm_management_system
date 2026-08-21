@@ -1,6 +1,7 @@
 import { SqlClient } from "@effect/sql";
 import { Effect, Layer } from "effect";
 import { RepositoryFailure, Transactor } from "../../services/repositories";
+import { contended } from "./resilience";
 
 /**
  * `Transactor`, over `@effect/sql`.
@@ -18,6 +19,12 @@ import { RepositoryFailure, Transactor } from "../../services/repositories";
  * must not have to know that name — so it becomes `RepositoryFailure`, which is
  * the one word `services/` uses for "the store refused", exactly as every
  * repository in this directory already does.
+ *
+ * `contended` is Phase 8's addition and covers the one failure the
+ * statement-level retries cannot: a deadlock aborts the whole transaction, so
+ * retrying a *statement* inside it re-runs it in a transaction that no longer
+ * exists. It retries the `BEGIN` and everything after it, which is safe here
+ * and nowhere else — see `resilience.ts`.
  */
 
 const isSqlError = (error: unknown): error is { readonly message: string } =>
@@ -34,6 +41,7 @@ export const TransactorLive = Layer.effect(
     return Transactor.of({
       transaction: (effect) =>
         sql.withTransaction(effect).pipe(
+          contended,
           Effect.mapError((error) =>
             isSqlError(error)
               ? new RepositoryFailure({

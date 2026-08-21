@@ -10,6 +10,7 @@ import {
 } from "../../services/repositories";
 import { CaseFromRow } from "./case-model";
 import { failure, isUniqueViolation } from "./failure";
+import { guarded, reading } from "./resilience";
 
 /**
  * Matters, in Postgres.
@@ -60,11 +61,11 @@ export const CaseRepositoryLive = Layer.effect(
     });
 
     return CaseRepository.of({
-      findById: (id) => findById(id).pipe(Effect.mapError(failure("findById"))),
+      findById: (id) => findById(id).pipe(reading("CaseRepository.findById")),
 
       byId: (id) =>
         findById(id).pipe(
-          Effect.mapError(failure("byId")),
+          reading("CaseRepository.byId"),
           Effect.flatMap(
             Option.match({
               onNone: () => Effect.fail(new NotFound({ entity: "Case", id })),
@@ -74,12 +75,12 @@ export const CaseRepositoryLive = Layer.effect(
         ),
 
       forClient: (clientId) =>
-        forClient(clientId).pipe(Effect.mapError(failure("forClient"))),
+        forClient(clientId).pipe(reading("CaseRepository.forClient")),
 
       openMatters: () =>
-        openMatters().pipe(Effect.mapError(failure("openMatters"))),
+        openMatters().pipe(reading("CaseRepository.openMatters")),
 
-      all: () => all().pipe(Effect.mapError(failure("all"))),
+      all: () => all().pipe(reading("CaseRepository.all")),
 
       /**
        * Upsert, because `save` is the only write the interface offers and a
@@ -99,6 +100,7 @@ export const CaseRepositoryLive = Layer.effect(
             `,
           ),
           Effect.as(matter),
+          guarded("CaseRepository.save", { replayable: false }),
           Effect.mapError((error) =>
             /**
              * `ON CONFLICT (id)` handles the id, so the only conflict left is
@@ -109,7 +111,7 @@ export const CaseRepositoryLive = Layer.effect(
              */
             isUniqueViolation(error, "cases_number_key")
               ? new CaseNumberTaken({ number: matter.number })
-              : failure("save")(error),
+              : failure("CaseRepository.save")(error),
           ),
         ) satisfies Effect.Effect<
           Matter.Case,

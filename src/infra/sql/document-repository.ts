@@ -10,6 +10,7 @@ import {
 } from "../../services/repositories";
 import { DocumentFromRow } from "./document-model";
 import { failure, isUniqueViolation } from "./failure";
+import { guarded, reading, writing } from "./resilience";
 
 /**
  * Documents, in Postgres — an aggregate across two tables.
@@ -65,7 +66,7 @@ export const DocumentRepositoryLive = Layer.effect(
       byId: (id: DocumentId) =>
         sql<RawRow>`SELECT * FROM documents WHERE id = ${id}`.pipe(
           Effect.flatMap(assemble),
-          Effect.mapError(failure("byId")),
+          reading("DocumentRepository.byId"),
           Effect.flatMap((documents) =>
             Option.match(Option.fromNullable(documents[0]), {
               onNone: () =>
@@ -78,12 +79,12 @@ export const DocumentRepositoryLive = Layer.effect(
       forCase: (caseId: CaseId) =>
         sql<RawRow>`
           SELECT * FROM documents WHERE case_id = ${caseId} ORDER BY name
-        `.pipe(Effect.flatMap(assemble), Effect.mapError(failure("forCase"))),
+        `.pipe(Effect.flatMap(assemble), reading("DocumentRepository.forCase")),
 
       all: () =>
         sql<RawRow>`SELECT * FROM documents ORDER BY created_at DESC`.pipe(
           Effect.flatMap(assemble),
-          Effect.mapError(failure("all")),
+          reading("DocumentRepository.all"),
         ),
 
       /**
@@ -114,7 +115,7 @@ export const DocumentRepositoryLive = Layer.effect(
             ),
           ),
           Effect.as(document),
-          Effect.mapError(failure("save")),
+          writing("DocumentRepository.save"),
         ) satisfies Effect.Effect<Documents.Document, RepositoryFailure>,
 
       addVersion: (id, version) =>
@@ -144,6 +145,7 @@ export const DocumentRepositoryLive = Layer.effect(
             }),
           )
           .pipe(
+            guarded("DocumentRepository.addVersion", { replayable: false }),
             Effect.catchTag(
               "SqlError",
               (
@@ -156,7 +158,9 @@ export const DocumentRepositoryLive = Layer.effect(
                   ? Effect.fail(
                       new VersionAlreadyExists({ number: version.number }),
                     )
-                  : Effect.fail(failure("addVersion")(error)),
+                  : Effect.fail(
+                      failure("DocumentRepository.addVersion")(error),
+                    ),
             ),
             Effect.asVoid,
           ),

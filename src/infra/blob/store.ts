@@ -1,6 +1,7 @@
 import { del, issueSignedToken, presignUrl, put } from "@vercel/blob";
-import { Config, Effect, Layer, Redacted } from "effect";
+import { Config, Duration, Effect, Layer, Redacted } from "effect";
 import { DocumentStore, StorageFailure } from "../../services/repositories";
+import { within } from "../budget";
 
 /**
  * Document bytes, in Vercel Blob (D-4).
@@ -47,6 +48,33 @@ const failing = (operation: string) => (cause: unknown) =>
   new StorageFailure({
     operation,
     detail: cause instanceof Error ? cause.message : String(cause),
+  });
+
+/**
+ * Three budgets, because these are three different journeys.
+ *
+ * `put` carries the bytes, and a bundle of scanned pleadings is genuinely tens
+ * of megabytes over whatever connection the firm's office has — thirty seconds
+ * is generous on purpose, because failing a real upload wastes the upload.
+ *
+ * `signedUrl` carries nothing. It is two control-plane calls that either answer
+ * in milliseconds or are not going to, and it sits in the path of somebody
+ * clicking a document and waiting.
+ *
+ * `remove` is a single call with no payload, given longer than signing only
+ * because nobody is watching it happen.
+ */
+const BUDGET = {
+  put: Duration.seconds(30),
+  signedUrl: Duration.seconds(5),
+  remove: Duration.seconds(10),
+} as const;
+
+const budgeted = (operation: keyof typeof BUDGET) =>
+  within({
+    operation: `DocumentStore.${operation}`,
+    duration: BUDGET[operation],
+    onTimeout: (detail) => new StorageFailure({ operation, detail }),
   });
 
 export const DocumentStoreLive = Layer.effect(
@@ -108,7 +136,10 @@ export const DocumentStoreLive = Layer.effect(
               allowOverwrite: false,
             }),
           catch: failing("put"),
-        }).pipe(Effect.map(() => ({ sizeBytes: body.byteLength }))),
+        }).pipe(
+          budgeted("put"),
+          Effect.map(() => ({ sizeBytes: body.byteLength })),
+        ),
 
       signedUrl: (key) =>
         Effect.tryPromise({
@@ -134,13 +165,13 @@ export const DocumentStoreLive = Layer.effect(
             return presignedUrl;
           },
           catch: failing("signedUrl"),
-        }),
+        }).pipe(budgeted("signedUrl")),
 
       remove: (key) =>
         Effect.tryPromise({
           try: () => del(key, { token }),
           catch: failing("remove"),
-        }).pipe(Effect.asVoid),
+        }).pipe(budgeted("remove"), Effect.asVoid),
     });
   }),
 );

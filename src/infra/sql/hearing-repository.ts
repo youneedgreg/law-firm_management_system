@@ -7,7 +7,7 @@ import {
   NotFound,
   type RepositoryFailure,
 } from "../../services/repositories";
-import { failure } from "./failure";
+import { reading, writing } from "./resilience";
 import { HearingFromRow } from "./hearing-model";
 
 /**
@@ -53,7 +53,7 @@ export const HearingRepositoryLive = Layer.effect(
     return HearingRepository.of({
       byId: (id) =>
         findById(id).pipe(
-          Effect.mapError(failure("byId")),
+          reading("HearingRepository.byId"),
           Effect.flatMap(
             Option.match({
               onNone: () =>
@@ -64,11 +64,11 @@ export const HearingRepositoryLive = Layer.effect(
         ),
 
       forCase: (caseId) =>
-        forCase(caseId).pipe(Effect.mapError(failure("forCase"))),
+        forCase(caseId).pipe(reading("HearingRepository.forCase")),
 
-      pending: () => pending().pipe(Effect.mapError(failure("pending"))),
+      pending: () => pending().pipe(reading("HearingRepository.pending")),
 
-      all: () => all().pipe(Effect.mapError(failure("all"))),
+      all: () => all().pipe(reading("HearingRepository.all")),
 
       save: (hearing) =>
         Schema.encode(HearingFromRow)(hearing).pipe(
@@ -79,7 +79,7 @@ export const HearingRepositoryLive = Layer.effect(
             `,
           ),
           Effect.as(hearing),
-          Effect.mapError(failure("save")),
+          writing("HearingRepository.save"),
         ) satisfies Effect.Effect<Hearing.Hearing, RepositoryFailure>,
     });
   }),

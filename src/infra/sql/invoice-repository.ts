@@ -11,6 +11,7 @@ import {
   type RepositoryFailure,
 } from "../../services/repositories";
 import { failure, isUniqueViolation } from "./failure";
+import { guarded, reading } from "./resilience";
 import { InvoiceFromRow, paymentRow } from "./invoice-model";
 import { isRule10Violation } from "./rule10";
 
@@ -88,7 +89,7 @@ export const InvoiceRepositoryLive = Layer.effect(
       sql<RawRow>`SELECT * FROM invoices WHERE id = ${id}`.pipe(
         Effect.flatMap(assemble),
         Effect.map((invoices) => Option.fromNullable(invoices[0])),
-        Effect.mapError(failure("findById")),
+        reading("InvoiceRepository.findById"),
       );
 
     /**
@@ -104,7 +105,7 @@ export const InvoiceRepositoryLive = Layer.effect(
         SELECT balance_cents FROM client_trust_balances
          WHERE client_id = ${movement.clientId}
       `.pipe(
-        Effect.mapError(failure("settleFromTrust")),
+        reading("InvoiceRepository.settleFromTrust"),
         Effect.flatMap((rows) =>
           Effect.fail(
             new Ledger.TrustAccountUnderfunded({
@@ -131,12 +132,15 @@ export const InvoiceRepositoryLive = Layer.effect(
       forClient: (clientId: ClientId) =>
         sql<RawRow>`
           SELECT * FROM invoices WHERE client_id = ${clientId} ORDER BY number
-        `.pipe(Effect.flatMap(assemble), Effect.mapError(failure("forClient"))),
+        `.pipe(
+          Effect.flatMap(assemble),
+          reading("InvoiceRepository.forClient"),
+        ),
 
       all: () =>
         sql<RawRow>`SELECT * FROM invoices ORDER BY number`.pipe(
           Effect.flatMap(assemble),
-          Effect.mapError(failure("all")),
+          reading("InvoiceRepository.all"),
         ),
 
       /**
@@ -184,6 +188,7 @@ export const InvoiceRepositoryLive = Layer.effect(
             ),
           ),
           Effect.as(invoice),
+          guarded("InvoiceRepository.save", { replayable: false }),
           Effect.catchAll(
             (
               error,
@@ -192,7 +197,7 @@ export const InvoiceRepositoryLive = Layer.effect(
                 ? Effect.fail(
                     new InvoiceNumberTaken({ number: invoice.number }),
                   )
-                : Effect.fail(failure("save")(error)),
+                : Effect.fail(failure("InvoiceRepository.save")(error)),
           ),
         ) satisfies Effect.Effect<
           Billing.Invoice,
@@ -242,6 +247,7 @@ export const InvoiceRepositoryLive = Layer.effect(
             }),
           )
           .pipe(
+            guarded("InvoiceRepository.recordPayment", { replayable: false }),
             /**
              * The partial unique index's refusal, as the domain's own error.
              *
@@ -270,7 +276,9 @@ export const InvoiceRepositoryLive = Layer.effect(
                   ? Effect.fail(
                       new Billing.PaymentAlreadyRecorded({ confirmation }),
                     )
-                  : Effect.fail(failure("recordPayment")(error));
+                  : Effect.fail(
+                      failure("InvoiceRepository.recordPayment")(error),
+                    );
               },
             ),
             Effect.asVoid,
@@ -331,12 +339,17 @@ export const InvoiceRepositoryLive = Layer.effect(
             }),
           )
           .pipe(
+            guarded("InvoiceRepository.settleFromTrust", {
+              replayable: false,
+            }),
             // `NotFound` passes through untouched; only a database refusal is
             // a candidate for the Rule 10 translation.
             Effect.catchTag("SqlError", (error) =>
               isRule10Violation(error)
                 ? asUnderfunded(movement)
-                : Effect.fail(failure("settleFromTrust")(error)),
+                : Effect.fail(
+                    failure("InvoiceRepository.settleFromTrust")(error),
+                  ),
             ),
           ),
     });

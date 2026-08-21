@@ -8,7 +8,7 @@ import {
   type RepositoryFailure,
 } from "../../services/repositories";
 import { AdvocateFromRow } from "./advocate-model";
-import { failure } from "./failure";
+import { reading, writing } from "./resilience";
 
 /** People at the firm, in Postgres. The simplest of the repositories: one row,
  *  one entity, no aggregate to reassemble. */
@@ -32,7 +32,7 @@ export const AdvocateRepositoryLive = Layer.effect(
     return AdvocateRepository.of({
       byId: (id) =>
         findById(id).pipe(
-          Effect.mapError(failure("byId")),
+          reading("AdvocateRepository.byId"),
           Effect.flatMap(
             Option.match({
               onNone: () =>
@@ -42,7 +42,7 @@ export const AdvocateRepositoryLive = Layer.effect(
           ),
         ),
 
-      all: () => all().pipe(Effect.mapError(failure("all"))),
+      all: () => all().pipe(reading("AdvocateRepository.all")),
 
       save: (advocate) =>
         Schema.encode(AdvocateFromRow)(advocate).pipe(
@@ -53,7 +53,7 @@ export const AdvocateRepositoryLive = Layer.effect(
             `,
           ),
           Effect.as(advocate),
-          Effect.mapError(failure("save")),
+          writing("AdvocateRepository.save"),
         ) satisfies Effect.Effect<Firm.Advocate, RepositoryFailure>,
     });
   }),
