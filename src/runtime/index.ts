@@ -36,6 +36,7 @@ import { LibraryService } from "../services/library-service";
 import { ReportService } from "../services/report-service";
 import { SearchService } from "../services/search-service";
 import { AppointmentService } from "../services/appointment-service";
+import { DashboardService } from "../services/dashboard-service";
 import { HearingService } from "../services/hearing-service";
 import { TimeService } from "../services/time-service";
 
@@ -140,7 +141,15 @@ const derived = Layer.mergeAll(
   Layer.provide(Layer.mergeAll(repositories, sessions, blob)),
 );
 
-export const AppLayer = NoticeService.Default.pipe(Layer.provideMerge(derived));
+/**
+ * `NoticeService` and `DashboardService` both read the others and store nothing
+ * of their own, so both are *given* `derived` rather than merged beside it.
+ * `provideMerge` twice, so the second still sees the first's dependencies.
+ */
+export const AppLayer = Layer.mergeAll(
+  NoticeService.Default,
+  DashboardService.Default,
+).pipe(Layer.provideMerge(derived));
 
 export type AppServices = Layer.Layer.Success<typeof AppLayer>;
 
