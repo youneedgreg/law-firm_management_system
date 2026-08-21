@@ -16,6 +16,7 @@ import {
   ClientRepository,
   type NotFound,
   type RepositoryFailure,
+  TaskRepository,
   Transactor,
 } from "./repositories";
 
@@ -128,6 +129,18 @@ export interface CaseloadFilter {
  */
 export const OpenMatter = Schema.Struct({
   title: Schema.NonEmptyTrimmedString,
+  /**
+   * Who the client is against, for the conflict screen.
+   *
+   * Defaulted to empty rather than required: a conveyance or an advisory
+   * retainer genuinely has no opposing party, and demanding one would teach
+   * whoever does intake to type a placeholder — which is worse than an empty
+   * list, because the screen would then match on it.
+   */
+  opposingParties: Schema.optionalWith(
+    Schema.Array(Schema.NonEmptyTrimmedString),
+    { default: () => [] },
+  ),
   type: Matter.MatterType,
   clientId: ClientId,
   advocateId: AdvocateId,
@@ -156,6 +169,7 @@ export type OpenMatter = typeof OpenMatter.Type;
  */
 export const AmendMatter = Schema.Struct({
   title: Schema.optional(Schema.NonEmptyTrimmedString),
+  opposingParties: Schema.optional(Schema.Array(Schema.NonEmptyTrimmedString)),
   type: Schema.optional(Matter.MatterType),
   advocateId: Schema.optional(AdvocateId),
   court: Schema.optional(Court.Court),
@@ -305,6 +319,9 @@ const applyAmendment = (
 ): Matter.Case => ({
   ...matter,
   ...(edits.title === undefined ? {} : { title: edits.title }),
+  ...(edits.opposingParties === undefined
+    ? {}
+    : { opposingParties: edits.opposingParties }),
   ...(edits.type === undefined ? {} : { type: edits.type }),
   ...(edits.advocateId === undefined ? {} : { advocateId: edits.advocateId }),
   ...(edits.court === undefined ? {} : { court: edits.court }),
@@ -326,11 +343,34 @@ const applyAmendment = (
 
 // ── The service ───────────────────────────────────────────────────────────
 
+/**
+ * A matter with work still outstanding on it, asked to close.
+ *
+ * The count is on the error rather than the list, because the caller is a
+ * person about to be told "not yet" and the useful part is *how much* — one
+ * forgotten item and fourteen are different situations, and the screen links
+ * to the list either way.
+ */
+export class HasOpenTasks extends Schema.TaggedError<HasOpenTasks>()(
+  "HasOpenTasks",
+  { number: Schema.String, open: Schema.Int },
+) {
+  get reason(): string {
+    return (
+      `${this.number} has ${String(this.open)} task` +
+      `${this.open === 1 ? "" : "s"} still open. Closing it would hide ` +
+      `${this.open === 1 ? "it" : "them"} from every list in the system — ` +
+      `complete the work first, or reassign it to another matter`
+    );
+  }
+}
+
 export class CaseService extends Effect.Service<CaseService>()("CaseService", {
   effect: Effect.gen(function* () {
     const cases = yield* CaseRepository;
     const clients = yield* ClientRepository;
     const advocates = yield* AdvocateRepository;
+    const tasks = yield* TaskRepository;
     const audit = yield* AuditLog;
     const transactor = yield* Transactor;
 
@@ -615,6 +655,37 @@ export class CaseService extends Effect.Service<CaseService>()("CaseService", {
           yield* withinScope("case", id, matter.clientId);
 
           const moved = yield* enforce(Matter.changeStatus(matter, to));
+
+          /**
+           * **A matter cannot be closed over the top of open work.**
+           *
+           * The rule with the most consequence in the tasks module, and it
+           * lives here because this is where closing happens. "File the decree
+           * absolute", left open on a matter closed last March, is a task that
+           * will now never be done by anyone — not because anyone decided
+           * against it, but because nothing will ever show it again. The work
+           * list reads open tasks; a closed matter's tasks are not deleted,
+           * they simply stop being anywhere a person looks.
+           *
+           * It is a **refusal rather than a warning**, which is the arguable
+           * part. A warning is dismissed; the tasks are still there and still
+           * invisible. The remedy is one that has to happen anyway — complete
+           * the work, or decide it is not being done and say so — and it takes
+           * seconds, whereas discovering it eighteen months later takes a
+           * complaint.
+           *
+           * Only on the way *in* to `Closed`. Every other transition passes
+           * untouched, and reopening a closed matter is not obstructed by the
+           * tasks that closing it left behind.
+           */
+          if (to === "Closed") {
+            const open = yield* tasks.openCount(id);
+            if (open > 0) {
+              return yield* Effect.fail(
+                new HasOpenTasks({ number: matter.number, open }),
+              );
+            }
+          }
 
           return yield* transactor.transaction(
             Effect.gen(function* () {

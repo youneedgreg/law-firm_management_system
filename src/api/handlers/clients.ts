@@ -17,6 +17,21 @@ export const ClientsHandlers = HttpApiBuilder.group(
             .directory()
             .pipe(Effect.catchTag("RepositoryFailure", driverFailure)),
         )
+        .handle("screen", ({ payload }) =>
+          clients
+            .screen(payload)
+            .pipe(Effect.catchTag("RepositoryFailure", driverFailure)),
+        )
+        .handle("takeOn", ({ payload }) =>
+          clients
+            .takeOn(payload)
+            .pipe(Effect.catchTag("RepositoryFailure", driverFailure)),
+        )
+        .handle("amend", ({ path, payload }) =>
+          clients
+            .amend(path.id, payload)
+            .pipe(Effect.catchTag("RepositoryFailure", driverFailure)),
+        )
         .handle("file", ({ path }) =>
           clients
             .file(path.id)

@@ -34,6 +34,7 @@ const bare: Matter.Case = {
   id,
   number,
   title: "Wanjiku Mwangi v. Nairobi Metro SACCO",
+  opposingParties: ["Nairobi Metro SACCO"],
   type: "Civil",
   status: "New",
   clientId,

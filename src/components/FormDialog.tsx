@@ -18,6 +18,7 @@ export function FormDialog({
   triggerVariant = "btn-primary",
   submitLabel = "Save",
   onSubmit,
+  keepOpenOnSubmit = false,
   children,
 }: {
   title: string;
@@ -29,6 +30,15 @@ export function FormDialog({
   triggerVariant?: "btn-primary" | "btn-secondary" | "btn-ghost";
   submitLabel?: string;
   onSubmit: (fields: FormData) => void;
+  /**
+   * Stays open after submitting, for the form whose *answer* is the point.
+   *
+   * Every other dialog here closes on submit because the result of submitting
+   * is a changed record on the page behind it. The conflict screen has nothing
+   * to close to: it reports findings, and closing the dialog would throw away
+   * the only thing the user asked for.
+   */
+  keepOpenOnSubmit?: boolean;
   children: React.ReactNode;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -38,7 +48,7 @@ export function FormDialog({
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     onSubmit(new FormData(event.currentTarget));
-    dialogRef.current?.close();
+    if (!keepOpenOnSubmit) dialogRef.current?.close();
   }
 
   return (

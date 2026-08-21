@@ -25,6 +25,7 @@ import {
   inMemoryAdvocates,
   inMemoryAudit,
   inMemoryCases,
+  inMemoryTasks,
   inMemoryClients,
   inMemoryTransactor,
 } from "../../test/in-memory-repositories";
@@ -60,6 +61,7 @@ const firm = (seed: readonly Matter.Case[] = matters) =>
     inMemoryCases(seed),
     inMemoryClients(clients),
     inMemoryAdvocates(advocates),
+    inMemoryTasks(),
     inMemoryAudit().layer,
     inMemoryTransactor(),
   );
@@ -84,6 +86,7 @@ const scenario = <A, E>(
 
 const intake: OpenMatter = {
   title: "Zenith Distributors Ltd v. Coastal Freight Ltd",
+  opposingParties: ["Coastal Freight Ltd"],
   type: "Commercial",
   clientId: zenith.id,
   advocateId: sarah.id,
@@ -173,6 +176,7 @@ describe("reading the caseload", () => {
               inMemoryCases([filedMatter]),
               inMemoryClients(clients),
               inMemoryAdvocates([]),
+              inMemoryTasks(),
               inMemoryAudit().layer,
               inMemoryTransactor(),
             ),
@@ -557,6 +561,7 @@ describe("two intakes racing for the same reference", () => {
               contended,
               inMemoryClients(clients),
               inMemoryAdvocates(advocates),
+              inMemoryTasks(),
               inMemoryAudit().layer,
               inMemoryTransactor(),
             ),

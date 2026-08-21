@@ -45,6 +45,27 @@ export const Case = Schema.Struct({
   /** The court's reference, assigned on filing. Absent before then. */
   causeNumber: Schema.optional(Schema.NonEmptyTrimmedString),
   title: Schema.NonEmptyTrimmedString,
+  /**
+   * Who the client is against.
+   *
+   * Added in Phase 7, and the gap it closes is worth naming because it was
+   * invisible until something needed it. `title` is free text — "Wanjiku Mwangi
+   * v. Nairobi Metro SACCO" — and a title is what a screen prints, not
+   * something that can be searched. `domain/client/conflicts.ts` was written in
+   * Phase 1 against a `MatterRecord` carrying structured parties, and **nothing
+   * produced one**: the conflict screen could be tested and could not be run.
+   *
+   * A `readonly string[]` rather than a table of parties, and that is a
+   * deliberate stopping point. The screen matches on *names*, normalised — it
+   * never needs a party's own record, and modelling one would mean deciding
+   * what an opposing party is when they are also a client, which is the
+   * question the screen exists to raise rather than to answer.
+   *
+   * Empty is legitimate and common: a conveyance, a probate application, an
+   * advisory retainer. It is not a missing value, so this is an array rather
+   * than an optional one.
+   */
+  opposingParties: Schema.Array(Schema.NonEmptyTrimmedString),
   type: MatterType,
   status: Status.CaseStatus,
   clientId: ClientId,
@@ -267,3 +288,59 @@ export const consistency = (
 
   return Either.right(matter);
 };
+
+/**
+ * A closed matter, asked to do something only an open one can.
+ *
+ * **One error, in the domain, rather than one per service.** It was declared
+ * twice — once in `time-service.ts` and once in `task-service.ts` — with the
+ * same tag and the same field, which the API's own error table caught: two
+ * schemas cannot both be `MatterIsClosed` on one wire, and a client branching
+ * on `_tag` could not have told them apart if they had.
+ *
+ * That is a real defect and not merely tidiness. Errors on this API are part
+ * of the contract; a tag that means two things is a tag that means nothing.
+ *
+ * `attempted` is what keeps the message specific while the tag stays single.
+ * It is a short verb phrase completing "…so you cannot ___", supplied by the
+ * caller because only the caller knows what was being tried.
+ */
+export class MatterIsClosed extends Schema.TaggedError<MatterIsClosed>()(
+  "MatterIsClosed",
+  { number: Schema.String, attempted: Schema.String },
+) {
+  get reason(): string {
+    return (
+      `${this.number} is closed, so you cannot ${this.attempted}. Reopen the ` +
+      `matter first if the work is real — that is a decision with its own ` +
+      `audit entry rather than a side effect of another screen`
+    );
+  }
+}
+
+/**
+ * A matter named against the wrong client.
+ *
+ * In the domain, beside `MatterIsClosed`, and for the same reason: it was about
+ * to be declared a second time — once in `message-service.ts` and once in
+ * `library-service.ts` — and two tagged errors sharing a tag is a tag that
+ * means nothing on the wire. That lesson was learned once already in Phase 7;
+ * this is it being applied before the collision rather than after.
+ *
+ * It is deliberately **not** a `NotFound`. Scope violations answer `NotFound`
+ * because confirming a record exists is itself a disclosure; here the sender
+ * can see both the client and the matter and has simply put them together
+ * wrongly, and "not found" for something plainly on screen is baffling rather
+ * than discreet.
+ */
+export class MatterIsNotTheirs extends Schema.TaggedError<MatterIsNotTheirs>()(
+  "MatterIsNotTheirs",
+  { number: Schema.String },
+) {
+  get reason(): string {
+    return (
+      `${this.number} is not this client's matter, so it cannot be filed ` +
+      `against their record`
+    );
+  }
+}

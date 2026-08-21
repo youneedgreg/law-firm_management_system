@@ -2,7 +2,12 @@
 
 import { Result, useRxValue } from "@effect-rx/rx-react";
 import { ActionDialog } from "@/components/ActionDialog";
-import { Checkbox, SelectField, TextField } from "@/components/form";
+import {
+  Checkbox,
+  SelectField,
+  TextAreaField,
+  TextField,
+} from "@/components/form";
 import { MATTER_TYPES } from "@/domain/case/case";
 import { LIMITATION_BASES } from "@/domain/case/limitation";
 import { intakeChoicesRx } from "@/rx/cases";
@@ -92,6 +97,16 @@ export function NewCaseForm() {
                 label: client.name,
               }))}
               error={state.fields["clientId"] ?? unavailable}
+            />
+            <TextAreaField
+              wide
+              label="Other side"
+              name="opposingParties"
+              rows={2}
+              defaultValue={kept("opposingParties")}
+              placeholder="One party per line"
+              hint="Who the client is against. Searched by the conflict screen; blank is correct for a conveyance or a probate application."
+              error={state.fields["opposingParties"]}
             />
             <SelectField
               label="Matter type"

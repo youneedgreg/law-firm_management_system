@@ -11,6 +11,7 @@ const base: Matter.Case = {
   id: Schema.decodeSync(CaseId)("20000000-0000-4000-8000-000000000001"),
   number: Schema.decodeSync(CaseNumber)("OKL-2026-014"),
   title: "Wanjiku Mwangi v. Nairobi Metro SACCO",
+  opposingParties: ["Nairobi Metro SACCO"],
   type: "Civil",
   status: "New",
   clientId: Schema.decodeSync(ClientId)("00000000-0000-4000-8000-000000000001"),

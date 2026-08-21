@@ -45,6 +45,32 @@ export const submitted = (form: FormData): Record<string, string> => {
   return fields;
 };
 
+/**
+ * A textarea of names, one per line, as a list.
+ *
+ * A textarea rather than a repeating fieldset, because the number of opposing
+ * parties is genuinely open — a land dispute can have nine — and a dynamic row
+ * editor to collect names is a lot of machinery for a list of strings.
+ *
+ * Blank lines are dropped rather than becoming empty entries, and that is not
+ * tidiness: a blank party name normalises to the empty string, which the
+ * conflict screen would then match against every enquiry. The `CHECK` in
+ * migration 0010 says the same thing in Postgres.
+ */
+const PartyList = Schema.transform(
+  Schema.String,
+  Schema.Array(Schema.NonEmptyTrimmedString),
+  {
+    strict: true,
+    decode: (text) =>
+      text
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line !== ""),
+    encode: (parties) => parties.join("\n"),
+  },
+).annotations({ identifier: "PartyList" });
+
 /** An unticked checkbox is absent; a ticked one submits `"on"`. */
 const Ticked = Schema.transform(Schema.Literal("on"), Schema.Boolean, {
   strict: true,
@@ -89,7 +115,7 @@ const ClaimValueCents = Schema.transformOrFail(
  * one, which is the combination `Court` is a tagged union to prevent. See
  * `courts.ts`.
  */
-const CourtFromKey = Schema.transformOrFail(Schema.String, Court.Court, {
+export const CourtFromKey = Schema.transformOrFail(Schema.String, Court.Court, {
   strict: true,
   decode: (key, _options, ast) => {
     const court = COURTS[key];
@@ -123,6 +149,7 @@ const CourtFromKey = Schema.transformOrFail(Schema.String, Court.Court, {
 export const OpenMatterForm = Schema.Struct({
   title: Schema.NonEmptyTrimmedString,
   type: Matter.MatterType,
+  opposingParties: Schema.optionalWith(PartyList, { default: () => [] }),
   clientId: ClientId,
   advocateId: AdvocateId,
   court: Schema.optional(CourtFromKey),
@@ -157,6 +184,7 @@ void _openMatches;
  */
 export const AmendMatterForm = Schema.Struct({
   title: Schema.optional(Schema.NonEmptyTrimmedString),
+  opposingParties: Schema.optional(PartyList),
   type: Schema.optional(Matter.MatterType),
   advocateId: Schema.optional(AdvocateId),
   court: Schema.optional(CourtFromKey),
