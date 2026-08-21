@@ -268,3 +268,23 @@ export const ROLE_ACCESS: Partial<Record<string, string>> = {
   Receptionist: "Client intake, appointments",
   "Client Portal User": "Own cases & invoices only",
 };
+
+/**
+ * The portal's menu.
+ *
+ * Here rather than in `lib/data/portal.ts`, where it used to sit beside five
+ * functions that invented a client's matters, documents, invoices and messages.
+ * Those are gone — every portal screen reads its own service — and a navigation
+ * list is not mock data: it is the same kind of thing as `NAV_SECTIONS` above,
+ * which is why it now lives beside it.
+ *
+ * No role allow-list, because there is only one kind of portal user. The
+ * moment that stops being true this wants the same treatment as `NavItem`.
+ */
+export const PORTAL_NAV = [
+  { href: "/portal", label: "Overview" },
+  { href: "/portal/cases", label: "My Cases" },
+  { href: "/portal/documents", label: "Documents" },
+  { href: "/portal/invoices", label: "Invoices" },
+  { href: "/portal/messages", label: "Messages" },
+] as const;

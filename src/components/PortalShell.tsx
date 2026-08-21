@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "@/app/(auth)/sign-in/actions";
 import { type Session, SessionProvider } from "@/components/Session";
-import { PORTAL_NAV } from "@/lib/data/portal";
+import { PORTAL_NAV } from "@/lib/nav";
 
 /**
  * The client-facing surface. It carries its own masthead and nav rather than
