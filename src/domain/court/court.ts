@@ -157,3 +157,37 @@ export const lowestCompetentRank = (
   [...MAGISTRATE_RANKS]
     .reverse()
     .find((rank) => !Money.greaterThan(value, PECUNIARY_LIMITS[rank]));
+
+/**
+ * A court as a firm writes it.
+ *
+ * In the domain rather than in a display helper, and the reason is not that it
+ * is presentation-free — it plainly is presentation. It is that **the rank is
+ * part of the name**: an advocate reading "Milimani" alone cannot tell a
+ * Resident Magistrate's KES 5m ceiling from a Chief Magistrate's 20m one, and
+ * which of those it is decides what the court may hear. Naming a court and
+ * knowing what it can do are the same knowledge, so they live together.
+ *
+ * It moved here when the court diary needed it: `DiaryEntry` carries a court as
+ * one line, and a service cannot import from `app/` — the boundary rule sees to
+ * that. Copying it would have been a second exhaustive switch over this union,
+ * which is the mistake a tagged union exists to prevent.
+ */
+export const describe = (court: Court): string => {
+  switch (court._tag) {
+    case "SupremeCourt":
+      return "Supreme Court of Kenya";
+    case "CourtOfAppeal":
+      return `Court of Appeal at ${court.station}`;
+    case "HighCourt":
+      return court.division === undefined
+        ? `High Court at ${court.station}`
+        : `High Court at ${court.station} (${court.division} Division)`;
+    case "EmploymentAndLabourRelationsCourt":
+      return `Employment and Labour Relations Court at ${court.station}`;
+    case "EnvironmentAndLandCourt":
+      return `Environment and Land Court at ${court.station}`;
+    case "MagistratesCourt":
+      return `${court.rank}'s Court at ${court.station}`;
+  }
+};

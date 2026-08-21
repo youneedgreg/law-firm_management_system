@@ -91,9 +91,28 @@ export const upcoming = (
     )
     .sort((a, b) => a.scheduledFor.getTime() - b.scheduledFor.getTime());
 
+/**
+ * `Schema.Date`, not `Schema.DateFromSelf`, and the distinction bit.
+ *
+ * Every other date in this module is `DateFromSelf` — the right choice for a
+ * value that lives in memory, and the reason `api/wire.ts` exists at all.
+ * `DateFromSelf` *encodes to a `Date`*, which JSON cannot carry.
+ *
+ * An **error is on the wire too**. Phase 4 built a second description of every
+ * entity precisely because of this, and then declared the failures by sharing
+ * the domain's own classes — which is what lets a client reconstitute
+ * `AdvocateMayNotFile` with its `reason` getter intact. The consequence nobody
+ * noticed until a hearing endpoint existed: an error carrying `DateFromSelf`
+ * fields cannot be described, and the OpenAPI generator is what said so —
+ * "Generating a JSON Schema for this schema requires a jsonSchema annotation".
+ *
+ * `Schema.Date` decodes from an ISO string and its *type* side is still a
+ * `Date`, so nothing about constructing or reading this error changes. It is
+ * the encoded side that becomes describable.
+ */
 export class AdjournedIntoThePast extends Schema.TaggedError<AdjournedIntoThePast>()(
   "AdjournedIntoThePast",
-  { scheduledFor: Schema.DateFromSelf, adjournedTo: Schema.DateFromSelf },
+  { scheduledFor: Schema.Date, adjournedTo: Schema.Date },
 ) {
   get reason(): string {
     return (

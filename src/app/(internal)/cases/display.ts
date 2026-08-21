@@ -1,21 +1,6 @@
-import type * as Court from "@/domain/court/court";
+import * as Court from "@/domain/court/court";
 import type * as Limitation from "@/domain/case/limitation";
 import type { TagClass } from "@/lib/types";
-
-/**
- * Turning domain values into the words on the page.
- *
- * Kept in the route folder rather than in `lib/`: this is how the *cases*
- * screens choose to render a court, and a shared helper would quietly become
- * the one definition every module has to agree with. It moves to `lib/` the day
- * a second module needs the same sentence, and not before.
- *
- * Nothing here decides anything. A court's rank, a limitation's urgency and a
- * matter's status are all settled in `domain/`; this only picks the string.
- */
-
-const DIVISION = (division: string | undefined) =>
-  division === undefined ? "" : ` — ${division} Division`;
 
 /**
  * A court as a firm writes it.
@@ -24,24 +9,8 @@ const DIVISION = (division: string | undefined) =>
  * what the court may hear, and an advocate reading "Milimani" alone cannot tell
  * a Resident Magistrate's 5m ceiling from a Chief Magistrate's 20m one.
  */
-export const courtName = (court: Court.Court | undefined): string => {
-  if (court === undefined) return "Not filed in a court";
-
-  switch (court._tag) {
-    case "SupremeCourt":
-      return "Supreme Court of Kenya";
-    case "CourtOfAppeal":
-      return `Court of Appeal at ${court.station}`;
-    case "HighCourt":
-      return `High Court at ${court.station}${DIVISION(court.division)}`;
-    case "EmploymentAndLabourRelationsCourt":
-      return `Employment and Labour Relations Court at ${court.station}`;
-    case "EnvironmentAndLandCourt":
-      return `Environment and Land Court at ${court.station}`;
-    case "MagistratesCourt":
-      return `${court.rank}'s Court at ${court.station}`;
-  }
-};
+export const courtName = (court: Court.Court | undefined): string =>
+  court === undefined ? "Not filed in a court" : Court.describe(court);
 
 /** A calendar date in the house format, e.g. `19 Aug 2026`. Absent reads plain. */
 export const day = (date: Date | undefined): string =>
