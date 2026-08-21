@@ -1,7 +1,7 @@
 import { SqlClient } from "@effect/sql";
 import { Effect, Exit, Layer, ManagedRuntime, Option, Schema } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type * as Matter from "../../domain/case/case";
+import * as Matter from "../../domain/case/case";
 import * as Court from "../../domain/court/court";
 import {
   AdvocateId,
@@ -46,8 +46,21 @@ const caseId = (n: number) =>
     `cccccccc-0000-4000-8000-${String(n).padStart(12, "0")}`,
   );
 
+/**
+ * A matter, decoded rather than cast.
+ *
+ * It was `({ … }) as Matter.Case`, and the cast hid a real regression for two
+ * slices: `Case` gained a required `opposingParties` when the conflict screen
+ * was connected, this fixture never grew one, and `as` silenced the compiler
+ * while every save failed against real Postgres. The unit suite stayed green
+ * because it does not touch a database, and nobody ran the integration suite.
+ *
+ * `decodeSync` over `typeSchema` is the fix and the lesson: a fixture that
+ * decodes cannot drift from the domain, because adding a required field breaks
+ * it here at the same moment it breaks everywhere else.
+ */
 const matter = (n: number, overrides: Partial<Matter.Case> = {}): Matter.Case =>
-  ({
+  Schema.decodeSync(Schema.typeSchema(Matter.Case))({
     id: caseId(n),
     number: Schema.decodeSync(CaseNumber)(
       `OKL-2099-${String(n).padStart(3, "0")}`,
@@ -58,9 +71,10 @@ const matter = (n: number, overrides: Partial<Matter.Case> = {}): Matter.Case =>
     clientId,
     advocateId,
     underCustomaryLaw: false,
+    opposingParties: ["Nairobi Metro SACCO"],
     openedOn: new Date("2026-02-14T00:00:00.000Z"),
     ...overrides,
-  }) as Matter.Case;
+  });
 
 /**
  * One runtime for the file, not one per call.
@@ -254,15 +268,47 @@ describeIfDb("CaseRepository against Postgres", () => {
   });
 
   /**
-   * The database is still the last word. A matter whose court and rank
-   * disagree is refused by `rank_iff_magistrates_court`, and the caller gets a
-   * `RepositoryFailure` rather than a driver error.
+   * A duplicate matter number is `CaseNumberTaken`, not a generic failure.
+   *
+   * This test asserted `RepositoryFailure` and was **stale**: the repository
+   * learned to recognise `cases_number_key` when intake gained its retry, and
+   * the more specific error is the whole point of that work — `CaseService`
+   * catches this tag to compute the next free reference. Its docstring also
+   * described a court/rank constraint the body never exercised, which is how
+   * the drift went unnoticed.
    */
-  it("surfaces a constraint violation as a RepositoryFailure", async () => {
+  it("names a duplicate matter number rather than failing generically", async () => {
     const exit = await run(
       Effect.flatMap(CaseRepository, (repo) =>
-        // Same number as matter 1, which is unique.
         repo.save(matter(5, { number: matter(1).number })),
+      ),
+    );
+
+    expect(Exit.isFailure(exit)).toBe(true);
+    const error = Exit.isFailure(exit)
+      ? (exit.cause as { error?: { _tag?: string } }).error
+      : undefined;
+    expect(error?._tag).toBe("CaseNumberTaken");
+  });
+
+  /**
+   * And a constraint the repository does *not* single out still arrives as a
+   * `RepositoryFailure` rather than a raw driver error — which is what the test
+   * above was originally for, and is worth keeping separately.
+   *
+   * `filed_after_opened` is the one used: a matter filed before it was opened.
+   * The domain does not model that relationship, so nothing catches it earlier
+   * and the database is genuinely the last word.
+   */
+  it("surfaces an unrecognised constraint violation as a RepositoryFailure", async () => {
+    const exit = await run(
+      Effect.flatMap(CaseRepository, (repo) =>
+        repo.save(
+          matter(6, {
+            filedOn: new Date("2020-01-01T00:00:00.000Z"),
+            causeNumber: "HCCC E900 of 2020",
+          }),
+        ),
       ),
     );
 
