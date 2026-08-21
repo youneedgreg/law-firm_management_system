@@ -1,5 +1,5 @@
-import { Either, Schema } from "effect";
-import { AdvocateId, CaseId } from "../shared/ids";
+import { Either, Option, Schema } from "effect";
+import { AdvocateId, CaseId, InvoiceId, TimeEntryId } from "../shared/ids";
 import * as Money from "../shared/money";
 
 /**
@@ -15,6 +15,14 @@ import * as Money from "../shared/money";
  * **Non-billable time is still recorded.** Write-offs, pro bono, and internal
  * work are all real and all need to appear in utilisation figures. A model that
  * only records billable time cannot answer where the week went.
+ *
+ * **An invoiced entry names the fee note it went onto**, rather than carrying a
+ * boolean. Phase 1 modelled this as `invoiced: true | false`, which records
+ * that the work was billed and loses the only thing anyone ever asks about it:
+ * *on which fee note*. That question arrives in exactly one situation — a
+ * client disputing a bill — and a boolean answers it with a search through
+ * every invoice raised in the relevant month, by hand. The column in Postgres
+ * was `invoice_id` from the start; the domain has caught up.
  */
 
 export const ACTIVITIES = [
@@ -31,6 +39,7 @@ export const Activity = Schema.Literal(...ACTIVITIES);
 export type Activity = typeof Activity.Type;
 
 export const TimeEntry = Schema.Struct({
+  id: TimeEntryId,
   caseId: CaseId,
   advocateId: AdvocateId,
   activity: Activity,
@@ -41,8 +50,16 @@ export const TimeEntry = Schema.Struct({
   /** The advocate's rate for this work, in cents per hour. */
   hourlyRateCents: Schema.Int.pipe(Schema.nonNegative()),
   narrative: Schema.NonEmptyTrimmedString,
-  /** Set once the entry has been carried onto a fee note. */
-  invoiced: Schema.Boolean,
+  /**
+   * The fee note this work was carried onto, once it has been.
+   *
+   * `Schema.Option` rather than an optional field, because this one is *read*
+   * far more often than it is spread — every screen showing recorded time asks
+   * whether it has been billed — and an `Option` makes the two cases
+   * exhaustive at the point of use rather than a `!== undefined` somebody
+   * forgets.
+   */
+  invoicedOn: Schema.Option(InvoiceId),
 });
 
 export type TimeEntry = typeof TimeEntry.Type;
@@ -85,26 +102,65 @@ export const utilisation = (entries: readonly TimeEntry[]): number => {
 
 export class AlreadyInvoiced extends Schema.TaggedError<AlreadyInvoiced>()(
   "AlreadyInvoiced",
-  { narrative: Schema.String },
+  { narrative: Schema.String, invoiceId: Schema.String },
 ) {
   get reason(): string {
-    return `"${this.narrative}" has already been carried onto a fee note; billing it again would double-charge the client`;
+    return (
+      `"${this.narrative}" has already been carried onto a fee note; billing ` +
+      `it again would double-charge the client`
+    );
   }
 }
 
+/** Non-billable work cannot be carried onto a fee note. */
+export class NotBillable extends Schema.TaggedError<NotBillable>()(
+  "NotBillable",
+  { narrative: Schema.String },
+) {
+  get reason(): string {
+    return (
+      `"${this.narrative}" was recorded as non-billable, so it cannot be put ` +
+      `on a fee note. Change the entry if that was a mistake — the write-off ` +
+      `is a decision worth making deliberately`
+    );
+  }
+}
+
+export const isInvoiced = (entry: TimeEntry): boolean =>
+  Option.isSome(entry.invoicedOn);
+
 /**
- * Marks an entry as invoiced, refusing one that already is.
+ * Carries an entry onto a fee note, refusing one already on another.
  *
  * The failure this prevents is billing the same work twice, which is both a
  * fee-dispute risk and the kind of thing that is very hard to spot once the
- * invoice has gone out.
+ * invoice has gone out. The refusal names the fee note it is already on, so
+ * whoever hit it can go and look rather than guess.
+ *
+ * Non-billable work is refused separately and for a different reason: it is not
+ * a mistake to be corrected here but a decision already made elsewhere, and
+ * quietly billing it would reverse that decision without anybody choosing to.
+ * `only_billable_time_is_invoiced` says the same thing in Postgres.
  */
 export const markInvoiced = (
   entry: TimeEntry,
-): Either.Either<TimeEntry, AlreadyInvoiced> =>
-  entry.invoiced
-    ? Either.left(new AlreadyInvoiced({ narrative: entry.narrative }))
-    : Either.right({ ...entry, invoiced: true });
+  invoiceId: InvoiceId,
+): Either.Either<TimeEntry, AlreadyInvoiced | NotBillable> => {
+  if (Option.isSome(entry.invoicedOn)) {
+    return Either.left(
+      new AlreadyInvoiced({
+        narrative: entry.narrative,
+        invoiceId: entry.invoicedOn.value,
+      }),
+    );
+  }
+
+  if (!entry.billable) {
+    return Either.left(new NotBillable({ narrative: entry.narrative }));
+  }
+
+  return Either.right({ ...entry, invoicedOn: Option.some(invoiceId) });
+};
 
 /** Entries not yet carried onto a fee note, for a given matter. */
 export const unbilledFor = (
@@ -112,5 +168,5 @@ export const unbilledFor = (
   caseId: CaseId,
 ): readonly TimeEntry[] =>
   entries.filter(
-    (entry) => entry.caseId === caseId && entry.billable && !entry.invoiced,
+    (entry) => entry.caseId === caseId && entry.billable && !isInvoiced(entry),
   );
