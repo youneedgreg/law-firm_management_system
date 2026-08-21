@@ -1,6 +1,6 @@
-import { ConfigProvider, Effect, Exit, Redacted } from "effect";
+import { ConfigProvider, Effect, Exit, LogLevel, Redacted } from "effect";
 import { describe, expect, it } from "vitest";
-import { DatabaseConfig } from "./config";
+import { DatabaseConfig, ServiceIdentity, TelemetryConfig } from "./config";
 
 /**
  * Configuration is the one place where a mistake is invisible until it is
@@ -87,5 +87,118 @@ describe("DATABASE_URL", () => {
 
     expect(Exit.isSuccess(exit)).toBe(true);
     if (Exit.isSuccess(exit)) expect(exit.value.maxConnections).toBe(5);
+  });
+});
+
+const from = <A, E>(
+  service: Effect.Effect<A, E, never>,
+  environment: Record<string, string>,
+) =>
+  Effect.runPromiseExit(
+    service.pipe(
+      Effect.withConfigProvider(
+        ConfigProvider.fromMap(new Map(Object.entries(environment))),
+      ),
+    ),
+  );
+
+const identityIn = (environment: Record<string, string>) =>
+  from(
+    ServiceIdentity.pipe(Effect.provide(ServiceIdentity.Default)),
+    environment,
+  );
+
+const telemetryIn = (environment: Record<string, string>) =>
+  from(
+    TelemetryConfig.pipe(Effect.provide(TelemetryConfig.Default)),
+    environment,
+  );
+
+/**
+ * Both of these exist to make a log line and a span attributable to a build and
+ * a deployment. Getting either wrong is invisible until somebody is reading an
+ * incident and cannot say which commit produced it.
+ */
+describe("service identity", () => {
+  it("names the build by its short commit", async () => {
+    const exit = await identityIn({
+      VERCEL_GIT_COMMIT_SHA: "9f2c1ab4e7d3115a0c8ee0aa3c1d9e2f4b6a8c70",
+    });
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (Exit.isSuccess(exit)) expect(exit.value.version).toBe("9f2c1ab");
+  });
+
+  it("says so plainly when there is no commit to name", async () => {
+    const exit = await identityIn({});
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (Exit.isSuccess(exit)) {
+      expect(exit.value.version).toBe("dev");
+      expect(exit.value.environment).toBe("development");
+    }
+  });
+
+  /**
+   * The distinction `NODE_ENV` cannot make. A preview deployment runs with
+   * `NODE_ENV=production`, so a dashboard split on it would file every preview's
+   * errors under production — which is how an incident gets declared over
+   * somebody testing a branch.
+   */
+  it("separates preview from production", async () => {
+    const preview = await identityIn({ VERCEL_ENV: "preview" });
+
+    expect(Exit.isSuccess(preview)).toBe(true);
+    if (Exit.isSuccess(preview))
+      expect(preview.value.environment).toBe("preview");
+  });
+
+  it("refuses an environment it does not recognise", async () => {
+    expect(Exit.isFailure(await identityIn({ VERCEL_ENV: "staging" }))).toBe(
+      true,
+    );
+  });
+});
+
+describe("telemetry configuration", () => {
+  /**
+   * The default that matters. A log drain parses a JSON line into fields you
+   * can filter on and treats a pretty-printed one as a string you cannot — so
+   * the deployed default has to be `json`, and it has to be the default rather
+   * than a variable somebody remembers to set.
+   */
+  it("logs JSON where a drain will read it and prose where a person will", async () => {
+    const deployed = await telemetryIn({ VERCEL_ENV: "production" });
+    const laptop = await telemetryIn({});
+
+    expect(Exit.isSuccess(deployed)).toBe(true);
+    if (Exit.isSuccess(deployed)) expect(deployed.value.format).toBe("json");
+
+    expect(Exit.isSuccess(laptop)).toBe(true);
+    if (Exit.isSuccess(laptop)) expect(laptop.value.format).toBe("pretty");
+  });
+
+  it("defaults to Info, and takes a level when it is given one", async () => {
+    const byDefault = await telemetryIn({});
+    const asked = await telemetryIn({ LOG_LEVEL: "Debug" });
+
+    expect(Exit.isSuccess(byDefault)).toBe(true);
+    if (Exit.isSuccess(byDefault)) {
+      expect(byDefault.value.level).toBe(LogLevel.Info);
+    }
+
+    expect(Exit.isSuccess(asked)).toBe(true);
+    if (Exit.isSuccess(asked)) expect(asked.value.level).toBe(LogLevel.Debug);
+  });
+
+  /**
+   * A typo is refused rather than defaulted. `LOG_LEVEL=verbose` on a
+   * deployment somebody has gone to the trouble of redeploying to debug should
+   * fail loudly, not log at `Info` and leave them wondering.
+   */
+  it("refuses a level that is not one", async () => {
+    expect(Exit.isFailure(await telemetryIn({ LOG_LEVEL: "verbose" }))).toBe(
+      true,
+    );
   });
 });

@@ -22,6 +22,8 @@ import { TimeRepositoryLive } from "../infra/sql/time-repository";
 import { TransactorLive } from "../infra/sql/transactor";
 import { TrustRepositoryLive } from "../infra/sql/trust-repository";
 import { UserRepositoryLive } from "../infra/sql/user-repository";
+import { LoggingLive } from "../infra/telemetry/logging";
+import { TracingLive } from "../infra/telemetry/tracing";
 import { AuditLog } from "../services/audit-service";
 import { BillingService } from "../services/billing-service";
 import { CaseService } from "../services/case-service";
@@ -146,10 +148,31 @@ const derived = Layer.mergeAll(
  * of their own, so both are *given* `derived` rather than merged beside it.
  * `provideMerge` twice, so the second still sees the first's dependencies.
  */
+/**
+ * Observability is merged in at the top, and the order matters.
+ *
+ * `LoggingLive` replaces the default logger and `TracingLive` sets the tracer,
+ * and both are *runtime-wide* settings rather than services anybody asks for —
+ * so they have to be part of the layer the `ManagedRuntime` is built from, not
+ * something a call site provides. Merged rather than provided, because nothing
+ * below them depends on them: a repository does not require a logger, it just
+ * logs, and whichever logger the runtime holds is the one it gets.
+ *
+ * Which is also why they are last. Anything built *before* them — a layer's own
+ * construction effects, `DatabaseConfig` failing on a bad URL — logs through
+ * Effect's default logger, because at that point ours does not exist yet. That
+ * is a real gap and a small one: it covers only the first few milliseconds of a
+ * process, and the alternative is a bootstrap ordering problem that buys back
+ * nothing except those milliseconds.
+ */
 export const AppLayer = Layer.mergeAll(
   NoticeService.Default,
   DashboardService.Default,
-).pipe(Layer.provideMerge(derived));
+).pipe(
+  Layer.provideMerge(derived),
+  Layer.merge(LoggingLive),
+  Layer.merge(TracingLive),
+);
 
 export type AppServices = Layer.Layer.Success<typeof AppLayer>;
 

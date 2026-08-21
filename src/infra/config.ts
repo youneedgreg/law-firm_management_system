@@ -1,4 +1,4 @@
-import { Config, Effect, Redacted, Schema } from "effect";
+import { Config, Effect, LogLevel, Redacted, Schema } from "effect";
 
 /**
  * Environment configuration, validated once at startup.
@@ -114,3 +114,86 @@ export class AuthConfig extends Effect.Service<AuthConfig>()("AuthConfig", {
     };
   }),
 }) {}
+
+/**
+ * What this process calls itself when it writes a log line or opens a span.
+ *
+ * Three facts, and the third is the one that earns the service its own tag: a
+ * trace or an error report is only useful if you can say **which build** it
+ * came from. `VERCEL_GIT_COMMIT_SHA` is the deployment's commit, set by the
+ * platform on every build, so a span from a preview and a span from production
+ * are distinguishable without anybody having to remember what was deployed on
+ * Tuesday.
+ *
+ * Short-form SHA rather than the full forty characters, because it is read by
+ * people — it is the string you paste after `git show`.
+ *
+ * `environment` is `VERCEL_ENV` (`production`, `preview`, `development`) rather
+ * than `NODE_ENV`, which is `production` on a preview deployment too. Telling
+ * the two apart is the entire point of the attribute: a spike in errors on
+ * preview is somebody testing, and the same spike in production is an incident.
+ */
+export class ServiceIdentity extends Effect.Service<ServiceIdentity>()(
+  "ServiceIdentity",
+  {
+    effect: Effect.gen(function* () {
+      const commit = yield* Config.string("VERCEL_GIT_COMMIT_SHA").pipe(
+        Config.map((sha) => sha.slice(0, 7)),
+        Config.withDefault("dev"),
+      );
+
+      return {
+        name: "oklaw",
+        version: commit,
+        environment: yield* Config.literal(
+          "production",
+          "preview",
+          "development",
+        )("VERCEL_ENV").pipe(Config.withDefault("development" as const)),
+      };
+    }),
+  },
+) {}
+
+/**
+ * How much is logged, and in what shape.
+ *
+ * Two settings, both with defaults that are right for where they run, so
+ * neither has to be set anywhere for the application to behave sensibly.
+ *
+ * `LOG_FORMAT` defaults to `json` on a deployment and `pretty` on a laptop.
+ * That is not a cosmetic choice: Vercel's log drains parse a JSON line into
+ * queryable fields and treat a pretty-printed one as an opaque string, so
+ * `annotations.caseId` is either something you can filter on or something you
+ * can only eyeball. Locally the tradeoff runs the other way — nobody greps
+ * their own terminal.
+ *
+ * `LOG_LEVEL` defaults to `Info`. `Debug` is deliberately not the default even
+ * in development: the SQL layer logs every statement at `Debug`, and a page
+ * that issues forty queries would bury the one line that matters.
+ */
+export class TelemetryConfig extends Effect.Service<TelemetryConfig>()(
+  "TelemetryConfig",
+  {
+    effect: Effect.gen(function* () {
+      const deployed = yield* Config.string("VERCEL_ENV").pipe(
+        Config.option,
+        Config.map((value) => value._tag === "Some"),
+      );
+
+      return {
+        level: yield* Config.logLevel("LOG_LEVEL").pipe(
+          Config.withDefault(LogLevel.Info),
+        ),
+        format: yield* Config.literal(
+          "json",
+          "pretty",
+        )("LOG_FORMAT").pipe(
+          Config.withDefault(
+            deployed ? ("json" as const) : ("pretty" as const),
+          ),
+        ),
+      };
+    }),
+  },
+) {}
