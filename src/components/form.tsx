@@ -251,10 +251,21 @@ export function SegmentedField({
   name,
   options,
   defaultValue,
+  onChange,
 }: FieldProps & {
   name: string;
   options: readonly Option[];
   defaultValue?: string;
+  /**
+   * Told when the choice changes, for the form whose *other fields* depend on
+   * it.
+   *
+   * The control stays uncontrolled — the radios keep their own state and the
+   * form submits them — so this is a notification rather than a binding. The
+   * one caller is the client intake form, where the choice picks which half of
+   * a tagged union is being created and therefore which fields are required.
+   */
+  onChange?: (value: string) => void;
 }) {
   return (
     <FieldGroup label={label} hint={hint} wide={wide}>
@@ -266,6 +277,13 @@ export function SegmentedField({
               name={name}
               value={optionValue(option)}
               defaultChecked={optionValue(option) === defaultValue}
+              onChange={
+                onChange === undefined
+                  ? undefined
+                  : (event) => {
+                      if (event.target.checked) onChange(event.target.value);
+                    }
+              }
             />
             {optionLabel(option)}
           </label>

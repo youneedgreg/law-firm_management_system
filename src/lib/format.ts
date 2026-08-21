@@ -1,11 +1,7 @@
 import type { InvoiceStatus as FeeNoteStatus } from "@/domain/billing/invoice";
-import type {
-  CaseStatus,
-  InvoiceStatus,
-  Priority,
-  SignatureStatus,
-  TagClass,
-} from "./types";
+import type { SignatureStatus } from "@/domain/document/document";
+import type { Priority } from "@/domain/work/task";
+import type { CaseStatus, InvoiceStatus, TagClass } from "./types";
 
 /** The firm bills in Kenyan shillings; the spec lists KES as default currency. */
 export function kes(amount: number): string {
@@ -60,6 +56,13 @@ export function feeNoteStatusTag(status: FeeNoteStatus): TagClass {
   return FEE_NOTE_STATUS_TAG[status];
 }
 
+/**
+ * Takes the *domain* priority, like `signatureTag` takes the domain's
+ * signature status. The three values happen to be spelled the same as the
+ * prototype's, which is exactly why it is worth pointing at the domain
+ * deliberately: a silent structural match is one that stops matching without
+ * anything failing.
+ */
 const PRIORITY_TAG: Record<Priority, TagClass> = {
   High: "tag tag-accent-2",
   Medium: "tag tag-outline",
@@ -70,8 +73,18 @@ export function priorityTag(priority: Priority): TagClass {
   return PRIORITY_TAG[priority];
 }
 
+/**
+ * Takes the *domain* signature status, not the prototype's.
+ *
+ * The two vocabularies differ — the prototype said "Pending signature" and
+ * "Final", the domain says "Awaiting signature" and "Not required" — and this
+ * followed the domain when the register moved onto real data. "Awaiting" is
+ * outlined because it is the one state that is a piece of outstanding work;
+ * signed and not-required are both settled, and a settled document should not
+ * shout.
+ */
 export function signatureTag(status: SignatureStatus): TagClass {
-  return status === "Pending signature" ? "tag tag-outline" : "tag tag-accent";
+  return status === "Awaiting signature" ? "tag tag-outline" : "tag tag-accent";
 }
 
 export function billableTag(billable: boolean): TagClass {

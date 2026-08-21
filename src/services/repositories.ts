@@ -5,12 +5,24 @@ import type * as Identity from "../domain/identity/principal";
 import type * as Matter from "../domain/case/case";
 import type * as Client from "../domain/client/client";
 import type * as Firm from "../domain/firm/advocate";
+import type * as Court from "../domain/court/hearing";
+import type * as Documents from "../domain/document/document";
 import type * as Ledger from "../domain/trust/ledger";
+import type * as Time from "../domain/time/entry";
+import type * as Work from "../domain/work/task";
+import type * as Correspondence from "../domain/message/message";
+import type * as Log from "../domain/firm/contact";
+import type * as Library from "../domain/firm/precedent";
 import type {
   AdvocateId,
   CaseId,
   ClientId,
+  DocumentId,
+  HearingId,
   InvoiceId,
+  MessageId,
+  TaskId,
+  TimeEntryId,
   UserId,
 } from "../domain/shared/ids";
 import type * as Money from "../domain/shared/money";
@@ -63,6 +75,29 @@ export class CaseNumberTaken extends Schema.TaggedError<CaseNumberTaken>()(
 ) {
   get reason(): string {
     return `Matter reference ${this.number} is already in use`;
+  }
+}
+
+/**
+ * A fee-note number the firm has already issued.
+ *
+ * The same arrangement as `CaseNumberTaken` and for the same reason: `INV-3007`
+ * is derived from every number already stored, so two people raising a fee note
+ * at the same moment compute the same one. `invoices.number` is `UNIQUE`, the
+ * loser is refused, and `BillingService.raise` retries onto the next free
+ * number.
+ *
+ * It is a separate error from `CaseNumberTaken` rather than a shared
+ * `NumberTaken` with a field for which sequence: a caller catching one of them
+ * is handling one operation, and a single error covering both would compile at
+ * call sites that cannot actually produce it.
+ */
+export class InvoiceNumberTaken extends Schema.TaggedError<InvoiceNumberTaken>()(
+  "InvoiceNumberTaken",
+  { number: Schema.String },
+) {
+  get reason(): string {
+    return `Fee note number ${this.number} is already in use`;
   }
 }
 
@@ -155,9 +190,46 @@ export interface InvoiceRepository {
     clientId: ClientId,
   ) => Effect.Effect<readonly Billing.Invoice[], RepositoryFailure>;
 
+  /**
+   * Every fee note the firm has raised.
+   *
+   * Needed for two things that are both about the whole set rather than one
+   * client's: the next invoice number, derived from every number already
+   * issued, and the billing screen, which is a view of the firm's receivables.
+   */
+  readonly all: () => Effect.Effect<
+    readonly Billing.Invoice[],
+    RepositoryFailure
+  >;
+
   readonly save: (
     invoice: Billing.Invoice,
-  ) => Effect.Effect<Billing.Invoice, RepositoryFailure>;
+  ) => Effect.Effect<Billing.Invoice, InvoiceNumberTaken | RepositoryFailure>;
+
+  /**
+   * Appends one payment to a fee note.
+   *
+   * Deliberately not `save` with the payment added to the array. `save`
+   * replaces an invoice's payments wholesale, so recording a payment through it
+   * is a read, a modification and a write with a gap in the middle — and two
+   * clerks banking two cheques against the same invoice at the same time both
+   * read the same list, both append their own, and the second write silently
+   * discards the first. That is a lost payment, which is the worst defect this
+   * module could have: the client has paid and the firm's books say they have
+   * not.
+   *
+   * An append has no such gap. It is also where the M-Pesa confirmation's
+   * uniqueness is enforced, by a partial unique index, and translated back into
+   * the domain's `PaymentAlreadyRecorded` — the same arrangement as Rule 10's
+   * trigger and the `cases.number` index.
+   */
+  readonly recordPayment: (
+    invoiceId: InvoiceId,
+    payment: Billing.Payment,
+  ) => Effect.Effect<
+    void,
+    Billing.PaymentAlreadyRecorded | NotFound | RepositoryFailure
+  >;
 
   /**
    * Pays an invoice out of the money the firm already holds for that client.
@@ -187,6 +259,377 @@ export interface InvoiceRepository {
 
 export const InvoiceRepository =
   Context.GenericTag<InvoiceRepository>("InvoiceRepository");
+
+/**
+ * Documents on a matter file.
+ *
+ * Versions are append-only in the domain and in Postgres — `document_versions`
+ * is keyed on `(document_id, number)`, so a version cannot be replaced by
+ * writing over it. `addVersion` is a separate operation from `save` for the
+ * same reason `InvoiceRepository.recordPayment` is: a read-modify-write of the
+ * whole version list loses one when two people upload at once, and a lost
+ * version of a pleading is the copy that was actually filed.
+ */
+export interface DocumentRepository {
+  readonly byId: (
+    id: DocumentId,
+  ) => Effect.Effect<Documents.Document, NotFound | RepositoryFailure>;
+
+  readonly forCase: (
+    caseId: CaseId,
+  ) => Effect.Effect<readonly Documents.Document[], RepositoryFailure>;
+
+  readonly all: () => Effect.Effect<
+    readonly Documents.Document[],
+    RepositoryFailure
+  >;
+
+  readonly save: (
+    document: Documents.Document,
+  ) => Effect.Effect<Documents.Document, RepositoryFailure>;
+
+  /**
+   * Appends one version, and refuses to overwrite one that exists.
+   *
+   * The version number is computed inside the transaction against
+   * `(document_id, number)`, so two uploads racing cannot both claim version 4
+   * — the primary key refuses the second, which is translated to
+   * `VersionAlreadyExists` and retried by the service.
+   */
+  readonly addVersion: (
+    id: DocumentId,
+    version: Documents.Version,
+  ) => Effect.Effect<void, VersionAlreadyExists | NotFound | RepositoryFailure>;
+}
+
+export const DocumentRepository =
+  Context.GenericTag<DocumentRepository>("DocumentRepository");
+
+/**
+ * Two uploads raced for the same version number.
+ *
+ * The same arrangement as `CaseNumberTaken`: the number is derived from what is
+ * stored, `(document_id, number)` is the primary key, the loser is refused, and
+ * the service retries onto the next one. A version silently overwritten would
+ * be the version somebody filed.
+ */
+export class VersionAlreadyExists extends Schema.TaggedError<VersionAlreadyExists>()(
+  "VersionAlreadyExists",
+  { number: Schema.Int },
+) {
+  get reason(): string {
+    return `Version ${String(this.number)} of this document already exists`;
+  }
+}
+
+/**
+ * Where document bytes live.
+ *
+ * An interface in `services/` rather than a direct call to `@vercel/blob`, and
+ * the reason is the same one every repository here has: a service that imported
+ * the Blob SDK would be a service that cannot be tested without a network, and
+ * a `DocumentService` test would need a store, a token and an internet
+ * connection to assert a permission check.
+ *
+ * The three operations are the whole of what this system does with bytes.
+ * Notably absent is "read the bytes": the application never handles a document
+ * body. It hands out a **short-lived signed URL** and the browser fetches
+ * directly from the CDN — which is what keeps a 40 MB bundle of pleadings from
+ * passing through a serverless function twice.
+ */
+export interface DocumentStore {
+  /** Stores bytes and returns the key they can be fetched back by. */
+  readonly put: (
+    key: string,
+    body: Uint8Array,
+    contentType: string,
+  ) => Effect.Effect<{ readonly sizeBytes: number }, StorageFailure>;
+
+  /**
+   * A URL that will serve this key, for a short time, to whoever holds it.
+   *
+   * Short-lived because the URL *is* the authorisation once issued — there is
+   * no session on a CDN fetch. Fifteen minutes is long enough to open a
+   * document and short enough that a URL pasted into a chat is not a permanent
+   * grant.
+   */
+  readonly signedUrl: (key: string) => Effect.Effect<string, StorageFailure>;
+
+  readonly remove: (key: string) => Effect.Effect<void, StorageFailure>;
+}
+
+export const DocumentStore = Context.GenericTag<DocumentStore>("DocumentStore");
+
+/**
+ * The blob store refused or failed.
+ *
+ * Separate from `RepositoryFailure` because it is a different dependency with a
+ * different failure mode — a database that will not answer and a CDN that will
+ * not answer are different operational problems, and a single error would make
+ * the logs unable to tell them apart.
+ */
+export class StorageFailure extends Schema.TaggedError<StorageFailure>()(
+  "StorageFailure",
+  { operation: Schema.String, detail: Schema.String },
+) {
+  get reason(): string {
+    return `Document storage ${this.operation} failed: ${this.detail}`;
+  }
+}
+
+/**
+ * Court dates.
+ *
+ * `upcoming` and `awaitingOutcome` are the two reads a firm actually runs, and
+ * they are opposite halves of the same partial index: everything with no
+ * outcome, either side of today. The second is the report that matters — a
+ * hearing whose date has passed with nothing recorded is either an
+ * administrative gap or a missed attendance, and the firm needs to know which
+ * before the other side raises it.
+ */
+export interface HearingRepository {
+  readonly byId: (
+    id: HearingId,
+  ) => Effect.Effect<Court.Hearing, NotFound | RepositoryFailure>;
+
+  readonly forCase: (
+    caseId: CaseId,
+  ) => Effect.Effect<readonly Court.Hearing[], RepositoryFailure>;
+
+  /** Every hearing with no outcome recorded, in date order. */
+  readonly pending: () => Effect.Effect<
+    readonly Court.Hearing[],
+    RepositoryFailure
+  >;
+
+  readonly all: () => Effect.Effect<
+    readonly Court.Hearing[],
+    RepositoryFailure
+  >;
+
+  readonly save: (
+    hearing: Court.Hearing,
+  ) => Effect.Effect<Court.Hearing, RepositoryFailure>;
+}
+
+export const HearingRepository =
+  Context.GenericTag<HearingRepository>("HearingRepository");
+
+/**
+ * Outstanding work.
+ *
+ * `open` is shaped to the `tasks_open_by_due` partial index — everything not
+ * `Done`, by due date — and it is deliberately the *only* list read. The
+ * screens then split it into overdue and due-soon against **one clock
+ * reading**, in the service, rather than as two queries against two different
+ * `now()`s: a task that appeared in both lists, or in neither, depending on how
+ * long a second round trip took is exactly the bug the hearing diary already
+ * avoids this way.
+ *
+ * There is no `all()`. A firm accumulates completed tasks indefinitely and
+ * nothing asks for them in bulk — a done task is answered for by the audit
+ * trail, and by `forCase` when somebody is reading a matter file. An `all()`
+ * added for a screen that does not exist is a table scan waiting for a firm
+ * with three years of history.
+ */
+export interface TaskRepository {
+  readonly byId: (
+    id: TaskId,
+  ) => Effect.Effect<Work.Task, NotFound | RepositoryFailure>;
+
+  /** Every task on one matter, done included: a matter file shows both. */
+  readonly forCase: (
+    caseId: CaseId,
+  ) => Effect.Effect<readonly Work.Task[], RepositoryFailure>;
+
+  /** Everything not yet done, in due-date order. */
+  readonly open: () => Effect.Effect<readonly Work.Task[], RepositoryFailure>;
+
+  /**
+   * How many tasks are still open on a matter.
+   *
+   * A count rather than a list, because the caller — `CaseService`, about to
+   * close a matter — does not want the tasks, it wants to know whether there
+   * are any. Closing a matter over the top of "file the decree absolute" is the
+   * way that task is never done by anyone.
+   */
+  readonly openCount: (
+    caseId: CaseId,
+  ) => Effect.Effect<number, RepositoryFailure>;
+
+  readonly save: (
+    task: Work.Task,
+  ) => Effect.Effect<Work.Task, RepositoryFailure>;
+}
+
+export const TaskRepository =
+  Context.GenericTag<TaskRepository>("TaskRepository");
+
+/**
+ * Correspondence with clients.
+ *
+ * `forClient` is the only way to read a thread, and there is deliberately no
+ * `byId`. A message is never looked at on its own — it is read in the
+ * conversation it belongs to, and an id-based read would be the one that
+ * eventually gets called without a scope check.
+ *
+ * `unanswered` is the report. It reads the *latest* client message per client
+ * where nothing from the firm has been said since — one row per waiting client
+ * rather than one per unanswered message, because three questions in a row is
+ * one conversation waiting and a queue that counted them separately would be
+ * ignored within a week.
+ *
+ * `markRead` takes a set rather than one id: a thread is opened all at once,
+ * and a loop of updates can half-succeed, leaving some of what somebody plainly
+ * saw recorded as unseen.
+ */
+export interface MessageRepository {
+  readonly forClient: (
+    clientId: ClientId,
+  ) => Effect.Effect<readonly Correspondence.Message[], RepositoryFailure>;
+
+  /** The oldest unanswered message per client, newest wait last. */
+  readonly unanswered: () => Effect.Effect<
+    readonly Correspondence.Message[],
+    RepositoryFailure
+  >;
+
+  readonly send: (
+    message: Correspondence.Message,
+  ) => Effect.Effect<Correspondence.Message, RepositoryFailure>;
+
+  /**
+   * Records that these messages were read, at this moment.
+   *
+   * Answers how many rows it actually changed. Already-read messages are
+   * skipped by the `WHERE`, so the count is the number newly seen — which is
+   * what the caller wants to know and what the database is entitled to decide.
+   */
+  readonly markRead: (
+    ids: readonly MessageId[],
+    at: Date,
+  ) => Effect.Effect<number, RepositoryFailure>;
+}
+
+export const MessageRepository =
+  Context.GenericTag<MessageRepository>("MessageRepository");
+
+/**
+ * The contact log — notes about conversations that happened elsewhere.
+ *
+ * No `byId`, for the same reason `MessageRepository` has none: an entry is read
+ * in the log it belongs to, and an id-based read is the one that eventually
+ * gets called without a scope check.
+ *
+ * `latestPerClient` is one `DISTINCT ON`, not a query per client. Answering
+ * "who have we not spoken to" by asking six times is the shape that looks fine
+ * on seed data and is forty round trips against a real client list.
+ */
+export interface ContactRepository {
+  readonly forClient: (
+    clientId: ClientId,
+  ) => Effect.Effect<readonly Log.Contact[], RepositoryFailure>;
+
+  /** The firm's whole log, newest first, capped. */
+  readonly recent: (
+    limit: number,
+  ) => Effect.Effect<readonly Log.Contact[], RepositoryFailure>;
+
+  /** The most recent contact with each client, for "who have we neglected". */
+  readonly latestPerClient: () => Effect.Effect<
+    readonly Log.Contact[],
+    RepositoryFailure
+  >;
+
+  readonly log: (
+    contact: Log.Contact,
+  ) => Effect.Effect<Log.Contact, RepositoryFailure>;
+}
+
+export const ContactRepository =
+  Context.GenericTag<ContactRepository>("ContactRepository");
+
+/**
+ * The precedent bank.
+ *
+ * `all()` and `save`, and nothing more. Search and the staleness check run in
+ * the domain over the whole list — a firm's bank is tens of entries, and
+ * pushing either into SQL would put "is this still good law" in two places that
+ * eventually disagree about the interval.
+ */
+export interface PrecedentRepository {
+  readonly all: () => Effect.Effect<
+    readonly Library.Precedent[],
+    RepositoryFailure
+  >;
+
+  readonly save: (
+    precedent: Library.Precedent,
+  ) => Effect.Effect<Library.Precedent, RepositoryFailure>;
+}
+
+export const PrecedentRepository = Context.GenericTag<PrecedentRepository>(
+  "PrecedentRepository",
+);
+
+/**
+ * Recorded work.
+ *
+ * `forCase` and `unbilled` look like the same query with a filter, and are kept
+ * apart for the reason `CaseRepository` keeps `openMatters` apart from `all`:
+ * `unbilled` is shaped to the `time_entries_unbilled` partial index and this one
+ * deliberately is not, so a reader can tell from the call site which runs.
+ *
+ * `carryOnto` is the interesting one. It moves a set of entries onto a fee note
+ * as a single statement, because the alternative — a loop of updates — can
+ * half-succeed, and half a fee note's worth of time marked as billed is work
+ * that will never be billed by anyone. It refuses the whole set if any entry
+ * has already been carried, which the `WHERE invoice_id IS NULL` makes atomic:
+ * two people generating a fee note from the same matter at the same moment
+ * cannot both claim the same hours.
+ */
+export interface TimeRepository {
+  readonly byId: (
+    id: TimeEntryId,
+  ) => Effect.Effect<Time.TimeEntry, NotFound | RepositoryFailure>;
+
+  readonly forCase: (
+    caseId: CaseId,
+  ) => Effect.Effect<readonly Time.TimeEntry[], RepositoryFailure>;
+
+  readonly forAdvocate: (
+    advocateId: AdvocateId,
+  ) => Effect.Effect<readonly Time.TimeEntry[], RepositoryFailure>;
+
+  /** Billable work not yet on a fee note, for one matter or the whole firm. */
+  readonly unbilled: (
+    caseId?: CaseId,
+  ) => Effect.Effect<readonly Time.TimeEntry[], RepositoryFailure>;
+
+  readonly recent: (
+    limit: number,
+  ) => Effect.Effect<readonly Time.TimeEntry[], RepositoryFailure>;
+
+  readonly save: (
+    entry: Time.TimeEntry,
+  ) => Effect.Effect<Time.TimeEntry, RepositoryFailure>;
+
+  /**
+   * Marks a set of entries as billed on one fee note, all or nothing.
+   *
+   * Returns how many were actually claimed. A caller that asked for six and
+   * gets five has lost a race, and the difference is the signal — the count is
+   * not decoration, it is how the service knows to fail rather than to raise a
+   * fee note for the wrong amount.
+   */
+  readonly carryOnto: (
+    invoiceId: InvoiceId,
+    entries: readonly TimeEntryId[],
+  ) => Effect.Effect<number, RepositoryFailure>;
+}
+
+export const TimeRepository =
+  Context.GenericTag<TimeRepository>("TimeRepository");
 
 /**
  * The trust ledger.

@@ -18,6 +18,7 @@ import {
   inMemoryAdvocates,
   inMemoryAudit,
   inMemoryClients,
+  inMemoryTasks,
   inMemoryTransactor,
   restorable,
 } from "../../test/in-memory-repositories";
@@ -40,6 +41,7 @@ import { AuditRepository, RepositoryFailure } from "./repositories";
 
 const intake: OpenMatter = {
   title: "Zenith Distributors Ltd v. Coastal Freight Ltd",
+  opposingParties: ["Coastal Freight Ltd"],
   type: "Commercial",
   clientId: zenith.id,
   advocateId: sarah.id,
@@ -60,6 +62,7 @@ const withAudit = (audit: ReturnType<typeof inMemoryAudit>) => {
           cases.layer,
           inMemoryClients(clients),
           inMemoryAdvocates(advocates),
+          inMemoryTasks(),
           audit.layer,
           inMemoryTransactor(restorable(cases.store)),
         ),
@@ -200,6 +203,7 @@ describe("recording what was done", () => {
               cases.layer,
               inMemoryClients(clients),
               inMemoryAdvocates(advocates),
+              inMemoryTasks(),
               refusing,
               inMemoryTransactor(restorable(cases.store)),
             ),

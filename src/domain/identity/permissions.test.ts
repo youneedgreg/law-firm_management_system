@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Either } from "effect";
 import {
+  asAdvocate,
   asFinance,
   asPartner,
   asReceptionist,
@@ -33,27 +34,44 @@ import { includes, OneClient, scopeOf, WholeFirm } from "./principal";
  */
 
 describe("what each role may do", () => {
-  it("gives a Managing Partner everything except moving client money", () => {
+  it("gives a Managing Partner everything", () => {
     for (const permission of PERMISSIONS) {
-      expect(may(asPartner, permission)).toBe(permission !== "trust:write");
+      expect(may(asPartner, permission)).toBe(true);
     }
   });
 
   /**
-   * Nobody holds `trust:write`, and that is not an oversight.
+   * `trust:write` is held by two roles, and the interesting one is who is left
+   * out.
    *
-   * Client money moves by settling a fee note against the ledger —
-   * `InvoiceRepository.settleFromTrust`, one payment and one withdrawal in one
-   * transaction — and there is no operation that simply takes money out. A
-   * permission granted before an operation exists is a claim the system does
-   * not honour, so the grant waits for Phase 7's write path.
+   * It was held by nobody through Phase 6, because nothing could move client
+   * money and a permission granted before an operation exists is a claim the
+   * system does not honour. Phase 7 built the operations — a deposit, and a
+   * Rule 9 transfer to office account — so the grant moved, and this assertion
+   * moved with it, which is the point of writing it down.
+   *
+   * An **ordinary Advocate does not hold it**. That is a deliberate separation
+   * of duties rather than an omission: the fee-earner who raises a fee note
+   * cannot also pay it out of their own client's money. It is the entry to
+   * argue with if anyone is going to argue with this table, so it gets its own
+   * assertion rather than being one of six in a loop.
    */
-  it("gives nobody a free hand over the client account", () => {
-    const holders = [asPartner, asFinance, asReceptionist, asWanjiku].filter(
-      (principal) => may(principal, "trust:write"),
-    );
+  it("lets only finance and the partner move client money", () => {
+    const holders = [
+      asPartner,
+      asAdvocate,
+      asFinance,
+      asReceptionist,
+      asWanjiku,
+    ].filter((principal) => may(principal, "trust:write"));
 
-    expect(holders).toEqual([]);
+    expect(holders).toEqual([asPartner, asFinance]);
+  });
+
+  it("does not let the advocate who raised a fee note settle it from trust", () => {
+    // Reading the ledger is part of advising a client about their own money.
+    expect(may(asAdvocate, "trust:read")).toBe(true);
+    expect(may(asAdvocate, "trust:write")).toBe(false);
   });
 
   it("keeps a Finance Officer out of a matter's lifecycle", () => {
@@ -67,6 +85,32 @@ describe("what each role may do", () => {
     expect(may(asFinance, "case:open")).toBe(false);
     expect(may(asFinance, "case:amend")).toBe(false);
     expect(may(asFinance, "case:transition")).toBe(false);
+  });
+
+  /**
+   * A Receptionist reads work and does not raise it.
+   *
+   * The same shape as the diary: they answer the telephone about what is
+   * happening, and carrying out a task somebody assigned is not the same as
+   * deciding it needs doing. The read is what makes the front desk able to say
+   * "that is with Mercy, due Thursday" instead of taking a message.
+   */
+  it("lets a Receptionist read work without raising it", () => {
+    expect(may(asReceptionist, "task:read")).toBe(true);
+    expect(may(asReceptionist, "task:write")).toBe(false);
+  });
+
+  /**
+   * Finance holds both halves of `task`, and only the read half of `time`.
+   *
+   * The asymmetry is the interesting part and it is about who performs the act.
+   * Recording time is the fee-earner's own; reconciling the trust account is
+   * finance's own, and it is the prototype's one task with no matter behind it.
+   */
+  it("lets a Finance Officer raise work but not record time", () => {
+    expect(may(asFinance, "task:write")).toBe(true);
+    expect(may(asFinance, "time:read")).toBe(true);
+    expect(may(asFinance, "time:write")).toBe(false);
   });
 
   it("keeps a Receptionist away from every figure", () => {
@@ -99,11 +143,34 @@ describe("what each role may do", () => {
     expect(may(admin, "trust:read")).toBe(false);
   });
 
-  it("gives a portal user three reads and nothing else", () => {
+  /**
+   * Four reads and one write, and the write is the interesting entry.
+   *
+   * `document:read` arrived first: a client is entitled to the documents on
+   * their own file, which is what a portal is for, and the scope keeps them to
+   * their own.
+   *
+   * **`message:write` is the portal's only write, ever.** A client portal whose
+   * client cannot write is a notice board, and refusing it pushes the
+   * conversation back onto email — unencrypted, unattributed, outside every
+   * guarantee this system makes.
+   *
+   * The asymmetry with `document:write` is the argument for both. A message
+   * needs no quarantine: it is text landing in a thread the firm reads, and
+   * nothing else acts on it. A document enters the matter *file* — the thing
+   * that gets filed at court and relied on — and a file anybody may add to
+   * needs a review step and a decision about what happens to a document the
+   * firm did not put there. So one is granted and the other is not, and this
+   * assertion is where that has to be argued rather than assumed.
+   */
+  it("gives a portal user four reads and exactly one write", () => {
     expect(permissionsOf(asWanjiku)).toEqual([
       "case:read",
       "client:read",
       "invoice:read",
+      "document:read",
+      "message:read",
+      "message:write",
     ]);
 
     // The reads they do not have are the point: the client account is the
@@ -117,6 +184,24 @@ describe("what each role may do", () => {
       "invoice:write",
       "trust:read",
       "trust:write",
+      "time:read",
+      "time:write",
+      "hearing:read",
+      "hearing:write",
+      /**
+       * The one they conspicuously do not have, beside the one they do. A
+       * client may send a *message* about a document and may not put a
+       * document on the file.
+       */
+      "document:write",
+      /**
+       * The firm's own work list, which is internal by definition. It names
+       * who is doing what and by when across every matter — a client seeing it
+       * would see other clients' deadlines, and a client seeing only their own
+       * would still be reading the firm's internal allocation of staff.
+       */
+      "task:read",
+      "task:write",
       "staff:read",
       "audit:read",
     ] as const) {

@@ -4,6 +4,12 @@ import * as Matter from "../domain/case/case";
 import type * as Limitation from "../domain/case/limitation";
 import * as ClientDomain from "../domain/client/client";
 import * as Firm from "../domain/firm/advocate";
+import * as DocumentDomain from "../domain/document/document";
+import * as Work from "../domain/work/task";
+import * as Correspondence from "../domain/message/message";
+import * as HearingDomain from "../domain/court/hearing";
+import * as Ledger from "../domain/trust/ledger";
+import * as TimeDomain from "../domain/time/entry";
 
 /**
  * The domain, in a shape that survives JSON.
@@ -83,7 +89,7 @@ type IsJson<T> = [T] extends [Json] ? true : false;
  * real-looking value until something formats it. This one refuses at the
  * boundary, where the caller can still be told which field was wrong.
  */
-const Timestamp = Schema.Date.annotations({
+export const Timestamp = Schema.Date.annotations({
   identifier: "Timestamp",
   description: "An ISO-8601 date-time, e.g. 2026-08-19T00:00:00.000Z",
 });
@@ -128,9 +134,171 @@ export const Client = Schema.Union(Individual, Corporate).annotations({
   description: "A client of the firm: an individual or a corporate entity",
 });
 
+/**
+ * The one schema here that restates a *rule* as well as a date.
+ *
+ * Everything else in this file is a mechanical date substitution over the
+ * domain's own `fields`, which is what keeps it from drifting. A payment is the
+ * exception: the domain applies a struct-level filter — an M-Pesa payment must
+ * carry its confirmation code — and a filter is not a field, so spreading
+ * `PaymentFields` alone would put a schema on the wire that accepts what the
+ * domain refuses. An API that takes a payment the service will then reject is
+ * an API that has to be tried before it can be understood.
+ *
+ * The predicate itself is imported rather than rewritten, so there is one
+ * statement of the rule and this is a second application of it.
+ */
 const Payment = Schema.Struct({
-  ...Billing.Payment.fields,
+  ...Billing.PaymentFields,
   receivedOn: Timestamp,
+}).pipe(
+  Schema.filter((payment) =>
+    Billing.isReconcilable(payment) ? undefined : Billing.RECONCILABLE_MESSAGE,
+  ),
+);
+
+/**
+ * A trust movement, dated for the wire.
+ *
+ * The amount stays a positive integer and the direction stays in the reason,
+ * exactly as the domain has it. A signed amount would be smaller on the wire
+ * and would let a "deposit" of minus five thousand pass every check in the
+ * system — see `domain/trust/ledger.ts`, which explains why that shape was
+ * refused in the first place.
+ */
+export const TrustMovement = Schema.Struct({
+  ...Ledger.TrustMovement.fields,
+  recordedAt: Timestamp,
+}).annotations({
+  identifier: "TrustMovement",
+  description: "One entry in a client's trust ledger",
+});
+
+/**
+ * A time entry, dated for the wire.
+ *
+ * `invoicedOn` is a `Schema.Option`, which encodes to the tagged form
+ * `{"_tag":"Some","value":"…"}` rather than to a nullable string. That is
+ * uglier on the wire than `invoiceId: string | null` and is what the domain
+ * holds, so it is what crosses — a wire schema that flattened it would be a
+ * second model, and the drift guard below exists to make sure there is not one.
+ */
+export const TimeEntry = Schema.Struct({
+  ...TimeDomain.TimeEntry.fields,
+  workedOn: Timestamp,
+}).annotations({
+  identifier: "TimeEntry",
+  description: "A recorded unit of work",
+});
+
+/**
+ * A hearing, dated for the wire.
+ *
+ * `outcome` is the domain's tagged union unchanged, and that matters: only
+ * `Adjourned` carries a destination, so a client cannot receive an adjournment
+ * with nowhere recorded to have gone. Flattening it to
+ * `{ outcome: string, adjournedTo?: string }` would hand every consumer exactly
+ * the shape the domain refuses — and the destination is the thing that stops a
+ * matter falling off the diary.
+ *
+ * The nested date inside `Adjourned` has to be restated too, which is why the
+ * union is rebuilt here rather than spread: it is the one place in this file
+ * where a date is not at the top level.
+ */
+const Outcome = Schema.Union(
+  Schema.TaggedStruct("Heard", { note: Schema.optional(Schema.String) }),
+  Schema.TaggedStruct("Adjourned", {
+    adjournedTo: Timestamp,
+    reason: Schema.NonEmptyTrimmedString,
+  }),
+  Schema.TaggedStruct("NotReached", { note: Schema.optional(Schema.String) }),
+  Schema.TaggedStruct("Withdrawn", { note: Schema.optional(Schema.String) }),
+);
+
+export const Hearing = Schema.Struct({
+  ...HearingDomain.Hearing.fields,
+  scheduledFor: Timestamp,
+  outcome: Schema.optional(Outcome),
+}).annotations({
+  identifier: "Hearing",
+  description: "A court date, and how it went once somebody has recorded it",
+});
+
+/**
+ * A document on a matter file, dated for the wire.
+ *
+ * `versions` is a `NonEmptyArray` here as in the domain, because a document
+ * with no version is just a name and every consumer downstream would have to
+ * decide what that means. `storageKey` crosses too, and deliberately: it is not
+ * a secret — the store is private, so the key alone opens nothing, and a signed
+ * URL is issued only by `/documents/:id/download` after the permission and the
+ * scope have been checked.
+ */
+const DocumentVersion = Schema.Struct({
+  ...DocumentDomain.Version.fields,
+  uploadedOn: Timestamp,
+});
+
+export const Document = Schema.Struct({
+  ...DocumentDomain.Document.fields,
+  versions: Schema.NonEmptyArray(DocumentVersion),
+}).annotations({
+  identifier: "Document",
+  description:
+    "A document on a matter file. Versions are append-only: a filed pleading " +
+    "is evidence of what was said at that moment, and replacing its contents " +
+    "destroys the answer to the question people actually ask",
+});
+
+/**
+ * A task, with both of its dates as timestamps.
+ *
+ * `raisedOn` and `dueOn` are *days* in the domain and in Postgres — a task is
+ * due on the 20th, not at a moment on the 20th. They still cross the wire as
+ * ISO-8601 date-times, because there is no JSON date type and inventing one
+ * here would mean every consumer parsing a bespoke format. Midnight UTC is what
+ * they carry, and the description says so rather than leaving a reader to infer
+ * that a task is due at exactly one second past midnight.
+ */
+export const Task = Schema.Struct({
+  ...Work.TaskFields,
+  raisedOn: Timestamp,
+  dueOn: Timestamp,
+  completed: Schema.Option(
+    Schema.Struct({ ...Work.Completion.fields, on: Timestamp }),
+  ),
+})
+  // The invariant crosses the boundary rather than being dropped on the way
+  // out. A `Done` task with no completion record is not describable here
+  // either.
+  .pipe(Schema.filter(Work.doneIffCompleted))
+  .annotations({
+    identifier: "Task",
+    description:
+      "Outstanding work. `caseId` is absent for firm work — reconciling the " +
+      "trust account has no file number — and `completed` is present exactly " +
+      "when `status` is `Done`. Both dates are days carried at midnight UTC",
+  });
+
+/**
+ * A message on a client thread.
+ *
+ * `author` crosses the wire as the tagged union it is, so a consumer branches
+ * on `_tag` rather than testing an `advocateId` for null and hoping the two
+ * columns agreed. A `FromClient` carries no name because there is none to
+ * carry: the portal login belongs to the client, which for a company is an
+ * organisation rather than a person.
+ */
+export const Message = Schema.Struct({
+  ...Correspondence.Message.fields,
+  sentAt: Timestamp,
+  readAt: Schema.Option(Timestamp),
+}).annotations({
+  identifier: "Message",
+  description:
+    "Correspondence between a client and the firm. Append-only in the domain, " +
+    "in Postgres and on this API: there is no endpoint that edits or withdraws " +
+    "one, because what was said to a client is part of the retainer's history",
 });
 
 export const Invoice = Schema.Struct({
@@ -174,6 +342,15 @@ export const WIRE_MATCHES_DOMAIN: {
   readonly advocate: Identical<typeof Advocate.Type, Firm.Advocate>;
   readonly client: Identical<typeof Client.Type, ClientDomain.Client>;
   readonly invoice: Identical<typeof Invoice.Type, Billing.Invoice>;
+  readonly trustMovement: Identical<
+    typeof TrustMovement.Type,
+    Ledger.TrustMovement
+  >;
+  readonly timeEntry: Identical<typeof TimeEntry.Type, TimeDomain.TimeEntry>;
+  readonly hearing: Identical<typeof Hearing.Type, HearingDomain.Hearing>;
+  readonly document: Identical<typeof Document.Type, DocumentDomain.Document>;
+  readonly task: Identical<typeof Task.Type, Work.Task>;
+  readonly message: Identical<typeof Message.Type, Correspondence.Message>;
   readonly limitation: Identical<
     typeof LimitationWindow.Type,
     Limitation.LimitationWindow
@@ -183,6 +360,12 @@ export const WIRE_MATCHES_DOMAIN: {
   advocate: true,
   client: true,
   invoice: true,
+  trustMovement: true,
+  timeEntry: true,
+  hearing: true,
+  document: true,
+  task: true,
+  message: true,
   limitation: true,
 };
 
@@ -199,11 +382,23 @@ export const WIRE_IS_JSON: {
   readonly advocate: IsJson<typeof Advocate.Encoded>;
   readonly client: IsJson<typeof Client.Encoded>;
   readonly invoice: IsJson<typeof Invoice.Encoded>;
+  readonly trustMovement: IsJson<typeof TrustMovement.Encoded>;
+  readonly timeEntry: IsJson<typeof TimeEntry.Encoded>;
+  readonly hearing: IsJson<typeof Hearing.Encoded>;
+  readonly document: IsJson<typeof Document.Encoded>;
+  readonly task: IsJson<typeof Task.Encoded>;
+  readonly message: IsJson<typeof Message.Encoded>;
   readonly limitation: IsJson<typeof LimitationWindow.Encoded>;
 } = {
   case: true,
   advocate: true,
   client: true,
   invoice: true,
+  trustMovement: true,
+  timeEntry: true,
+  hearing: true,
+  document: true,
+  task: true,
+  message: true,
   limitation: true,
 };

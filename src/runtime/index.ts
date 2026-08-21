@@ -1,18 +1,39 @@
 import { type Either, Effect, Layer, ManagedRuntime } from "effect";
 import { SessionGatewayLive } from "../infra/auth/session-gateway";
+import { DocumentStoreLive } from "../infra/blob/store";
 import { AdvocateRepositoryLive } from "../infra/sql/advocate-repository";
 import { AuditRepositoryLive } from "../infra/sql/audit-repository";
 import { CaseRepositoryLive } from "../infra/sql/case-repository";
 import { PgLive } from "../infra/sql/client";
 import { ClientRepositoryLive } from "../infra/sql/client-repository";
+import { DocumentRepositoryLive } from "../infra/sql/document-repository";
+import { TaskRepositoryLive } from "../infra/sql/task-repository";
+import { MessageRepositoryLive } from "../infra/sql/message-repository";
+import { ReportRepositoryLive } from "../infra/sql/report-repository";
+import {
+  ContactRepositoryLive,
+  PrecedentRepositoryLive,
+} from "../infra/sql/firm-records-repository";
+import { HearingRepositoryLive } from "../infra/sql/hearing-repository";
 import { InvoiceRepositoryLive } from "../infra/sql/invoice-repository";
+import { TimeRepositoryLive } from "../infra/sql/time-repository";
 import { TransactorLive } from "../infra/sql/transactor";
+import { TrustRepositoryLive } from "../infra/sql/trust-repository";
 import { UserRepositoryLive } from "../infra/sql/user-repository";
 import { AuditLog } from "../services/audit-service";
 import { BillingService } from "../services/billing-service";
 import { CaseService } from "../services/case-service";
 import { ClientService } from "../services/client-service";
 import { IdentityService } from "../services/identity-service";
+import { DocumentService } from "../services/document-service";
+import { TaskService } from "../services/task-service";
+import { MessageService } from "../services/message-service";
+import { NoticeService } from "../services/notice-service";
+import { FirmService } from "../services/firm-service";
+import { LibraryService } from "../services/library-service";
+import { ReportService } from "../services/report-service";
+import { HearingService } from "../services/hearing-service";
+import { TimeService } from "../services/time-service";
 
 /**
  * Where the layers meet the framework.
@@ -34,8 +55,17 @@ const repositories = Layer.mergeAll(
   ClientRepositoryLive,
   AdvocateRepositoryLive,
   InvoiceRepositoryLive,
+  HearingRepositoryLive,
+  DocumentRepositoryLive,
   UserRepositoryLive,
   AuditRepositoryLive,
+  TrustRepositoryLive,
+  TimeRepositoryLive,
+  TaskRepositoryLive,
+  MessageRepositoryLive,
+  ContactRepositoryLive,
+  PrecedentRepositoryLive,
+  ReportRepositoryLive,
   TransactorLive,
 ).pipe(Layer.provide(PgLive));
 
@@ -52,29 +82,57 @@ const repositories = Layer.mergeAll(
 const sessions = SessionGatewayLive;
 
 /**
+ * Document bytes, in Vercel Blob.
+ *
+ * Beside the repositories rather than among them, because it is not one: it
+ * reaches a CDN over HTTP rather than Postgres over a pool, and its failures
+ * are `StorageFailure` rather than `RepositoryFailure` precisely so the logs
+ * can tell "the database will not answer" from "the blob store will not".
+ */
+const blob = DocumentStoreLive;
+
+/**
  * Everything a route may ask for.
  *
  * Deliberately only what is wired. A layer listed here that nothing uses is a
- * claim the app does not honour — so `TrustRepository` is absent, because no
- * service reads the ledger yet, and there is no `DocumentService` because there
- * is no `DocumentRepository` for one to depend on.
+ * claim the app does not honour — so there is still no `DocumentService`,
+ * because there is no `DocumentRepository` for one to depend on.
  *
- * `ClientService` and `BillingService` joined in Phase 4. Both are read-only,
- * which is exactly as much as the API offers: their data is real and served
- * from Postgres, and the write paths are Phase 7's along with the rest of those
- * modules. The screens for them still read `lib/data` — the seam Phase 3
- * described has moved, not closed.
+ * `TrustRepository` joined in Phase 7 and its arrival is the reason to read
+ * this list carefully: it means client money can now be moved by this
+ * application, where before the ledger was seeded and then read by nobody.
+ * `BillingService` is what moves it, under `trust:write`, and every movement
+ * goes through an audit entry inside the same transaction.
  */
-export const AppLayer = Layer.mergeAll(
+/**
+ * The services that compose other services.
+ *
+ * `NoticeService` reads four of the others and stores nothing of its own, so it
+ * cannot sit in `AppLayer` beside them — it has to be *given* them. That is the
+ * one Layer mistake this codebase can still make silently: a merged layer
+ * satisfies the same tags, so getting it wrong compiles and fails at runtime
+ * with "Service not found".
+ */
+const derived = Layer.mergeAll(
   CaseService.Default,
   ClientService.Default,
   BillingService.Default,
+  TimeService.Default,
+  HearingService.Default,
+  DocumentService.Default,
+  TaskService.Default,
+  MessageService.Default,
+  FirmService.Default,
+  LibraryService.Default,
+  ReportService.Default,
   AuditLog.Default,
   IdentityService.Default,
 ).pipe(
   Layer.provide(AuditLog.Default),
-  Layer.provide(Layer.mergeAll(repositories, sessions)),
+  Layer.provide(Layer.mergeAll(repositories, sessions, blob)),
 );
+
+export const AppLayer = NoticeService.Default.pipe(Layer.provideMerge(derived));
 
 export type AppServices = Layer.Layer.Success<typeof AppLayer>;
 

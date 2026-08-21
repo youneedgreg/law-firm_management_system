@@ -138,6 +138,377 @@ export const COURTS: Readonly<Record<string, Court.Court | null>> = {
   "Tax Appeals Tribunal": null,
 };
 
+// ── Payments ──────────────────────────────────────────────────────────────
+
+/**
+ * M-Pesa confirmation codes, for the fee notes the prototype says were paid
+ * that way.
+ *
+ * The prototype records a payment *method* per invoice and no reference at all,
+ * so the seed was writing `INV-3001/1` into the reference column for every
+ * payment regardless of method. For a cheque that is harmless if useless. For
+ * M-Pesa it was a falsehood of exactly the kind `KenyanPhone` was making in
+ * Phase 2: a value invented to satisfy a field, sitting in the column a
+ * reconciliation would read.
+ *
+ * Now the domain refuses an M-Pesa payment with no confirmation code, so the
+ * codes are supplied here, out loud, where a reader can see that they were made
+ * up rather than discovering it from a statement that will never match. They
+ * are format-valid and fictional; no real transaction has these codes.
+ *
+ * Required rather than defaulted: an M-Pesa fee note with no entry fails the
+ * import. A default would put the seed straight back where it was.
+ */
+export const MPESA_CONFIRMATIONS: Readonly<Record<string, string>> = {
+  "INV-3001": "QGH7XYZ12A",
+};
+
+// ── Court dates ───────────────────────────────────────────────────────────
+
+/**
+ * What each listed hearing is *for*.
+ *
+ * The prototype records a `status` — "Confirmed" or "Tentative" — which is
+ * about whether the listing is firm, not about what the court will do on the
+ * day. `HearingKind` is the second question, and a mention, a hearing and a
+ * ruling are different events with different preparation behind them.
+ *
+ * Supplied, and required: a hearing with no entry fails the import rather than
+ * defaulting to "Hearing", which would say every date in the diary is a full
+ * hearing and make the diary useless for planning a week.
+ */
+export const HEARING_KINDS_BY_ID: Readonly<Record<number, string>> = {
+  1: "Hearing",
+  2: "Mention",
+  3: "Mention",
+  4: "Directions",
+  5: "Ruling",
+  6: "Hearing",
+};
+
+// ── Documents ─────────────────────────────────────────────────────────────
+
+/**
+ * Which documents the prototype says are on the court record.
+ *
+ * The prototype records a signature status and a version count, and says
+ * nothing about filing — but `filedWithCourt` is the flag that makes a document
+ * *fixed*, so it cannot be defaulted to `false` for everything without quietly
+ * asserting that the firm has never filed anything.
+ *
+ * Supplied here, and only for the documents that plausibly went to court: a
+ * plaint and an affidavit of service are filed; a master services agreement and
+ * an attendance note are not.
+ */
+export const FILED_WITH_COURT: ReadonlySet<number> = new Set([1, 3, 5]);
+
+/**
+ * The prototype's signature vocabulary, mapped onto the domain's.
+ *
+ * Two of the three prototype values are not domain values. "Pending signature"
+ * is plainly `Awaiting signature`. "Final" is the interesting one: it is what
+ * the prototype says about a *judgment*, and a judgment is not a document the
+ * firm signs at all — the court issued it. `Not required` is the truthful
+ * answer, and it is a decision rather than a rename, which is why it is
+ * written down here instead of buried in a `??`.
+ *
+ * A status not in this table is refused by the seed. The alternative — falling
+ * back to `Not required` — would silently mark a contract as needing no
+ * signature.
+ */
+export const SIGNATURE_STATUSES_BY_PROTOTYPE: ReadonlyMap<string, string> =
+  new Map([
+    ["Signed", "Signed"],
+    ["Pending signature", "Awaiting signature"],
+    ["Final", "Not required"],
+  ]);
+
+// ── Work ──────────────────────────────────────────────────────────────────
+
+/**
+ * The prototype's task statuses, mapped onto the domain's.
+ *
+ * `Scheduled` is the interesting one, and it is dropped rather than renamed.
+ * It was never a state of the *work* — it was the presence of a date, and
+ * every task has a due date. The one task carrying it is "Attend hearing",
+ * which is a court date; the diary owns those, and the task is the preparation.
+ * `In progress` is the truthful reading: somebody has it, and it is not done.
+ *
+ * A status not in this table stops the import rather than defaulting, because
+ * defaulting to `Not started` would silently un-do work somebody had begun.
+ */
+export const TASK_STATUSES_BY_PROTOTYPE: ReadonlyMap<string, string> = new Map([
+  ["Not started", "Not started"],
+  ["In progress", "In progress"],
+  ["Scheduled", "In progress"],
+  ["Done", "Done"],
+]);
+
+/**
+ * Who the prototype's task assignees actually are.
+ *
+ * **The prototype's own data is inconsistent, and this is where that shows.**
+ * `TASKS` assigns "File documents at registry" to `"Clerk - James"`, and
+ * `STAFF` in `lib/data/firm.ts` — the same prototype's own staff list — does
+ * not contain anybody by that name. The task list and the staff list disagree.
+ *
+ * That is worth stating rather than smoothing over, because the domain has a
+ * rule about exactly this: work is assigned to a named person on the staff
+ * list, and a task assigned to somebody who is not there is a task nobody is
+ * doing while looking, in every list, as though somebody is.
+ *
+ * The registry filing is a legal assistant's job, so it goes to Mercy — a
+ * decision, recorded here, rather than a `?? someone`. Every other name maps to
+ * itself; an assignee absent from both this table and the staff list stops the
+ * import.
+ */
+export const TASK_ASSIGNEES: ReadonlyMap<string, string> = new Map([
+  ["Clerk - James", "Legal Assistant - Mercy"],
+]);
+
+// ── Correspondence ────────────────────────────────────────────────────────
+
+/**
+ * A short thread per client, supplied outright.
+ *
+ * **The prototype has no messages.** It has `COMMUNICATIONS` — a contact log of
+ * calls, meetings, WhatsApp and email *summaries* — and that is a different
+ * record: "Discussed plea strategy" on a phone call is a note somebody made
+ * about a conversation, not something anybody typed to a client. Importing it
+ * as correspondence would put words in the firm's mouth and, worse, would make
+ * the audit trail say those words were *sent*. The contact log belongs to the
+ * communications module; this is the client thread, and it starts empty unless
+ * something is written here.
+ *
+ * So these are invented, and their shape is chosen to make the one report that
+ * matters demonstrable:
+ *
+ * - **Wanjiku is waiting.** She asked, the firm read it, and nothing was said
+ *   since. That is the case every unread badge reports as clear.
+ * - **General Innovations is not.** They asked and were answered, so a
+ *   `waiting()` that returned everything would be visibly wrong.
+ *
+ * `sentAt` is expressed as days before `AS_AT` rather than as a fixed date, so
+ * the demo shows a plausible "waiting 3 days" however long after the fixtures
+ * were written it is run.
+ */
+export const SEEDED_THREAD: readonly {
+  readonly clientNumber: string;
+  readonly matterNumber?: string;
+  readonly from: "client" | "firm";
+  readonly daysAgo: number;
+  readonly read: boolean;
+  readonly body: string;
+}[] = [
+  {
+    clientNumber: "CLT-1001",
+    matterNumber: "OKL-2026-014",
+    from: "firm",
+    daysAgo: 9,
+    read: true,
+    body:
+      "Good afternoon. The plaint and verifying affidavit have been filed at " +
+      "Milimani. I will confirm the hearing date as soon as the registry " +
+      "issues it.",
+  },
+  {
+    clientNumber: "CLT-1001",
+    matterNumber: "OKL-2026-014",
+    from: "client",
+    daysAgo: 4,
+    // Read, and not answered. The point of the whole module.
+    read: true,
+    body: "Thank you. Has the hearing date come through yet?",
+  },
+  {
+    clientNumber: "CLT-1001",
+    from: "client",
+    daysAgo: 2,
+    read: false,
+    body: "Sorry to chase — is there any news? My employer needs the date.",
+  },
+  {
+    clientNumber: "CLT-2001",
+    from: "client",
+    daysAgo: 6,
+    read: true,
+    body: "Could you resend the fee note for last month? I cannot find it.",
+  },
+  {
+    clientNumber: "CLT-2001",
+    from: "firm",
+    daysAgo: 5,
+    read: false,
+    body:
+      "Attached again — INV-3002. Let me know if you would like it broken " +
+      "down by activity.",
+  },
+];
+
+// ── The firm's own records ────────────────────────────────────────────────
+
+/**
+ * Which way each logged conversation went.
+ *
+ * The prototype records a channel, a client and a summary, and not whether the
+ * firm rang them or they rang the firm — which is the first question anybody
+ * puts to a contact log. Defaulting to `Outgoing` would claim the firm
+ * initiated every conversation it has ever had, which is both untrue and
+ * flattering, so each entry is decided here and an unlisted one stops the
+ * import.
+ *
+ * Read against the summaries: sending a confirmation and sharing an invoice are
+ * things the firm did; a site-visit debrief and a plea-strategy discussion are
+ * meetings, recorded from the firm's side but initiated by the matter rather
+ * than by either party — those are marked `Outgoing` only where the summary
+ * says the firm sent something.
+ */
+export const CONTACT_DIRECTIONS: ReadonlyMap<number, string> = new Map([
+  [1, "Outgoing"],
+  [2, "Outgoing"],
+  [3, "Incoming"],
+  [4, "Incoming"],
+  [5, "Outgoing"],
+  [6, "Incoming"],
+]);
+
+/**
+ * Two conversations dated back, so the report the log exists for has something
+ * to show.
+ *
+ * The prototype's six log entries name six different clients — the firm's
+ * entire client list — and all fall within a week of each other. Imported as
+ * they stand, every client counts as recently contacted and `neglected` returns
+ * nothing at all.
+ *
+ * That is a *correct* answer and a useless demonstration: the one question a
+ * contact log exists to answer would be invisible, exactly as the precedent
+ * bank's staleness report would be if every entry had a review date. So two
+ * entries are moved back, marked here as supplied rather than adapted.
+ *
+ * The choice of which is not arbitrary. Coastal Agro's site-visit debrief and
+ * Grace Njeri's ID request are both one-off administrative exchanges — the kind
+ * a firm has once and then does not follow up, which is precisely how a client
+ * goes quiet without anybody deciding to neglect them.
+ */
+export const CONTACT_BACKDATED: ReadonlyMap<number, string> = new Map([
+  [4, "14 Apr 2026"],
+  [6, "12 May 2026"],
+]);
+
+/**
+ * Real dates for the knowledge base, whose own are labels.
+ *
+ * The prototype writes `"Updated Jan 2026"` — a string for a screen, not a
+ * date — and the domain needs two: when the entry was filed, and when somebody
+ * last checked it against current law.
+ *
+ * **`reviewed` is deliberately absent for some.** A precedent nobody has
+ * verified since it went in is exactly the one to be careful of, and supplying
+ * a review date for everything would make the staleness report empty and the
+ * whole point of the module invisible. The Land Registration checklist and the
+ * Court of Appeal digest are the two nobody has looked at.
+ */
+export const PRECEDENT_DATES: ReadonlyMap<
+  number,
+  {
+    readonly added: string;
+    readonly reviewed?: string;
+    readonly addedBy: string;
+    readonly location: string;
+    readonly note?: string;
+  }
+> = new Map([
+  [
+    1,
+    {
+      added: "12 Mar 2021",
+      reviewed: "14 Jan 2026",
+      addedBy: "Adv. Sarah Wanjiru",
+      location: "Shared drive · /precedents/employment",
+      note: "Annotated against the 2024 amendments.",
+    },
+  ],
+  [
+    2,
+    {
+      added: "3 Feb 2022",
+      reviewed: "9 Mar 2026",
+      addedBy: "Adv. Brian Kiptoo",
+      location: "Shared drive · /templates/civil-procedure",
+    },
+  ],
+  [
+    3,
+    {
+      added: "18 Jun 2019",
+      addedBy: "Adv. Sarah Wanjiru",
+      location: "Lever-arch, second shelf",
+      note: "Predates the 2023 regulations — check before relying on it.",
+    },
+  ],
+  [
+    4,
+    {
+      added: "2 Aug 2023",
+      addedBy: "Adv. Brian Kiptoo",
+      location: "Shared drive · /digests/court-of-appeal",
+    },
+  ],
+  [
+    5,
+    {
+      added: "7 Apr 2024",
+      reviewed: "4 Apr 2026",
+      addedBy: "Adv. Faith Achieng",
+      location: "Shared drive · /precedents/kra",
+      note: "Includes the notice of objection template.",
+    },
+  ],
+]);
+
+// ── Recorded time ─────────────────────────────────────────────────────────
+
+/**
+ * Hourly rates, by fee-earner.
+ *
+ * The prototype records who did the work and for how long, and no rate at all —
+ * a screen showing "2.5 hours" does not need one. A `TimeEntry` does, because
+ * the whole point of recording time is that a fee note can be built from it,
+ * and a rate of zero would produce a bill for nothing.
+ *
+ * Supplied, like everything else here, and plausible for Nairobi in 2026 rather
+ * than researched: a partner above a senior advocate above a legal assistant.
+ * An entry for somebody absent from this table fails the import, which is what
+ * stops a missing rate silently becoming free work.
+ */
+export const HOURLY_RATES: Readonly<Record<string, number>> = {
+  "Adv. Sarah Wanjiru": 25_000,
+  "Adv. Brian Kiptoo": 20_000,
+  "Adv. Faith Achieng": 20_000,
+  "Legal Assistant - Mercy": 8_000,
+  "Finance - Peter": 6_000,
+  "Reception - Ann": 4_000,
+};
+
+/**
+ * A narrative per prototype entry.
+ *
+ * `TimeEntry.narrative` is `NonEmptyTrimmedString` because it is the thing a
+ * client reads when a bill is challenged — "Drafting" alone is not a defensible
+ * description of three hours. The prototype has only the activity, so these are
+ * written here rather than derived from it, and are marked as invented by
+ * living in this file.
+ */
+export const TIME_NARRATIVES: Readonly<Record<number, string>> = {
+  1: "Drafting the plaint and verifying affidavit",
+  2: "Attending court for directions",
+  3: "Researching the pecuniary jurisdiction point",
+  4: "File housekeeping and correspondence filing",
+  5: "Consultation with the client on settlement terms",
+  6: "Drafting the list of documents",
+};
+
 // ── Matters ───────────────────────────────────────────────────────────────
 
 export interface MatterSupplement {

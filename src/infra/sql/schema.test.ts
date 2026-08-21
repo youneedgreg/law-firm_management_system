@@ -1,5 +1,6 @@
 import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { AUDITED_ENTITIES, AUDIT_ACTIONS } from "../../domain/audit/entry";
 import { allStatements } from "./migrations";
 
 /**
@@ -70,13 +71,17 @@ describe("the schema applies at all", () => {
       "cases",
       "client_contacts",
       "clients",
+      "contacts",
       "document_versions",
       "documents",
       "hearings",
       "invoice_lines",
       "invoices",
+      "messages",
       "payments",
+      "precedents",
       "sessions",
+      "tasks",
       "time_entries",
       "trust_movements",
       "users",
@@ -375,6 +380,90 @@ describe("billing constraints", () => {
 });
 
 /**
+ * M-Pesa reconciliation, migration 0006.
+ *
+ * Two rules, and they fail for different reasons — which is the whole reason
+ * both exist. The `CHECK` refuses a payment that could never be reconciled; the
+ * partial unique index refuses a second payment carrying a confirmation code
+ * that has already been banked. A system with only the first would happily
+ * credit a client twice for one transaction.
+ *
+ * The `NOT VALID` qualifier on the `CHECK` is deliberately *not* exercised here
+ * by seeding a bad row first. It governs only whether pre-existing rows were
+ * scanned when the constraint was added; every statement below is a new write,
+ * and new writes are checked. That is exactly the claim being tested.
+ */
+describe("M-Pesa reconciliation", () => {
+  const feeNote = "55555555-5555-4555-8555-555555555555";
+  const second = "66666666-6666-4666-8666-666666666666";
+
+  beforeAll(async () => {
+    await db.exec(`
+      INSERT INTO invoices (id, number, client_id, issued_on, due_on)
+      VALUES ('${feeNote}', 'INV-9101', '${client}', '2026-08-01', '2026-08-31'),
+             ('${second}', 'INV-9102', '${client}', '2026-08-01', '2026-08-31');
+    `);
+  });
+
+  it("refuses an M-Pesa payment with no confirmation code", async () => {
+    expect(
+      await refuses(`
+        INSERT INTO payments (id, invoice_id, ordinal, amount_cents, method, received_on)
+        VALUES (gen_random_uuid(), '${feeNote}', 0, 100000, 'M-Pesa', '2026-08-15')`),
+    ).toBe(true);
+  });
+
+  it("refuses a reference that is not shaped like a confirmation code", async () => {
+    expect(
+      await refuses(`
+        INSERT INTO payments (id, invoice_id, ordinal, amount_cents, method, received_on, reference)
+        VALUES (gen_random_uuid(), '${feeNote}', 1, 100000, 'M-Pesa', '2026-08-15',
+                'INV-9101/1')`),
+    ).toBe(true);
+  });
+
+  it("accepts one, and then refuses the same code a second time", async () => {
+    await db.exec(`
+      INSERT INTO payments (id, invoice_id, ordinal, amount_cents, method, received_on, reference)
+      VALUES (gen_random_uuid(), '${feeNote}', 2, 100000, 'M-Pesa', '2026-08-15',
+              'QGH7XYZ12A')`);
+
+    /**
+     * The double post, refused — and refused *across* invoices, which is the
+     * case a per-invoice constraint would miss. One M-Pesa transaction cannot
+     * pay two fee notes, and the way this mistake actually happens is somebody
+     * applying a forwarded confirmation to the wrong invoice a week later.
+     */
+    expect(
+      await refuses(`
+        INSERT INTO payments (id, invoice_id, ordinal, amount_cents, method, received_on, reference)
+        VALUES (gen_random_uuid(), '${second}', 2, 100000, 'M-Pesa', '2026-08-16',
+                'QGH7XYZ12A')`),
+    ).toBe(true);
+  });
+
+  /**
+   * The index is partial, and this is what that buys.
+   *
+   * Two cheques carrying the same client reference are ordinary. A constraint
+   * over the whole column would refuse the second one to enforce a rule that
+   * only applies to M-Pesa — a fake stricter than reality, in the database.
+   */
+  it("allows two non-M-Pesa payments to share a reference", async () => {
+    await db.exec(`
+      INSERT INTO payments (id, invoice_id, ordinal, amount_cents, method, received_on, reference)
+      VALUES (gen_random_uuid(), '${feeNote}', 3, 50000, 'Cheque', '2026-08-17', '004821'),
+             (gen_random_uuid(), '${second}', 3, 50000, 'Cheque', '2026-08-17', '004821')`);
+
+    const result = await db.query<{ count: number }>(
+      `SELECT count(*)::int AS count FROM payments WHERE reference = '004821'`,
+    );
+
+    expect(result.rows[0]?.count).toBe(2);
+  });
+});
+
+/**
  * Migration 0004 widened the phone constraint from mobile-only to any Kenyan
  * number. What matters is that it widened rather than opened: a landline is
  * accepted now, and a mistyped trunk prefix still is not.
@@ -594,6 +683,61 @@ describe("a login points at exactly one subject", () => {
   });
 });
 
+/**
+ * The audit vocabulary, in two places, asserted to be one.
+ *
+ * `AUDIT_ACTIONS` is a TypeScript union and `audit_action` is a Postgres enum,
+ * and nothing structural keeps them in step — which is exactly how Phase 7's
+ * first settlement failed: `invoice.settled` was added to the union, the enum
+ * was not migrated, and the write was refused. The transaction then rolled the
+ * money back with it, which is the guarantee working, but the right place to
+ * catch this is here rather than in a browser.
+ *
+ * Written as a set comparison in both directions. An action in the union and
+ * not the enum is a write that will fail; an action in the enum and not the
+ * union is a value no code can produce and nothing will ever read, which is
+ * dead vocabulary in the one table that is supposed to be legible in five
+ * years.
+ */
+describe("the audit vocabulary matches the domain", () => {
+  const labels = async (type: string) => {
+    const result = await db.query<{ label: string }>(
+      `SELECT e.enumlabel AS label
+         FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid
+        WHERE t.typname = $1
+        ORDER BY e.enumsortorder`,
+      [type],
+    );
+    return result.rows.map((row) => row.label);
+  };
+
+  it("declares exactly the actions the domain can record", async () => {
+    expect((await labels("audit_action")).sort()).toEqual(
+      [...AUDIT_ACTIONS].sort(),
+    );
+  });
+
+  it("declares exactly the entities the domain can act on", async () => {
+    expect((await labels("audited_entity")).sort()).toEqual(
+      [...AUDITED_ENTITIES].sort(),
+    );
+  });
+
+  /**
+   * And the enum still refuses what neither declares. This is what the enum is
+   * *for* — a `text` column would have accepted `invoice.setled` silently, and
+   * the report looking for settlements would have quietly missed one.
+   */
+  it("refuses an action nobody declared", async () => {
+    expect(
+      await refuses(`
+        INSERT INTO audit_log (id, actor_name, actor_role, action, entity, entity_id)
+        VALUES (gen_random_uuid(), 'Probe', 'Advocate', 'invoice.setled',
+                'invoice', 'x')`),
+    ).toBe(true);
+  });
+});
+
 describe("the audit trail is append-only", () => {
   const entry = "55555555-5555-4555-8555-555555555555";
 
@@ -653,5 +797,277 @@ describe("the audit trail is append-only", () => {
         INSERT INTO audit_log (id, actor_name, actor_role, action, entity, entity_id)
         VALUES (gen_random_uuid(), 'X', 'Advocate', 'case.deleted', 'case', 'x')`),
     ).toBe(true);
+  });
+});
+
+/**
+ * The task invariants, said to anything that is not this application.
+ *
+ * The domain's `Schema.filter` refuses a task that is `Done` with no completion
+ * record — but a domain filter protects one code path, and a status column
+ * beside two nullable columns is reachable from a psql prompt, a fix-up script
+ * and any future service that forgets. These are what stop the row that
+ * contradicts itself.
+ */
+describe("tasks", () => {
+  let matter: string;
+
+  beforeAll(async () => {
+    const result = await db.query<{ id: string }>(`
+      INSERT INTO cases (id, number, title, type, status, client_id, advocate_id, opened_on)
+      VALUES (gen_random_uuid(), 'OKL-2026-777', 'Task matter', 'Civil', 'New',
+              '${client}', '${advocate}', '2026-02-14')
+      RETURNING id`);
+    matter = result.rows[0]!.id;
+  });
+
+  const insert = (columns: string, values: string) =>
+    refuses(
+      `INSERT INTO tasks (id, title, assigned_to, priority, status, raised_on, due_on${columns})
+       VALUES (gen_random_uuid(), 'Draft affidavit', '${advocate}', 'High'${values})`,
+    );
+
+  it("accepts open work on a matter", async () => {
+    expect(
+      await insert(
+        ", case_id",
+        ", 'Not started', '2026-08-10', '2026-08-20', '" + matter + "'",
+      ),
+    ).toBe(false);
+  });
+
+  /**
+   * Firm work — reconciling the trust account — has no file number, and that
+   * is correct rather than a gap. `time_entries.case_id` is `NOT NULL` for the
+   * opposite reason: unattributed *time* is a hole in the billing record.
+   */
+  it("accepts firm work with no matter behind it", async () => {
+    expect(
+      await insert("", ", 'Not started', '2026-08-10', '2026-08-25'"),
+    ).toBe(false);
+  });
+
+  it("refuses a task due before it was raised", async () => {
+    expect(
+      await insert("", ", 'Not started', '2026-08-10', '2025-08-25'"),
+    ).toBe(true);
+  });
+
+  it("refuses Done with nothing recorded", async () => {
+    expect(await insert("", ", 'Done', '2026-08-10', '2026-08-20'")).toBe(true);
+  });
+
+  it("refuses a completion record under any other status", async () => {
+    expect(
+      await insert(
+        ", completed_on, completed_by",
+        ", 'In progress', '2026-08-10', '2026-08-20', '2026-08-18', '" +
+          advocate +
+          "'",
+      ),
+    ).toBe(true);
+  });
+
+  it("refuses half a completion record", async () => {
+    expect(
+      await insert(
+        ", completed_on",
+        ", 'Done', '2026-08-10', '2026-08-20', '2026-08-18'",
+      ),
+    ).toBe(true);
+  });
+
+  it("accepts a whole one", async () => {
+    expect(
+      await insert(
+        ", completed_on, completed_by",
+        ", 'Done', '2026-08-10', '2026-08-20', '2026-08-18', '" +
+          advocate +
+          "'",
+      ),
+    ).toBe(false);
+  });
+
+  /**
+   * A task exists to get a matter done, so if the matter is gone the task is
+   * not merely unassigned — it is meaningless. Same reasoning as documents and
+   * time entries, and the opposite of the audit trail, which outlives
+   * everything it names.
+   */
+  it("takes its tasks with the matter", async () => {
+    const doomed = await db.query<{ id: string }>(`
+      INSERT INTO cases (id, number, title, type, status, client_id, advocate_id, opened_on)
+      VALUES (gen_random_uuid(), 'OKL-2026-778', 'Doomed', 'Civil', 'New',
+              '${client}', '${advocate}', '2026-02-14')
+      RETURNING id`);
+    const id = doomed.rows[0]!.id;
+
+    await db.query(
+      `INSERT INTO tasks (id, title, case_id, assigned_to, priority, status, raised_on, due_on)
+       VALUES (gen_random_uuid(), 'Doomed task', '${id}', '${advocate}', 'Low',
+               'Not started', '2026-08-10', '2026-08-20')`,
+    );
+    await db.query(`DELETE FROM cases WHERE id = '${id}'`);
+
+    const left = await db.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM tasks WHERE case_id = '${id}'`,
+    );
+
+    expect(left.rows[0]?.count).toBe("0");
+  });
+});
+
+/**
+ * Correspondence, and the guarantees the database itself makes about it.
+ *
+ * What was said to a client is part of the retainer's history. A firm that can
+ * quietly revise its side of that is worse than one with no messages at all,
+ * so the append-only rule is a trigger rather than a convention — the same
+ * treatment the audit trail gets, and for a related reason.
+ */
+describe("messages", () => {
+  let matter: string;
+  let sent: string;
+
+  beforeAll(async () => {
+    const result = await db.query<{ id: string }>(`
+      INSERT INTO cases (id, number, title, type, status, client_id, advocate_id, opened_on)
+      VALUES (gen_random_uuid(), 'OKL-2030-001', 'Message matter', 'Civil', 'New',
+              '${client}', '${advocate}', '2026-02-14')
+      RETURNING id`);
+    matter = result.rows[0]!.id;
+
+    const message = await db.query<{ id: string }>(`
+      INSERT INTO messages (id, client_id, case_id, author, body, sent_at)
+      VALUES (gen_random_uuid(), '${client}', '${matter}', 'FromClient',
+              'Any news on the hearing?', '2026-08-20T10:00:00Z')
+      RETURNING id`);
+    sent = message.rows[0]!.id;
+  });
+
+  it("accepts a message from a client, naming nobody", async () => {
+    expect(
+      await refuses(`
+        INSERT INTO messages (id, client_id, author, body)
+        VALUES (gen_random_uuid(), '${client}', 'FromClient', 'Hello')`),
+    ).toBe(false);
+  });
+
+  it("accepts a message from the firm, naming the advocate", async () => {
+    expect(
+      await refuses(`
+        INSERT INTO messages (id, client_id, author, advocate_id, body)
+        VALUES (gen_random_uuid(), '${client}', 'FromFirm', '${advocate}', 'Hello')`),
+    ).toBe(false);
+  });
+
+  /**
+   * The tagged union, in SQL. Both halves refused, because either way round
+   * the row means two things at once.
+   */
+  it("refuses a firm message that names nobody", async () => {
+    expect(
+      await refuses(`
+        INSERT INTO messages (id, client_id, author, body)
+        VALUES (gen_random_uuid(), '${client}', 'FromFirm', 'Hello')`),
+    ).toBe(true);
+  });
+
+  it("refuses a client message that names an advocate", async () => {
+    expect(
+      await refuses(`
+        INSERT INTO messages (id, client_id, author, advocate_id, body)
+        VALUES (gen_random_uuid(), '${client}', 'FromClient', '${advocate}', 'Hello')`),
+    ).toBe(true);
+  });
+
+  it("refuses an empty message", async () => {
+    expect(
+      await refuses(`
+        INSERT INTO messages (id, client_id, author, body)
+        VALUES (gen_random_uuid(), '${client}', 'FromClient', '   ')`),
+    ).toBe(true);
+  });
+
+  it("refuses a message read before it was sent", async () => {
+    expect(
+      await refuses(`
+        INSERT INTO messages (id, client_id, author, body, sent_at, read_at)
+        VALUES (gen_random_uuid(), '${client}', 'FromClient', 'Hello',
+                '2026-08-20T10:00:00Z', '2026-08-19T10:00:00Z')`),
+    ).toBe(true);
+  });
+
+  it("refuses an edit to what was said", async () => {
+    expect(
+      await refuses(
+        `UPDATE messages SET body = 'Something else' WHERE id = '${sent}'`,
+      ),
+    ).toBe(true);
+  });
+
+  it("refuses a delete", async () => {
+    expect(await refuses(`DELETE FROM messages WHERE id = '${sent}'`)).toBe(
+      true,
+    );
+  });
+
+  /** Marking read is the one permitted update: it is not a revision. */
+  it("permits marking it read", async () => {
+    expect(
+      await refuses(
+        `UPDATE messages SET read_at = '2026-08-20T11:00:00Z' WHERE id = '${sent}'`,
+      ),
+    ).toBe(false);
+  });
+
+  /**
+   * First read wins. Overwriting would make a message look freshly seen every
+   * time somebody opened the page, and "when did you first see this" has one
+   * answer.
+   */
+  it("refuses a second, different read time", async () => {
+    expect(
+      await refuses(
+        `UPDATE messages SET read_at = '2026-08-25T09:00:00Z' WHERE id = '${sent}'`,
+      ),
+    ).toBe(true);
+  });
+
+  /**
+   * Correspondence does not cascade away with the client, unlike every other
+   * child table here. A system that silently discards it when somebody tidies
+   * up a record cannot answer "what did you tell them, and when".
+   */
+  it("will not let a client with correspondence be deleted", async () => {
+    expect(await refuses(`DELETE FROM clients WHERE id = '${client}'`)).toBe(
+      true,
+    );
+  });
+
+  /**
+   * Nor does a matter with correspondence on it, and the reason is the trigger
+   * above rather than tidiness.
+   *
+   * `case_id` was first written `ON DELETE SET NULL` — which reads as the
+   * gentle option and is not: nulling the column is an *edit* to a message,
+   * which the append-only trigger refuses, so the delete failed with a
+   * confusing error from the trigger instead of a clear one from the
+   * constraint. This test is what found that, and `RESTRICT` is what makes the
+   * two agree.
+   */
+  it("will not let a matter with correspondence be deleted", async () => {
+    const doomed = await db.query<{ id: string }>(`
+      INSERT INTO cases (id, number, title, type, status, client_id, advocate_id, opened_on)
+      VALUES (gen_random_uuid(), 'OKL-2030-002', 'Doomed', 'Civil', 'New',
+              '${client}', '${advocate}', '2026-02-14')
+      RETURNING id`);
+    const id = doomed.rows[0]!.id;
+
+    await db.query(`
+      INSERT INTO messages (id, client_id, case_id, author, body)
+      VALUES (gen_random_uuid(), '${client}', '${id}', 'FromClient', 'About this one')`);
+
+    expect(await refuses(`DELETE FROM cases WHERE id = '${id}'`)).toBe(true);
   });
 });

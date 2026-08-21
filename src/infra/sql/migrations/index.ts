@@ -14,6 +14,35 @@ import widenPhoneNumbers, {
 import identityAndAudit, {
   statements as identityStatements,
 } from "./0005_identity_and_audit";
+import mpesaReconciliation, {
+  statements as mpesaStatements,
+} from "./0006_mpesa_reconciliation";
+import validateMpesaConfirmations, {
+  statements as validateMpesaStatements,
+} from "./0007_validate_mpesa_confirmations";
+import auditMoney, {
+  statements as auditMoneyStatements,
+} from "./0008_audit_money";
+import auditTime, {
+  statements as auditTimeStatements,
+} from "./0009_audit_time";
+import caseParties, {
+  statements as casePartiesStatements,
+} from "./0010_case_parties";
+import auditClients, {
+  statements as auditClientsStatements,
+} from "./0011_audit_clients";
+import auditHearings, {
+  statements as auditHearingsStatements,
+} from "./0012_audit_hearings";
+import auditDocuments, {
+  statements as auditDocumentsStatements,
+} from "./0013_audit_documents";
+import tasks, { statements as tasksStatements } from "./0014_tasks";
+import messages, { statements as messagesStatements } from "./0015_messages";
+import firmRecords, {
+  statements as firmRecordsStatements,
+} from "./0016_firm_records";
 
 /**
  * The migration set, listed explicitly.
@@ -32,6 +61,17 @@ export const migrations = Migrator.fromRecord({
   "0003_invoice_line_and_payment_order": invoiceLineAndPaymentOrder,
   "0004_widen_phone_numbers": widenPhoneNumbers,
   "0005_identity_and_audit": identityAndAudit,
+  "0006_mpesa_reconciliation": mpesaReconciliation,
+  "0007_validate_mpesa_confirmations": validateMpesaConfirmations,
+  "0008_audit_money": auditMoney,
+  "0009_audit_time": auditTime,
+  "0010_case_parties": caseParties,
+  "0011_audit_clients": auditClients,
+  "0012_audit_hearings": auditHearings,
+  "0013_audit_documents": auditDocuments,
+  "0014_tasks": tasks,
+  "0015_messages": messages,
+  "0016_firm_records": firmRecords,
 });
 
 /**
@@ -47,4 +87,15 @@ export const allStatements: readonly string[] = [
   ...invoiceOrderStatements,
   ...phoneStatements,
   ...identityStatements,
+  ...mpesaStatements,
+  ...validateMpesaStatements,
+  ...auditMoneyStatements,
+  ...auditTimeStatements,
+  ...casePartiesStatements,
+  ...auditClientsStatements,
+  ...auditHearingsStatements,
+  ...auditDocumentsStatements,
+  ...tasksStatements,
+  ...messagesStatements,
+  ...firmRecordsStatements,
 ];

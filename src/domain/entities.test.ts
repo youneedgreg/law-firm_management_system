@@ -11,10 +11,12 @@ import {
   ClientId,
   DocumentId,
   HearingId,
+  InvoiceId,
   KenyanPhone,
   normalisePhone,
   phoneKind,
   KraPin,
+  TimeEntryId,
 } from "./shared/ids";
 import * as Money from "./shared/money";
 import * as Time from "./time/entry";
@@ -27,6 +29,9 @@ const caseId = Schema.decodeSync(CaseId)(uuid("2"));
 const advocateId = Schema.decodeSync(AdvocateId)(uuid("4"));
 const hearingId = Schema.decodeSync(HearingId)(uuid("5"));
 const documentId = Schema.decodeSync(DocumentId)(uuid("6"));
+const timeEntryId = Schema.decodeSync(TimeEntryId)(uuid("7"));
+const invoiceId = Schema.decodeSync(InvoiceId)(uuid("8"));
+const otherInvoiceId = Schema.decodeSync(InvoiceId)(uuid("8", 2));
 
 const utc = (iso: string) => new Date(`${iso}T00:00:00Z`);
 
@@ -94,6 +99,7 @@ describe("Client", () => {
 
 describe("TimeEntry", () => {
   const entry: Time.TimeEntry = {
+    id: timeEntryId,
     caseId,
     advocateId,
     activity: "Drafting",
@@ -102,7 +108,7 @@ describe("TimeEntry", () => {
     billable: true,
     hourlyRateCents: 20_000_00,
     narrative: "Drafting the plaint",
-    invoiced: false,
+    invoicedOn: Option.none(),
   };
 
   it("values billable time at the hourly rate", () => {
@@ -124,19 +130,40 @@ describe("TimeEntry", () => {
     expect(Time.utilisation([])).toBe(0);
   });
 
-  it("refuses to invoice the same work twice", () => {
-    const invoiced = Either.getOrThrow(Time.markInvoiced(entry));
-    const again = Time.markInvoiced(invoiced);
+  it("refuses to invoice the same work twice, and names the fee note", () => {
+    const invoiced = Either.getOrThrow(Time.markInvoiced(entry, invoiceId));
+    expect(Option.getOrNull(invoiced.invoicedOn)).toBe(invoiceId);
+
+    const again = Time.markInvoiced(invoiced, otherInvoiceId);
 
     const error = Option.getOrThrow(Either.getLeft(again));
     expect(error._tag).toBe("AlreadyInvoiced");
     expect(error.reason).toContain("double-charge");
+    /**
+     * The fee note it is *already* on, not the one being attempted. Somebody
+     * who hits this needs to go and look at the first one.
+     */
+    if (error._tag === "AlreadyInvoiced") {
+      expect(error.invoiceId).toBe(invoiceId);
+    }
+  });
+
+  /**
+   * A write-off is a decision, and billing it anyway would reverse that
+   * decision without anybody choosing to. `only_billable_time_is_invoiced`
+   * says the same thing in Postgres.
+   */
+  it("refuses to carry non-billable work onto a fee note", () => {
+    const written = Time.markInvoiced({ ...entry, billable: false }, invoiceId);
+
+    const error = Option.getOrThrow(Either.getLeft(written));
+    expect(error._tag).toBe("NotBillable");
   });
 
   it("lists only unbilled billable time for a matter", () => {
     const entries = [
       entry,
-      { ...entry, invoiced: true },
+      { ...entry, invoicedOn: Option.some(invoiceId) },
       { ...entry, billable: false },
     ];
 

@@ -41,8 +41,32 @@ export type DocumentId = typeof DocumentId.Type;
 export const HearingId = entityId("HearingId");
 export type HearingId = typeof HearingId.Type;
 
+export const TaskId = entityId("TaskId");
+export type TaskId = typeof TaskId.Type;
+
+export const MessageId = entityId("MessageId");
+export type MessageId = typeof MessageId.Type;
+
+export const ContactId = entityId("ContactId");
+export type ContactId = typeof ContactId.Type;
+
+export const PrecedentId = entityId("PrecedentId");
+export type PrecedentId = typeof PrecedentId.Type;
+
 export const TrustMovementId = entityId("TrustMovementId");
 export type TrustMovementId = typeof TrustMovementId.Type;
+
+/**
+ * A recorded unit of work.
+ *
+ * `TimeEntry` had no identity through Phase 1, which was defensible while
+ * nothing could be done to one: a time entry looked like a fact about a matter
+ * rather than a record in its own right. Phase 7 gave it two operations that
+ * need to name a single entry — correcting one, and carrying one onto a fee
+ * note — and both are impossible against a value with no key.
+ */
+export const TimeEntryId = entityId("TimeEntryId");
+export type TimeEntryId = typeof TimeEntryId.Type;
 
 /**
  * A login, which is not the same thing as a person's staff or client record.

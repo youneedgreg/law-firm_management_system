@@ -1,24 +1,33 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Either, Schema } from "effect";
+import { Effect, Either, Option, Schema } from "effect";
 import { BASE_URL, runningApi, withApi } from "../../test/api-harness";
 import {
+  asAdvocate,
   asFinance,
   asReceptionist,
   asWanjiku,
+  asZenith,
   closedMatter,
   daniel,
+  doneTask,
+  draftPlaint,
+  dueToday,
+  filedList,
   filedMatter,
+  firmChore,
   grace,
   lapsed,
   overdueInvoice,
+  overdueTask,
   partPaidInvoice,
   sarah,
   settledInvoice,
+  TODAY,
   unfiledMatter,
   wanjiku,
   zenith,
 } from "../../test/fixtures";
-import { CaseId, ClientId, InvoiceId } from "../domain/shared/ids";
+import { CaseId, ClientId, DocumentId, InvoiceId } from "../domain/shared/ids";
 import { openApiSpec } from "./openapi";
 
 /**
@@ -183,6 +192,7 @@ describe("reading matters", () => {
 describe("writing matters", () => {
   const intake = {
     title: "Zenith Distributors Ltd v. Coastal Freight Ltd",
+    opposingParties: ["Coastal Freight Ltd"],
     type: "Commercial",
     clientId: zenith.id,
     advocateId: sarah.id,
@@ -261,6 +271,7 @@ describe("refusals", () => {
             client.cases.open({
               payload: {
                 title: "Kariuki v. Highland Tea Ltd",
+                opposingParties: ["Highland Tea Ltd"],
                 type: "Civil",
                 clientId: wanjiku.id,
                 advocateId: sarah.id,
@@ -319,6 +330,7 @@ describe("refusals", () => {
             payload: {
               ...{
                 title: "Backdated filing",
+                opposingParties: [],
                 type: "Civil",
                 clientId: wanjiku.id,
                 advocateId: sarah.id,
@@ -616,18 +628,318 @@ describe("clients and billing", () => {
  * detail but that it *is* generated — that it tracks the definition rather than
  * a copy of it.
  */
+/**
+ * Money, over HTTP.
+ *
+ * These are the tests where the contract earns its keep, because the money
+ * refusals are the ones whose *explanation* matters most. A duplicate M-Pesa
+ * confirmation arrives on the client as `PaymentAlreadyRecorded` — the class,
+ * with its `reason` getter — and the sentence a user reads was never
+ * transmitted: the wire carried a tag and a ten-character code, and the client
+ * reconstituted the rest because both ends hold the same class.
+ */
+describe("money", () => {
+  it.effect("raises a fee note and numbers it from what is stored", () =>
+    withApi(
+      (client) =>
+        Effect.gen(function* () {
+          const raised = yield* client.billing.raise({
+            payload: {
+              clientId: zenith.id,
+              issuedOn: new Date("2026-08-19T00:00:00.000Z"),
+              dueOn: new Date("2026-09-18T00:00:00.000Z"),
+              lines: [
+                {
+                  description: "Professional fees — August",
+                  quantityHundredths: 100,
+                  unitPriceCents: 45_000_00,
+                },
+              ],
+            },
+          });
+
+          expect(raised.number).toBe("INV-1004");
+          // A `Date` on both ends, an ISO-8601 string in between.
+          expect(raised.issuedOn).toBeInstanceOf(Date);
+          expect(raised.payments).toEqual([]);
+        }),
+      { as: asFinance },
+    ),
+  );
+
+  it.effect("records a payment and re-derives the status", () =>
+    withApi(
+      (client) =>
+        Effect.gen(function* () {
+          const view = yield* client.billing.recordPayment({
+            path: { id: overdueInvoice.id },
+            payload: {
+              amountCents: 13_000_00,
+              method: "Bank Transfer",
+              receivedOn: new Date("2026-08-18T00:00:00.000Z"),
+              reference: "FT26230AB12",
+            },
+          });
+
+          expect(view.status).toBe("Paid");
+          expect(view.outstanding).toBe(0);
+        }),
+      { as: asFinance },
+    ),
+  );
+
+  /**
+   * The refusal arrives as the class, not as a message.
+   *
+   * `SFH4KJ2L91` is already on `settledInvoice`. What crosses the wire is
+   * `{"_tag":"PaymentAlreadyRecorded","confirmation":"SFH4KJ2L91"}`; the
+   * sentence below is composed on the client from a getter the server also has.
+   */
+  it.effect("refuses a confirmation code that has already been banked", () =>
+    withApi(
+      (client) =>
+        Effect.gen(function* () {
+          const result = yield* Effect.either(
+            client.billing.recordPayment({
+              path: { id: partPaidInvoice.id },
+              payload: {
+                amountCents: 1_000_00,
+                method: "M-Pesa",
+                receivedOn: new Date("2026-08-18T00:00:00.000Z"),
+                reference: "SFH4KJ2L91",
+              },
+            }),
+          );
+
+          expect(Either.isLeft(result)).toBe(true);
+          if (Either.isLeft(result)) {
+            expect(result.left._tag).toBe("PaymentAlreadyRecorded");
+            if (result.left._tag === "PaymentAlreadyRecorded") {
+              expect(result.left.confirmation).toBe("SFH4KJ2L91");
+              expect(result.left.reason).toContain("credit the client twice");
+            }
+          }
+        }),
+      { as: asFinance },
+    ),
+  );
+
+  /**
+   * The M-Pesa rule is on the *request schema*, so this never reaches a
+   * service — it is a 400 from the decoder. That is the right place for it: an
+   * API that accepts a payment its own service will then reject is an API you
+   * have to try before you can understand.
+   */
+  it.effect(
+    "refuses an M-Pesa payment with no confirmation code, at the boundary",
+    () =>
+      Effect.gen(function* () {
+        const api = runningApi({ as: asFinance });
+
+        const response = yield* Effect.promise(() =>
+          api.handler(
+            new Request(
+              `${BASE_URL}/api/invoices/${partPaidInvoice.id}/payments`,
+              {
+                method: "POST",
+                headers: {
+                  "content-type": "application/json",
+                  cookie: `oklaw.session_token=token-${asFinance.userId}`,
+                },
+                body: JSON.stringify({
+                  amountCents: 100_00,
+                  method: "M-Pesa",
+                  receivedOn: "2026-08-18T00:00:00.000Z",
+                }),
+              },
+            ),
+          ),
+        );
+
+        expect(response.status).toBe(400);
+        yield* Effect.promise(() => api.dispose());
+      }),
+  );
+
+  it.effect("settles a fee note out of client money and moves the ledger", () =>
+    withApi(
+      (client) =>
+        Effect.gen(function* () {
+          const view = yield* client.billing.settle({
+            path: { id: overdueInvoice.id },
+            payload: {
+              amountCents: 13_000_00,
+              settledOn: new Date("2026-08-19T00:00:00.000Z"),
+            },
+          });
+
+          expect(view.status).toBe("Paid");
+
+          const ledger = yield* client.billing.ledger({
+            path: { clientId: zenith.id },
+          });
+
+          expect(ledger.balance).toBe(237_000_00);
+          expect(ledger.movements.at(-1)?.reason).toBe(
+            "Transfer to office account for costs",
+          );
+        }),
+      { as: asFinance },
+    ),
+  );
+
+  /**
+   * Rule 10 as a 422, carrying both figures.
+   *
+   * The firm holds a quarter of a million shillings — for Zenith. Wanjiku's own
+   * balance is nothing, and it is her balance the rule is about.
+   */
+  it.effect("refuses a settlement the client's own balance cannot cover", () =>
+    withApi(
+      (client) =>
+        Effect.gen(function* () {
+          const result = yield* Effect.either(
+            client.billing.settle({
+              path: { id: settledInvoice.id },
+              payload: {
+                amountCents: 1_000_00,
+                settledOn: new Date("2026-08-19T00:00:00.000Z"),
+              },
+            }),
+          );
+
+          expect(Either.isLeft(result)).toBe(true);
+          if (Either.isLeft(result)) {
+            // `settledInvoice` is paid in full, so the invoice refuses before
+            // the ledger is reached — and the order is deliberate: there is no
+            // point asking the client account about a fee note with nothing
+            // owing on it.
+            expect(result.left._tag).toBe("NothingOutstanding");
+          }
+        }),
+      { as: asFinance },
+    ),
+  );
+
+  it.effect("answers 422 for a Rule 10 breach, with the rule in the body", () =>
+    Effect.gen(function* () {
+      const api = runningApi({ as: asFinance, movements: [] });
+
+      const response = yield* Effect.promise(() =>
+        api.handler(
+          new Request(
+            `${BASE_URL}/api/invoices/${overdueInvoice.id}/settlement`,
+            {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                cookie: `oklaw.session_token=token-${asFinance.userId}`,
+              },
+              body: JSON.stringify({
+                amountCents: 1_000_00,
+                settledOn: "2026-08-19T00:00:00.000Z",
+              }),
+            },
+          ),
+        ),
+      );
+
+      expect(response.status).toBe(422);
+
+      const body = (yield* Effect.promise(() => response.json())) as {
+        readonly _tag: string;
+        readonly held: number;
+        readonly requested: number;
+      };
+
+      expect(body._tag).toBe("TrustAccountUnderfunded");
+      expect(body.held).toBe(0);
+      expect(body.requested).toBe(1_000_00);
+
+      yield* Effect.promise(() => api.dispose());
+    }),
+  );
+
+  it.effect(
+    "gives finance the client account and a portal user none of it",
+    () =>
+      withApi(
+        (client) =>
+          Effect.gen(function* () {
+            const theirs = yield* client.billing.receivables();
+
+            // Wanjiku has one fee note. `trust` is absent, not empty: an empty
+            // array would say the firm holds no client money.
+            expect(theirs.invoices).toHaveLength(1);
+            expect(theirs.trust).toBeUndefined();
+          }),
+        { as: asWanjiku },
+      ),
+  );
+
+  it.effect("refuses an Advocate the client account they may not move", () =>
+    withApi(
+      (client) =>
+        Effect.gen(function* () {
+          const result = yield* Effect.either(
+            client.billing.deposit({
+              payload: {
+                clientId: zenith.id,
+                amountCents: 10_000_00,
+                receivedOn: new Date("2026-08-19T00:00:00.000Z"),
+              },
+            }),
+          );
+
+          expect(Either.isLeft(result)).toBe(true);
+          if (Either.isLeft(result)) {
+            expect(result.left._tag).toBe("NotPermitted");
+            if (result.left._tag === "NotPermitted") {
+              expect(result.left.permission).toBe("trust:write");
+            }
+          }
+        }),
+      { as: asAdvocate },
+    ),
+  );
+});
+
 describe("the OpenAPI document", () => {
   it("describes every path the contract declares", () => {
     expect(Object.keys(openApiSpec.paths).sort()).toEqual([
+      "/api/billing",
       "/api/cases",
       "/api/cases/intake-choices",
+      "/api/cases/{caseId}/documents",
+      "/api/cases/{caseId}/fee-note",
+      "/api/cases/{caseId}/tasks",
       "/api/cases/{id}",
       "/api/cases/{id}/status",
       "/api/clients",
+      "/api/clients/screen",
       "/api/clients/{clientId}/invoices",
+      "/api/clients/{clientId}/messages",
+      "/api/clients/{clientId}/trust",
       "/api/clients/{id}",
+      "/api/documents",
+      "/api/documents/{id}/download",
+      "/api/documents/{id}/filed",
+      "/api/hearings",
+      "/api/hearings/{id}/outcome",
+      "/api/invoices",
       "/api/invoices/{id}",
+      "/api/invoices/{id}/payments",
+      "/api/invoices/{id}/settlement",
       "/api/me",
+      "/api/messages",
+      "/api/messages/waiting",
+      "/api/tasks",
+      "/api/tasks/{id}/assignee",
+      "/api/tasks/{id}/completion",
+      "/api/time",
+      "/api/time/work-in-progress",
+      "/api/time/{id}",
+      "/api/trust/deposits",
     ]);
   });
 
@@ -725,6 +1037,8 @@ describe("who is asking", () => {
           `/api/clients/${wanjiku.id}`,
           `/api/clients/${wanjiku.id}/invoices`,
           "/api/me",
+          "/api/messages",
+          "/api/messages/waiting",
         ];
 
         const statuses = yield* Effect.forEach(paths, (path) =>
@@ -991,4 +1305,752 @@ describe("a member of staff, refused", () => {
         }),
       { as: asReceptionist },
     ));
+});
+
+/**
+ * The group Phase 4 deferred, exercised over the wire it finally has.
+ *
+ * The two things a service test cannot see are both here. **Encoding**: a
+ * `Version` carries a `Date`, and a `Date` does not survive JSON on its own —
+ * `Wire.Timestamp` is what makes `uploadedOn` come back as a `Date` on the
+ * client rather than a string that merely looks like one. **The contract**:
+ * `download` answers a URL, and a URL that arrived without `expiresAt` would be
+ * a consumer caching a 403.
+ */
+describe("documents", () => {
+  it.effect(
+    "serves the register with matters and current versions resolved",
+    () =>
+      withApi((client) =>
+        Effect.gen(function* () {
+          const register = yield* client.documents.register();
+
+          expect(
+            register.map((entry) => entry.document.name).sort(),
+          ).toStrictEqual([
+            "List of documents",
+            "Plaint and verifying affidavit",
+          ]);
+
+          const plaint = register.find(
+            (entry) => entry.document.id === draftPlaint.id,
+          );
+
+          expect(plaint?.matterNumber).toBe(filedMatter.number);
+          expect(plaint?.versionCount).toBe(2);
+          // The *current* version, not the first — which is the whole point of
+          // sending one alongside the count.
+          expect(plaint?.current.number).toBe(2);
+          expect(plaint?.current.sizeBytes).toBe(86_902);
+        }),
+      ),
+  );
+
+  /**
+   * A `Date` that survived JSON.
+   *
+   * `instanceof Date` is the assertion that matters: a string that reads
+   * "2026-02-12T00:00:00.000Z" would satisfy any comparison written against
+   * `.toISOString()`, and would then break the first time a caller did date
+   * arithmetic on it.
+   */
+  it.effect("brings version dates back as dates", () =>
+    withApi((client) =>
+      Effect.gen(function* () {
+        const register = yield* client.documents.register();
+        const plaint = register.find(
+          (entry) => entry.document.id === draftPlaint.id,
+        );
+
+        expect(plaint?.current.uploadedOn).toBeInstanceOf(Date);
+        expect(plaint?.current.uploadedOn.getTime()).toBe(
+          new Date("2026-02-12T00:00:00.000Z").getTime(),
+        );
+
+        for (const version of plaint?.document.versions ?? []) {
+          expect(version.uploadedOn).toBeInstanceOf(Date);
+        }
+      }),
+    ),
+  );
+
+  it.effect("serves the documents on one matter", () =>
+    withApi((client) =>
+      Effect.gen(function* () {
+        const onFile = yield* client.documents.forCase({
+          path: { caseId: filedMatter.id },
+        });
+
+        expect(onFile).toHaveLength(2);
+        expect(
+          onFile.every((document) => document.caseId === filedMatter.id),
+        ).toBe(true);
+      }),
+    ),
+  );
+
+  it.effect("mints a signed URL that says when it stops working", () =>
+    withApi((client) =>
+      Effect.gen(function* () {
+        const download = yield* client.documents.download({
+          path: { id: draftPlaint.id },
+        });
+
+        expect(download.name).toBe(draftPlaint.name);
+        // The *current* version's key, so a download link never serves a
+        // superseded draft.
+        expect(download.url).toContain(`/v2`);
+        expect(download.expiresAt).toBeInstanceOf(Date);
+        /*
+          Fifteen minutes from the *service's* clock, not the wall clock. The
+          harness runs on a fixed clock, so asserting against `Date.now()` would
+          measure the difference between the two rather than the window — and
+          the window is the security property worth pinning.
+        */
+        expect(download.expiresAt.getTime() - TODAY.getTime()).toBe(
+          15 * 60 * 1000,
+        );
+      }),
+    ),
+  );
+
+  it.effect("records a document as filed", () =>
+    withApi((client) =>
+      Effect.gen(function* () {
+        const filed = yield* client.documents.markFiled({
+          path: { id: draftPlaint.id },
+          payload: {},
+        });
+
+        expect(filed.filedWithCourt).toBe(true);
+      }),
+    ),
+  );
+
+  /**
+   * The declared error, over the wire, with its status.
+   *
+   * `AlreadyFiled` is on the endpoint rather than a 500, because it is an
+   * answer: the caller asked for something that has already happened, and a
+   * client generated from this contract can branch on the tag.
+   */
+  it("answers 409 for a document already on the court record", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const api = runningApi();
+
+        const response = yield* Effect.promise(() =>
+          api.handler(
+            new Request(`${BASE_URL}/api/documents/${filedList.id}/filed`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: "{}",
+            }),
+          ),
+        );
+
+        expect(response.status).toBe(409);
+        expect(
+          (
+            (yield* Effect.promise(() => response.json())) as {
+              _tag?: string;
+            }
+          )._tag,
+        ).toBe("AlreadyFiled");
+
+        yield* Effect.promise(() => api.dispose());
+      }),
+    ));
+
+  it("answers 404 for a document id that belongs to nothing", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const api = runningApi();
+
+        const response = yield* Effect.promise(() =>
+          api.handler(
+            new Request(`${BASE_URL}/api/documents/${ABSENT}/download`),
+          ),
+        );
+
+        expect(response.status).toBe(404);
+
+        yield* Effect.promise(() => api.dispose());
+      }),
+    ));
+
+  /**
+   * The portal's one new grant, and the scope that bounds it.
+   *
+   * Wanjiku holds `document:read` — she is entitled to the documents on her own
+   * file, which is what a client portal is for. The register she is served is
+   * her own matters' documents and nothing else, and Zenith's document answers
+   * `NotFound` rather than a refusal, for the reason every scope check in this
+   * system gives: a 403 would confirm the document exists.
+   */
+  it.effect("serves a portal user the documents on their own file", () =>
+    withApi(
+      (client) =>
+        Effect.gen(function* () {
+          const register = yield* client.documents.register();
+
+          expect(register.length).toBeGreaterThan(0);
+          for (const entry of register) {
+            expect(entry.document.caseId).toBe(filedMatter.id);
+          }
+        }),
+      { as: asWanjiku },
+    ),
+  );
+
+  it("does not let a portal user download from another client's matter", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const api = runningApi({ as: asZenith });
+
+        const response = yield* Effect.promise(() =>
+          api.handler(
+            new Request(`${BASE_URL}/api/documents/${draftPlaint.id}/download`),
+          ),
+        );
+
+        expect(response.status).toBe(404);
+
+        yield* Effect.promise(() => api.dispose());
+      }),
+    ));
+
+  /**
+   * A portal user holds `document:read` and deliberately not `document:write`.
+   * Filing a document with the court is not something a client does.
+   */
+  it("does not let a portal user file a document with the court", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const api = runningApi({ as: asWanjiku });
+
+        const response = yield* Effect.promise(() =>
+          api.handler(
+            new Request(`${BASE_URL}/api/documents/${draftPlaint.id}/filed`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: "{}",
+            }),
+          ),
+        );
+
+        expect(response.status).toBe(403);
+
+        yield* Effect.promise(() => api.dispose());
+      }),
+    ));
+
+  /** A well-formed uuid that is not one this system issued still decodes. */
+  it.effect("rejects a path parameter that is not a uuid", () =>
+    Effect.gen(function* () {
+      const api = runningApi();
+
+      const response = yield* Effect.promise(() =>
+        api.handler(
+          new Request(`${BASE_URL}/api/documents/not-a-uuid/download`),
+        ),
+      );
+
+      expect(response.status).toBe(400);
+
+      yield* Effect.promise(() => api.dispose());
+    }),
+  );
+});
+
+/**
+ * Work, over the wire.
+ *
+ * The two things a service test cannot see are both here. **The split is the
+ * server's**: `workList` returns three arrays because the boundary between
+ * overdue and due-soon is the start of a day, and a browser computing it from
+ * its own clock would disagree for every user outside UTC. And **`caseId` is an
+ * `Option` on the wire** — firm work has no matter, and the encoding has to
+ * carry an absence rather than a null that a client mistakes for an id.
+ */
+describe("tasks", () => {
+  it.effect("splits the work list on the server", () =>
+    withApi((client) =>
+      Effect.gen(function* () {
+        const list = yield* client.tasks.workList();
+
+        expect(list.overdue.map((entry) => entry.task.id)).toStrictEqual([
+          overdueTask.id,
+        ]);
+        expect(list.dueSoon.map((entry) => entry.task.id)).toContain(
+          dueToday.id,
+        );
+
+        // Exhaustive and disjoint, all the way across the wire.
+        const placed = [...list.overdue, ...list.dueSoon, ...list.later].map(
+          (entry) => entry.task.id,
+        );
+
+        expect(placed).toHaveLength(list.openCount);
+        expect(new Set(placed).size).toBe(placed.length);
+      }),
+    ),
+  );
+
+  it.effect("brings task dates back as dates", () =>
+    withApi((client) =>
+      Effect.gen(function* () {
+        const list = yield* client.tasks.workList();
+        const [first] = list.overdue;
+
+        expect(first!.task.dueOn).toBeInstanceOf(Date);
+        expect(first!.task.raisedOn).toBeInstanceOf(Date);
+      }),
+    ),
+  );
+
+  /**
+   * Firm work survives the round trip as an *absent* matter rather than as a
+   * null somebody has to remember not to treat as an id.
+   */
+  it.effect("carries firm work with no matter behind it", () =>
+    withApi((client) =>
+      Effect.gen(function* () {
+        const list = yield* client.tasks.workList();
+        const chore = [...list.overdue, ...list.dueSoon, ...list.later].find(
+          (entry) => entry.task.id === firmChore.id,
+        );
+
+        expect(Option.isNone(chore!.task.caseId)).toBe(true);
+        expect(Option.isNone(chore!.matter)).toBe(true);
+      }),
+    ),
+  );
+
+  it.effect("raises a task against a matter", () =>
+    withApi((client) =>
+      Effect.gen(function* () {
+        const raised = yield* client.tasks.raise({
+          payload: {
+            title: "Prepare the bundle",
+            caseId: Option.some(filedMatter.id),
+            assignedTo: sarah.id,
+            priority: "High",
+            dueOn: new Date("2026-08-26T00:00:00.000Z"),
+          },
+        });
+
+        expect(raised.status).toBe("Not started");
+        expect(Option.isNone(raised.completed)).toBe(true);
+      }),
+    ),
+  );
+
+  it.effect("completes a task and records who and when", () =>
+    withApi((client) =>
+      Effect.gen(function* () {
+        const done = yield* client.tasks.complete({
+          path: { id: overdueTask.id },
+          payload: {},
+        });
+
+        expect(done.status).toBe("Done");
+        expect(Option.getOrThrow(done.completed).on).toBeInstanceOf(Date);
+      }),
+    ),
+  );
+
+  /** A `DELETE` on the completion, because that is exactly what it is. */
+  it.effect("reopens by deleting the completion", () =>
+    withApi((client) =>
+      Effect.gen(function* () {
+        const reopened = yield* client.tasks.reopen({
+          path: { id: doneTask.id },
+        });
+
+        expect(reopened.status).toBe("In progress");
+        expect(Option.isNone(reopened.completed)).toBe(true);
+      }),
+    ),
+  );
+
+  it("answers 409 for a task already done", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const api = runningApi();
+
+        const response = yield* Effect.promise(() =>
+          api.handler(
+            new Request(`${BASE_URL}/api/tasks/${doneTask.id}/completion`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: "{}",
+            }),
+          ),
+        );
+
+        expect(response.status).toBe(409);
+        expect(
+          (
+            (yield* Effect.promise(() => response.json())) as {
+              _tag?: string;
+            }
+          )._tag,
+        ).toBe("AlreadyDone");
+
+        yield* Effect.promise(() => api.dispose());
+      }),
+    ));
+
+  /**
+   * **The cross-module rule, over the wire.**
+   *
+   * Closing a matter with work still on it is a 409 carrying `HasOpenTasks` —
+   * the one endpoint in this API whose precondition lives in another module.
+   * The count is on the error because "one forgotten item" and "fourteen" are
+   * different situations to whoever is reading it.
+   */
+  it("refuses to close a matter that still has open work", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const api = runningApi();
+
+        const response = yield* Effect.promise(() =>
+          api.handler(
+            new Request(`${BASE_URL}/api/cases/${filedMatter.id}/status`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ to: "Closed" }),
+            }),
+          ),
+        );
+
+        expect(response.status).toBe(409);
+
+        const body = (yield* Effect.promise(() => response.json())) as {
+          _tag?: string;
+          open?: number;
+        };
+
+        expect(body._tag).toBe("HasOpenTasks");
+        expect(body.open).toBe(2);
+
+        yield* Effect.promise(() => api.dispose());
+      }),
+    ));
+
+  /**
+   * `MatterIsClosed` is now **one** error rather than two sharing a tag. It was
+   * declared separately in the time and task services, which this API's error
+   * table caught: two schemas cannot both be `MatterIsClosed` on one wire.
+   * `attempted` is what keeps the message specific while the tag stays single.
+   */
+  it("says what was being attempted on a closed matter", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const api = runningApi();
+
+        const response = yield* Effect.promise(() =>
+          api.handler(
+            new Request(`${BASE_URL}/api/tasks`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                title: "Something on a closed file",
+                caseId: closedMatter.id,
+                assignedTo: sarah.id,
+                priority: "Low",
+                dueOn: "2026-09-01T00:00:00.000Z",
+              }),
+            }),
+          ),
+        );
+
+        expect(response.status).toBe(409);
+
+        const body = (yield* Effect.promise(() => response.json())) as {
+          _tag?: string;
+          attempted?: string;
+        };
+
+        expect(body._tag).toBe("MatterIsClosed");
+        expect(body.attempted).toBe("raise work on it");
+
+        yield* Effect.promise(() => api.dispose());
+      }),
+    ));
+
+  it("does not let a Receptionist raise work", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const api = runningApi({ as: asReceptionist });
+
+        const response = yield* Effect.promise(() =>
+          api.handler(
+            new Request(`${BASE_URL}/api/tasks`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                title: "Chase the client",
+                caseId: null,
+                assignedTo: sarah.id,
+                priority: "Low",
+                dueOn: "2026-09-01T00:00:00.000Z",
+              }),
+            }),
+          ),
+        );
+
+        expect(response.status).toBe(403);
+
+        yield* Effect.promise(() => api.dispose());
+      }),
+    ));
+
+  /** The firm's work list names who is doing what across every matter. */
+  it("does not show a portal user the firm's work list", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const api = runningApi({ as: asWanjiku });
+
+        const response = yield* Effect.promise(() =>
+          api.handler(new Request(`${BASE_URL}/api/tasks`)),
+        );
+
+        expect(response.status).toBe(403);
+
+        yield* Effect.promise(() => api.dispose());
+      }),
+    ));
+});
+
+/**
+ * Correspondence, over the wire.
+ *
+ * Two things a service test cannot see. **The author is a tagged union on the
+ * wire**, so a consumer branches on `_tag` rather than testing an `advocateId`
+ * for null and hoping two columns agreed. And **this is the only group a portal
+ * user may write to** — the one grant that makes a portal something other than
+ * a notice board, proved here as a real request rather than as a permission
+ * table entry.
+ */
+describe("messages", () => {
+  it.effect("serves a thread with the firm's names resolved", () =>
+    withApi((client) =>
+      Effect.gen(function* () {
+        const thread = yield* client.messages.thread({
+          path: { clientId: wanjiku.id },
+        });
+
+        expect(thread.clientName).toBe(wanjiku.name);
+        expect(thread.entries.length).toBeGreaterThan(0);
+
+        const [first] = thread.entries;
+        expect(first!.message.sentAt).toBeInstanceOf(Date);
+        expect(Option.getOrThrow(first!.authorName)).toBe(sarah.name);
+      }),
+    ),
+  );
+
+  /** The union, intact after a round trip through JSON. */
+  it.effect("keeps the author a tagged union", () =>
+    withApi((client) =>
+      Effect.gen(function* () {
+        const thread = yield* client.messages.thread({
+          path: { clientId: wanjiku.id },
+        });
+
+        const fromClient = thread.entries.find(
+          (entry) => entry.message.author._tag === "FromClient",
+        );
+        const fromFirm = thread.entries.find(
+          (entry) => entry.message.author._tag === "FromFirm",
+        );
+
+        expect(fromClient).toBeDefined();
+        expect(Object.keys(fromClient!.message.author)).toStrictEqual(["_tag"]);
+
+        if (fromFirm?.message.author._tag === "FromFirm") {
+          expect(fromFirm.message.author.advocateId).toBe(sarah.id);
+        }
+      }),
+    ),
+  );
+
+  it.effect("reports who is waiting, and whether they were read", () =>
+    withApi((client) =>
+      Effect.gen(function* () {
+        const waiting = yield* client.messages.waiting();
+
+        expect(waiting.map((entry) => entry.clientName)).toStrictEqual([
+          wanjiku.name,
+        ]);
+        // Read on the 17th and never answered: the worse of the two failures.
+        expect(waiting[0]?.seen).toBe(true);
+        expect(waiting[0]?.since).toBeInstanceOf(Date);
+      }),
+    ),
+  );
+
+  it.effect("sends as the advocate who is signed in", () =>
+    withApi((client) =>
+      Effect.gen(function* () {
+        const sent = yield* client.messages.send({
+          payload: {
+            clientId: wanjiku.id,
+            caseId: Option.some(filedMatter.id),
+            body: "Listed for 3 September.",
+          },
+        });
+
+        expect(sent.author._tag).toBe("FromFirm");
+        expect(Option.isNone(sent.readAt)).toBe(true);
+      }),
+    ),
+  );
+
+  /**
+   * **The portal's only write, exercised.** A client portal whose client
+   * cannot write is a notice board.
+   */
+  it.effect("lets a portal user write to their own thread", () =>
+    withApi(
+      (client) =>
+        Effect.gen(function* () {
+          const sent = yield* client.messages.send({
+            payload: {
+              clientId: wanjiku.id,
+              caseId: Option.none(),
+              body: "Thank you, that is helpful.",
+            },
+          });
+
+          expect(sent.author._tag).toBe("FromClient");
+        }),
+      { as: asWanjiku },
+    ),
+  );
+
+  it("does not let a portal user write into another client's thread", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const api = runningApi({ as: asZenith });
+
+        const response = yield* Effect.promise(() =>
+          api.handler(
+            new Request(`${BASE_URL}/api/messages`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                clientId: wanjiku.id,
+                caseId: null,
+                body: "Hello",
+              }),
+            }),
+          ),
+        );
+
+        expect(response.status).toBe(404);
+
+        yield* Effect.promise(() => api.dispose());
+      }),
+    ));
+
+  it("does not let a portal user read another client's thread", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const api = runningApi({ as: asWanjiku });
+
+        const response = yield* Effect.promise(() =>
+          api.handler(
+            new Request(`${BASE_URL}/api/clients/${zenith.id}/messages`),
+          ),
+        );
+
+        expect(response.status).toBe(404);
+
+        yield* Effect.promise(() => api.dispose());
+      }),
+    ));
+
+  /**
+   * A message about one client's matter filed into another's thread would put
+   * it in front of the wrong client. A 422 rather than a 404, because nothing
+   * is being concealed from a sender who can see both.
+   */
+  it("answers 422 for a matter that is not that client's", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const api = runningApi();
+
+        const response = yield* Effect.promise(() =>
+          api.handler(
+            new Request(`${BASE_URL}/api/messages`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                clientId: wanjiku.id,
+                caseId: unfiledMatter.id,
+                body: "About the other matter.",
+              }),
+            }),
+          ),
+        );
+
+        expect(response.status).toBe(422);
+        expect(
+          (
+            (yield* Effect.promise(() => response.json())) as {
+              _tag?: string;
+            }
+          )._tag,
+        ).toBe("MatterIsNotTheirs");
+
+        yield* Effect.promise(() => api.dispose());
+      }),
+    ));
+
+  it("does not let a Receptionist reply on the firm's behalf", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const api = runningApi({ as: asReceptionist });
+
+        const response = yield* Effect.promise(() =>
+          api.handler(
+            new Request(`${BASE_URL}/api/messages`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                clientId: wanjiku.id,
+                caseId: null,
+                body: "He will call you back.",
+              }),
+            }),
+          ),
+        );
+
+        expect(response.status).toBe(403);
+
+        yield* Effect.promise(() => api.dispose());
+      }),
+    ));
+
+  /**
+   * There is no endpoint that edits or deletes a message, for either side, and
+   * this is what says so: the router itself has no route to take.
+   */
+  it("offers no way to edit or withdraw a message", () => {
+    const paths = Object.keys(openApiSpec.paths)
+      .filter((path) => path.includes("message"))
+      .sort();
+
+    expect(paths).toStrictEqual([
+      "/api/clients/{clientId}/messages",
+      "/api/messages",
+      "/api/messages/waiting",
+    ]);
+
+    const send = openApiSpec.paths["/api/messages"];
+    expect(Object.keys(send ?? {})).toStrictEqual(["post"]);
+  });
 });

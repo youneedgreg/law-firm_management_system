@@ -36,6 +36,82 @@ export const AUDIT_ACTIONS = [
   "case.opened",
   "case.amended",
   "case.transitioned",
+  /**
+   * Money. Four actions rather than one `invoice.changed`, because these are
+   * the entries somebody will actually be looking for.
+   *
+   * `invoice.settled` is separate from `invoice.paid` although both end in a
+   * payment row, and the distinction is the one an auditor cares about: a
+   * payment recorded from outside is the client sending money, while a
+   * settlement is the *firm* moving money it already held on trust into its own
+   * account. The second is a transfer under Rule 9 and the first is not, and a
+   * trail that called them the same thing could not answer which withdrawals
+   * from client account were made and why — which is the question the Advocates
+   * (Accounts) Rules exist to make answerable.
+   */
+  "invoice.raised",
+  "invoice.paid",
+  "invoice.settled",
+  "trust.deposited",
+  "time.recorded",
+  "time.amended",
+  "client.opened",
+  "client.amended",
+  /**
+   * The one **read** in this system that is audited, and the exception needs
+   * its reason stated because the paragraph above says reads are not.
+   *
+   * A conflict screen is not a page view. It is a professional act performed
+   * before a retainer is accepted, and "was a conflict check run, when, and
+   * what did it show" is a question the Law Society asks after the fact. An
+   * unrecorded screen is indistinguishable from one that never happened.
+   *
+   * The findings go in the snapshot, so the entry says what the advocate was
+   * looking at when they decided — not merely that they looked.
+   */
+  "client.screened",
+  "hearing.scheduled",
+  "hearing.recorded",
+  "document.uploaded",
+  "document.revised",
+  "document.filed",
+  /**
+   * Work, and specifically the two entries that answer for it.
+   *
+   * `task.completed` and `task.reopened` are both here because the domain
+   * *discards* a completion record when a task is reopened — a task is a note
+   * to ourselves about work rather than evidence about the world, so it does
+   * not get the append-only treatment a document or a hearing outcome gets.
+   * The trail is therefore the only place the reversal survives, which is why
+   * both halves are recorded rather than just the reopening.
+   *
+   * `task.reassigned` is separate from a general amendment because "who was
+   * this given to, and when did that change" is the question asked when a
+   * deadline is missed, and it should not require reading a diff.
+   */
+  "task.raised",
+  "task.reassigned",
+  "task.completed",
+  "task.reopened",
+  /**
+   * Correspondence, and only the sending of it.
+   *
+   * There is no `message.read`. Reads are not audited — a row per page view
+   * buries the entries that matter — and a message being *seen* is already
+   * recorded on the message itself, where a client can ask about it. Sending
+   * is the act, and "what was said to this client and when" is the question
+   * asked after a complaint.
+   */
+  "message.sent",
+  /**
+   * A note about a conversation the system never saw.
+   *
+   * Audited even though it is only a summary, because *when it was written* is
+   * the part that matters: a note recorded three weeks after the call is a
+   * different kind of evidence from one recorded the same afternoon, and the
+   * trail's timestamp is what shows which.
+   */
+  "contact.logged",
   "session.signed-in",
   "session.signed-out",
   "session.refused",
@@ -45,7 +121,19 @@ export const AuditAction = Schema.Literal(...AUDIT_ACTIONS);
 export type AuditAction = typeof AuditAction.Type;
 
 /** What kind of thing was acted on. */
-export const AUDITED_ENTITIES = ["case", "client", "invoice", "user"] as const;
+export const AUDITED_ENTITIES = [
+  "case",
+  "client",
+  "invoice",
+  "trust",
+  "time",
+  "hearing",
+  "document",
+  "task",
+  "message",
+  "contact",
+  "user",
+] as const;
 
 export const AuditedEntity = Schema.Literal(...AUDITED_ENTITIES);
 export type AuditedEntity = typeof AuditedEntity.Type;
@@ -180,6 +268,46 @@ export const describe = (entry: AuditEntry): string => {
       return "Amended a matter";
     case "case.transitioned":
       return "Moved a matter through the lifecycle";
+    case "invoice.raised":
+      return "Raised a fee note";
+    case "invoice.paid":
+      return "Recorded a payment";
+    case "invoice.settled":
+      return "Settled a fee note from client money";
+    case "trust.deposited":
+      return "Received client money into the trust account";
+    case "time.recorded":
+      return "Recorded time on a matter";
+    case "time.amended":
+      return "Corrected a time entry";
+    case "client.opened":
+      return "Took on a client";
+    case "client.amended":
+      return "Corrected a client's particulars";
+    case "client.screened":
+      return "Ran a conflict-of-interest screen";
+    case "hearing.scheduled":
+      return "Listed a matter for hearing";
+    case "hearing.recorded":
+      return "Recorded how a hearing went";
+    case "document.uploaded":
+      return "Put a document on a matter file";
+    case "document.revised":
+      return "Added a version to a document";
+    case "task.raised":
+      return "Raised a task";
+    case "task.reassigned":
+      return "Reassigned a task";
+    case "task.completed":
+      return "Completed a task";
+    case "task.reopened":
+      return "Reopened a completed task";
+    case "message.sent":
+      return "Sent a message to a client";
+    case "contact.logged":
+      return "Logged a conversation with a client";
+    case "document.filed":
+      return "Marked a document as filed with the court";
     case "session.signed-in":
       return "Signed in";
     case "session.signed-out":

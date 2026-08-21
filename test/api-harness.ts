@@ -3,6 +3,11 @@ import { Clock, Duration, Effect, Layer } from "effect";
 import { OkLawApi } from "@/api/contract";
 import { AuthenticationLive } from "@/api/handlers/authentication";
 import { BillingHandlers } from "@/api/handlers/billing";
+import { DocumentsHandlers } from "@/api/handlers/documents";
+import { TasksHandlers } from "@/api/handlers/tasks";
+import { MessagesHandlers } from "@/api/handlers/messages";
+import { HearingsHandlers } from "@/api/handlers/hearings";
+import { TimeHandlers } from "@/api/handlers/time";
 import { CasesHandlers } from "@/api/handlers/cases";
 import { ClientsHandlers } from "@/api/handlers/clients";
 import { SessionHandlers } from "@/api/handlers/session";
@@ -11,11 +16,22 @@ import { makeClient, type OkLawClient } from "@/api/client";
 import type * as Billing from "@/domain/billing/invoice";
 import type * as Matter from "@/domain/case/case";
 import type * as Identity from "@/domain/identity/principal";
+import type * as Ledger from "@/domain/trust/ledger";
+import type * as Time from "@/domain/time/entry";
+import type * as Hearing from "@/domain/court/hearing";
+import type * as Documents from "@/domain/document/document";
+import type * as Work from "@/domain/work/task";
+import type * as Correspondence from "@/domain/message/message";
 import { AuditLog } from "@/services/audit-service";
 import { BillingService } from "@/services/billing-service";
 import { CaseService } from "@/services/case-service";
 import { ClientService } from "@/services/client-service";
 import { IdentityService } from "@/services/identity-service";
+import { DocumentService } from "@/services/document-service";
+import { TaskService } from "@/services/task-service";
+import { MessageService } from "@/services/message-service";
+import { HearingService } from "@/services/hearing-service";
+import { TimeService } from "@/services/time-service";
 import {
   advocates,
   asAdvocate,
@@ -26,7 +42,13 @@ import {
   asZenith,
   clients,
   invoices,
+  courtDates,
+  documents,
+  tasks,
+  messages,
   matters,
+  movements,
+  timeEntries,
   TODAY,
 } from "./fixtures";
 import {
@@ -34,7 +56,12 @@ import {
   inMemoryAudit,
   inMemoryCases,
   inMemoryClients,
-  inMemoryInvoices,
+  inMemoryBilling,
+  inMemoryDocuments,
+  inMemoryHearings,
+  inMemoryMessages,
+  inMemoryTasks,
+  inMemoryTime,
   inMemorySessions,
   inMemoryTransactor,
   inMemoryUsers,
@@ -96,6 +123,13 @@ const stoppedAt = (instant: Date): Clock.Clock => {
 export interface Firm {
   readonly matters?: readonly Matter.Case[];
   readonly invoices?: readonly Billing.Invoice[];
+  /** The trust ledger. Seeded per test, because Rule 10 is about a balance. */
+  readonly movements?: readonly Ledger.TrustMovement[];
+  readonly time?: readonly Time.TimeEntry[];
+  readonly hearings?: readonly Hearing.Hearing[];
+  readonly documents?: readonly Documents.Document[];
+  readonly tasks?: readonly Work.Task[];
+  readonly messages?: readonly Correspondence.Message[];
   /**
    * Who the client is signed in as.
    *
@@ -144,11 +178,21 @@ export const runningApi = (firm: Firm = {}) => {
   const signedInAs = firm.as === undefined ? asPartner : firm.as;
   const audit = inMemoryAudit();
 
+  const billing = inMemoryBilling({
+    invoices: firm.invoices ?? invoices,
+    movements: firm.movements ?? movements,
+  });
+
   const repositories = Layer.mergeAll(
     inMemoryCases(firm.matters ?? matters),
+    inMemoryTasks(firm.tasks ?? tasks),
+    inMemoryMessages(firm.messages ?? messages),
     inMemoryClients(clients),
     inMemoryAdvocates(advocates),
-    inMemoryInvoices(firm.invoices ?? invoices),
+    billing.both,
+    inMemoryTime(firm.time ?? timeEntries),
+    inMemoryHearings(firm.hearings ?? courtDates),
+    inMemoryDocuments(firm.documents ?? documents).both,
     inMemoryUsers(signedInAs === null ? KNOWN : [...KNOWN, signedInAs]),
     inMemorySessions(TOKENS),
     audit.layer,
@@ -169,6 +213,11 @@ export const runningApi = (firm: Firm = {}) => {
     CaseService.Default,
     ClientService.Default,
     BillingService.Default,
+    TimeService.Default,
+    HearingService.Default,
+    DocumentService.Default,
+    TaskService.Default,
+    MessageService.Default,
     IdentityService.Default,
     AuditLog.Default,
   ).pipe(Layer.provide(AuditLog.Default), Layer.provide(repositories));
@@ -178,6 +227,11 @@ export const runningApi = (firm: Firm = {}) => {
       CasesHandlers,
       ClientsHandlers,
       BillingHandlers,
+      TimeHandlers,
+      HearingsHandlers,
+      DocumentsHandlers,
+      TasksHandlers,
+      MessagesHandlers,
       SessionHandlers,
       AuthenticationLive,
     ]),

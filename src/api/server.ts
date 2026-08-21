@@ -4,6 +4,11 @@ import { AppLayer, runtime } from "../runtime";
 import { OkLawApi } from "./contract";
 import { AuthenticationLive } from "./handlers/authentication";
 import { BillingHandlers } from "./handlers/billing";
+import { DocumentsHandlers } from "./handlers/documents";
+import { TasksHandlers } from "./handlers/tasks";
+import { MessagesHandlers } from "./handlers/messages";
+import { HearingsHandlers } from "./handlers/hearings";
+import { TimeHandlers } from "./handlers/time";
 import { CasesHandlers } from "./handlers/cases";
 import { ClientsHandlers } from "./handlers/clients";
 import { SessionHandlers } from "./handlers/session";
@@ -37,6 +42,11 @@ const ApiLive = HttpApiBuilder.api(OkLawApi).pipe(
     CasesHandlers,
     ClientsHandlers,
     BillingHandlers,
+    TimeHandlers,
+    HearingsHandlers,
+    DocumentsHandlers,
+    TasksHandlers,
+    MessagesHandlers,
     SessionHandlers,
     /**
      * The middleware is a Layer like the handler groups, and is provided the

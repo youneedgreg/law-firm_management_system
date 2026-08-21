@@ -5,25 +5,52 @@ import {
   AdvocateRepository,
   CaseRepository,
   ClientRepository,
+  ContactRepository,
+  DocumentRepository,
+  MessageRepository,
+  PrecedentRepository,
+  TaskRepository,
+  DocumentStore,
   InvoiceRepository,
+  HearingRepository,
+  TimeRepository,
   TrustRepository,
 } from "../../services/repositories";
 import { AuthLive } from "../auth/auth";
+import { DocumentStoreLive } from "../blob/store";
 import { AdvocateRepositoryLive } from "../sql/advocate-repository";
 import { CaseRepositoryLive } from "../sql/case-repository";
 import { PgLive } from "../sql/client";
 import { ClientRepositoryLive } from "../sql/client-repository";
+import { DocumentRepositoryLive } from "../sql/document-repository";
+import { TaskRepositoryLive } from "../sql/task-repository";
+import { MessageRepositoryLive } from "../sql/message-repository";
+import {
+  ContactRepositoryLive,
+  PrecedentRepositoryLive,
+} from "../sql/firm-records-repository";
 import { InvoiceRepositoryLive } from "../sql/invoice-repository";
+import { HearingRepositoryLive } from "../sql/hearing-repository";
+import { TimeRepositoryLive } from "../sql/time-repository";
 import { TrustRepositoryLive } from "../sql/trust-repository";
 import { UserRepositoryLive } from "../sql/user-repository";
+import { CASES } from "../../lib/data/cases";
+import { stableId } from "./ids";
 import { provisionLogins } from "./logins";
 import {
   advocates,
   clientIdsByPrototypeKey,
   clients,
+  documents,
+  contacts,
   invoices,
+  messages,
+  precedents,
+  tasks,
+  hearings,
   matters,
   type SeedProblem,
+  timeEntries,
   trustMovements,
 } from "./prototype";
 
@@ -90,6 +117,36 @@ const wipe = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
 
   yield* sql`DELETE FROM trust_movements`;
+  yield* sql`DELETE FROM time_entries`;
+  yield* sql`DELETE FROM hearings`;
+  yield* sql`DELETE FROM tasks`;
+  /**
+   * `messages` before `clients` and `cases`, and both of those reference it
+   * with `RESTRICT` rather than `CASCADE` — correspondence is not something
+   * this schema throws away as a side effect. The wipe deletes it deliberately,
+   * which is the only way it goes.
+   */
+  /**
+   * `TRUNCATE`, not `DELETE`, and the difference is the point.
+   *
+   * The append-only trigger on `messages` refuses a row delete — correctly, and
+   * it refused this wipe the first time it ran. A trigger cannot be argued with
+   * from application code, and disabling it for the seed would be exactly the
+   * escape hatch that makes the guarantee worthless.
+   *
+   * `TRUNCATE` does not fire row triggers, and that is not a loophole: it is a
+   * different operation, at a different level, meaning "empty this table" rather
+   * than "remove these rows". A seed resetting a demo dataset is doing the
+   * former; nothing in the application can do either.
+   */
+  yield* sql`TRUNCATE messages`;
+  yield* sql`DELETE FROM contacts`;
+  yield* sql`DELETE FROM precedents`;
+  // Versions cascade from documents. The *objects* are deliberately not
+  // deleted: a wipe that reached into blob storage would delete anything a
+  // demo upload had put there, and re-seeding overwrites the seeded keys
+  // anyway. Orphaned objects cost storage; deleted ones cost a document.
+  yield* sql`DELETE FROM documents`;
   yield* sql`DELETE FROM payments`;
   yield* sql`DELETE FROM invoice_lines`;
   yield* sql`DELETE FROM invoices`;
@@ -110,6 +167,14 @@ export const seed = Effect.gen(function* () {
   const caseRepo = yield* CaseRepository;
   const invoiceRepo = yield* InvoiceRepository;
   const trustRepo = yield* TrustRepository;
+  const timeRepo = yield* TimeRepository;
+  const hearingRepo = yield* HearingRepository;
+  const documentRepo = yield* DocumentRepository;
+  const store = yield* DocumentStore;
+  const taskRepo = yield* TaskRepository;
+  const messageRepo = yield* MessageRepository;
+  const contactRepo = yield* ContactRepository;
+  const precedentRepo = yield* PrecedentRepository;
 
   // ── Decode everything before writing anything ──────────────────────────
   //
@@ -139,6 +204,51 @@ export const seed = Effect.gen(function* () {
   );
   const movements = yield* adapted("trust", trustMovements(clientIdsByName));
 
+  const recorded = yield* adapted(
+    "time",
+    timeEntries(caseIdsByNumber, advocateIds),
+  );
+
+  /**
+   * Keyed by the prototype's integer, not by matter number: `HEARINGS` points
+   * at `caseId`, and `stableId` is a pure function of that key.
+   */
+  const caseIdsByPrototypeId = new Map(
+    CASES.map((legalCase) => [legalCase.id, stableId("case", legalCase.id)]),
+  );
+
+  const courtDates = yield* adapted(
+    "hearing",
+    hearings(caseIdsByPrototypeId, advocateIds),
+  );
+
+  const register = yield* adapted(
+    "document",
+    documents(caseIdsByNumber, advocateIds),
+  );
+
+  const workList = yield* adapted("task", tasks(caseIdsByNumber, advocateIds));
+
+  /**
+   * Keyed by client *number* rather than by the prototype's integer: the
+   * seeded thread names clients the way a person would.
+   */
+  const clientIdsByNumber = new Map(
+    firmClients.map((client) => [client.number, client.id]),
+  );
+
+  const thread = yield* adapted(
+    "message",
+    messages(clientIdsByNumber, caseIdsByNumber, advocateIds),
+  );
+
+  const contactLog = yield* adapted(
+    "contact",
+    contacts(clientIdsByName, caseIdsByNumber, advocateIds),
+  );
+
+  const bank = yield* adapted("precedent", precedents(advocateIds));
+
   // ── Write ──────────────────────────────────────────────────────────────
 
   yield* Effect.logInfo("Clearing the existing dataset…");
@@ -164,6 +274,53 @@ export const seed = Effect.gen(function* () {
       ? trustRepo.recordDeposit(movement)
       : trustRepo.recordWithdrawal(movement),
   );
+
+  yield* Effect.logInfo(`Writing ${recorded.length} time entries…`);
+  yield* Effect.forEach(recorded, (entry) => timeRepo.save(entry));
+
+  yield* Effect.logInfo(`Writing ${courtDates.length} court dates…`);
+  yield* Effect.forEach(courtDates, (hearing) => hearingRepo.save(hearing));
+
+  /**
+   * Bodies before rows, which is the same order `DocumentService.upload` uses
+   * and for the same reason: an object in the store with no row pointing at it
+   * is invisible and costs a fraction of a cent, while a row pointing at an
+   * object that was never written is a document the register offers and the
+   * download refuses.
+   *
+   * **Each key is removed before it is written**, because the store refuses to
+   * overwrite. That refusal is deliberate — it is what stops the bytes under a
+   * version changing while the row that describes them does not — so a second
+   * seed run has to say explicitly that it is replacing the demo dataset,
+   * rather than reaching for an overwrite flag that would weaken the guarantee
+   * for every caller. `remove` on a key that is not there is a no-op, so a
+   * first run pays one wasted call per body and stays idempotent.
+   */
+  const bodies = register.flatMap((entry) => entry.bodies);
+  yield* Effect.logInfo(`Uploading ${bodies.length} document bodies…`);
+  yield* Effect.forEach(
+    bodies,
+    (body) =>
+      store
+        .remove(body.key)
+        .pipe(Effect.andThen(store.put(body.key, body.body, "text/plain"))),
+    { concurrency: 4 },
+  );
+
+  yield* Effect.logInfo(`Writing ${register.length} documents…`);
+  yield* Effect.forEach(register, (entry) => documentRepo.save(entry.document));
+
+  yield* Effect.logInfo(`Writing ${workList.length} tasks…`);
+  yield* Effect.forEach(workList, (task) => taskRepo.save(task));
+
+  yield* Effect.logInfo(`Writing ${thread.length} messages…`);
+  yield* Effect.forEach(thread, (message) => messageRepo.send(message));
+
+  yield* Effect.logInfo(`Writing ${contactLog.length} logged conversations…`);
+  yield* Effect.forEach(contactLog, (contact) => contactRepo.log(contact));
+
+  yield* Effect.logInfo(`Writing ${bank.length} precedents…`);
+  yield* Effect.forEach(bank, (precedent) => precedentRepo.save(precedent));
 
   yield* Effect.logInfo("Provisioning logins…");
   const logins = yield* provisionLogins(
@@ -205,4 +362,12 @@ export const SeedLayer = Layer.mergeAll(
   ClientRepositoryLive,
   InvoiceRepositoryLive,
   TrustRepositoryLive,
+  TimeRepositoryLive,
+  HearingRepositoryLive,
+  DocumentRepositoryLive,
+  DocumentStoreLive,
+  TaskRepositoryLive,
+  MessageRepositoryLive,
+  ContactRepositoryLive,
+  PrecedentRepositoryLive,
 ).pipe(Layer.provideMerge(PgLive), Layer.merge(AuthLive));
