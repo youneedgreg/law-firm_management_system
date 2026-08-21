@@ -38,6 +38,7 @@ import {
   NotFound,
   RepositoryFailure,
   StorageFailure,
+  AttemptLimiter,
   SessionGateway,
   ContactRepository,
   MessageRepository,
@@ -1556,3 +1557,47 @@ export const appointmentsWithStore = (
 export const inMemoryAppointments = (
   seed: readonly Diary.Appointment[] = [],
 ): Layer.Layer<AppointmentRepository> => appointmentsWithStore(seed).layer;
+
+/**
+ * Authentication attempt counters, in a `Ref`.
+ *
+ * A fixed window is not modelled here and does not need to be: every test that
+ * cares about the limit spends within one window, and a fake that also floored
+ * timestamps would be a second implementation of the rule the service is being
+ * tested against. What this preserves is the shape the service depends on —
+ * `spend` returns the count *including* this attempt, and `forget` removes the
+ * buckets entirely — because those two are what the sign-in path reasons about.
+ */
+export const inMemoryLimiter = (): {
+  readonly layer: Layer.Layer<AttemptLimiter>;
+  readonly store: Ref.Ref<ReadonlyMap<string, number>>;
+} => {
+  const store = Ref.unsafeMake<ReadonlyMap<string, number>>(new Map());
+
+  return {
+    store,
+    layer: Layer.succeed(
+      AttemptLimiter,
+      AttemptLimiter.of({
+        spend: (buckets) =>
+          Ref.modify(store, (counts) => {
+            const next = new Map(counts);
+            for (const bucket of buckets) {
+              next.set(bucket, (next.get(bucket) ?? 0) + 1);
+            }
+            const spent = new Map(
+              buckets.map((bucket) => [bucket, next.get(bucket) ?? 0]),
+            );
+            return [spent as ReadonlyMap<string, number>, next];
+          }),
+
+        forget: (buckets) =>
+          Ref.update(store, (counts) => {
+            const next = new Map(counts);
+            for (const bucket of buckets) next.delete(bucket);
+            return next;
+          }),
+      }),
+    ),
+  };
+};

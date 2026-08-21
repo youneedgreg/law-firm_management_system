@@ -873,3 +873,49 @@ export interface Transactor {
 }
 
 export const Transactor = Context.GenericTag<Transactor>("Transactor");
+
+/**
+ * How many times each counter has been spent from, in the current window.
+ *
+ * A store, not a policy. It counts and it forgets; **whether a count is too
+ * many is decided in `IdentityService`**, against the allowance the domain
+ * attached to the bucket. That division is the same one every repository here
+ * keeps, and it is worth keeping precisely because a rate limit is the kind of
+ * rule that gets quietly reinvented in a `WHERE` clause otherwise.
+ *
+ * Postgres rather than memory, and not for elegance. This runs on serverless
+ * functions: there are several instances, each with its own heap, and any of
+ * them may be replaced between two requests. An in-process counter would
+ * therefore permit *n* times the intended attempts on a good day and reset
+ * itself on a deploy — a control that measures something other than what it
+ * claims to.
+ */
+export interface AttemptLimiter {
+  /**
+   * Spends one attempt from each bucket and answers with the new counts.
+   *
+   * Spend-then-check rather than check-then-spend, because the two are not the
+   * same under concurrency: a check that reads, decides, and writes lets a
+   * burst of simultaneous attempts all read the same number below the limit.
+   * The upsert is one statement, so the count it returns is the count after
+   * this attempt and after every other one that got there first.
+   */
+  readonly spend: (
+    buckets: readonly string[],
+  ) => Effect.Effect<ReadonlyMap<string, number>, RepositoryFailure>;
+
+  /**
+   * Forgets these counters entirely.
+   *
+   * Called when a sign-in succeeds. Without it, somebody who mistypes their
+   * password four times and then gets it right carries those four attempts for
+   * the rest of the window, and is refused on their next visit for something
+   * that was already resolved.
+   */
+  readonly forget: (
+    buckets: readonly string[],
+  ) => Effect.Effect<void, RepositoryFailure>;
+}
+
+export const AttemptLimiter =
+  Context.GenericTag<AttemptLimiter>("AttemptLimiter");

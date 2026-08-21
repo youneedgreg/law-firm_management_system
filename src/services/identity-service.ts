@@ -1,9 +1,11 @@
 import { Effect, Option } from "effect";
 import * as Audit from "../domain/audit/entry";
 import type { Principal } from "../domain/identity/principal";
+import * as Throttle from "../domain/identity/throttle";
 import { AuditLog } from "./audit-service";
 import { NotAuthenticated } from "./policy";
 import {
+  AttemptLimiter,
   type InvalidCredentials,
   type RepositoryFailure,
   type SessionCookie,
@@ -30,10 +32,23 @@ import {
  * default: a new endpoint appearing in a library upgrade should not stop
  * working because this file has not heard of it.
  */
-const endpoint = (request: Request): "sign-in" | "sign-out" | "other" => {
+const endpoint = (
+  request: Request,
+): "sign-in" | "sign-out" | "reset" | "other" => {
   const path = new URL(request.url).pathname;
   if (path.endsWith("/sign-in/email")) return "sign-in";
   if (path.endsWith("/sign-out")) return "sign-out";
+  /**
+   * Better Auth serves the same operation under two names, and both have to be
+   * recognised — a limiter that knew only the current one would be a limiter
+   * with a documented bypass.
+   */
+  if (
+    path.endsWith("/request-password-reset") ||
+    path.endsWith("/forget-password")
+  ) {
+    return "reset";
+  }
   return "other";
 };
 
@@ -44,6 +59,7 @@ export class IdentityService extends Effect.Service<IdentityService>()(
       const sessions = yield* SessionGateway;
       const users = yield* UserRepository;
       const audit = yield* AuditLog;
+      const limiter = yield* AttemptLimiter;
 
       /**
        * The principal behind a request's cookies, if there is one.
@@ -90,6 +106,40 @@ export class IdentityService extends Effect.Service<IdentityService>()(
           ),
         );
 
+      /**
+       * Spends one attempt from each allowance and refuses if any is spent.
+       *
+       * The check is here rather than in the repository because it is a rule,
+       * and rules live in `services/`. The repository counts; the allowance
+       * comes from the domain; this is where the two meet.
+       *
+       * The refusal is audited under `session.throttled` rather than
+       * `session.refused`, because those are different events and an incident
+       * review turns on the difference: one is somebody who forgot their
+       * password, the other is the control firing.
+       */
+      const throttled = (
+        allowances: readonly Throttle.Allowance[],
+        attemptedBy: string,
+      ): Effect.Effect<void, Throttle.TooManyAttempts | RepositoryFailure> =>
+        limiter
+          .spend(allowances.map((allowance) => allowance.bucket))
+          .pipe(
+            Effect.flatMap((counts) =>
+              allowances.some(
+                (allowance) =>
+                  (counts.get(allowance.bucket) ?? 0) > allowance.attempts,
+              )
+                ? recorded(
+                    audit.recordSession(
+                      Audit.attemptedBy(attemptedBy),
+                      "session.throttled",
+                    ),
+                  ).pipe(Effect.andThen(Effect.fail(Throttle.refuse())))
+                : Effect.void,
+            ),
+          );
+
       return {
         identify,
 
@@ -106,14 +156,42 @@ export class IdentityService extends Effect.Service<IdentityService>()(
          * response to attach them to, and the two callers that do — a Server
          * Action and a route handler — attach them differently.
          */
-        signIn: (credentials: {
-          readonly email: string;
-          readonly password: string;
-        }): Effect.Effect<
+        signIn: (
+          credentials: {
+            readonly email: string;
+            readonly password: string;
+          },
+          from: string,
+        ): Effect.Effect<
           readonly SessionCookie[],
-          InvalidCredentials | RepositoryFailure
+          InvalidCredentials | Throttle.TooManyAttempts | RepositoryFailure
         > =>
-          sessions.signIn(credentials).pipe(
+          Effect.suspend(() => {
+            const allowances = Throttle.forSignIn(from, credentials.email);
+
+            return throttled(allowances, credentials.email).pipe(
+              Effect.andThen(sessions.signIn(credentials)),
+              /**
+               * The counters are forgotten on success, and only on success.
+               * Otherwise somebody who mistypes their password four times and
+               * then gets it right carries those four attempts for the rest of
+               * the window, and is refused on their next visit for something
+               * already resolved.
+               *
+               * `ignore`, because a limiter that cannot be cleared must not
+               * fail a sign-in that has already succeeded — the session exists,
+               * the cookies are in hand, and the worst case is that this
+               * connection has fewer attempts left than it should.
+               */
+              Effect.tap(() =>
+                Effect.ignore(
+                  limiter.forget(
+                    allowances.map((allowance) => allowance.bucket),
+                  ),
+                ),
+              ),
+            );
+          }).pipe(
             Effect.tapError((failure) =>
               failure._tag === "InvalidCredentials"
                 ? recorded(
@@ -207,22 +285,30 @@ export class IdentityService extends Effect.Service<IdentityService>()(
          */
         handle: (
           request: Request,
-        ): Effect.Effect<Response, RepositoryFailure> =>
-          endpoint(request) === "other"
-            ? sessions.handle(request)
-            : Effect.succeed(
-                new Response(
-                  JSON.stringify({
-                    message:
-                      "This application signs in and out through its own " +
-                      "form, so that both are audited",
-                  }),
-                  {
-                    status: 404,
-                    headers: { "content-type": "application/json" },
-                  },
+          from: string,
+        ): Effect.Effect<
+          Response,
+          Throttle.TooManyAttempts | RepositoryFailure
+        > =>
+          endpoint(request) === "reset"
+            ? throttled(Throttle.forReset(from), "password reset").pipe(
+                Effect.andThen(sessions.handle(request)),
+              )
+            : endpoint(request) === "other"
+              ? sessions.handle(request)
+              : Effect.succeed(
+                  new Response(
+                    JSON.stringify({
+                      message:
+                        "This application signs in and out through its own " +
+                        "form, so that both are audited",
+                    }),
+                    {
+                      status: 404,
+                      headers: { "content-type": "application/json" },
+                    },
+                  ),
                 ),
-              ),
       };
     }),
   },

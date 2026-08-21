@@ -115,6 +115,18 @@ export const AUDIT_ACTIONS = [
   "session.signed-in",
   "session.signed-out",
   "session.refused",
+  /**
+   * A sign-in stopped before the password was even checked, because too many
+   * had already been tried from that connection.
+   *
+   * Separate from `session.refused`, and the distinction is what an incident
+   * review turns on. A run of `session.refused` is somebody who has forgotten
+   * their password, or somebody guessing and getting nowhere. A
+   * `session.throttled` is the control *firing* — the point at which guessing
+   * stopped being possible — and a trail that recorded both as "refused" could
+   * not say whether the limiter had done anything.
+   */
+  "session.throttled",
 ] as const;
 
 export const AuditAction = Schema.Literal(...AUDIT_ACTIONS);
@@ -314,5 +326,7 @@ export const describe = (entry: AuditEntry): string => {
       return "Signed out";
     case "session.refused":
       return "Sign-in refused";
+    case "session.throttled":
+      return "Sign-in stopped: too many attempts from one connection";
   }
 };

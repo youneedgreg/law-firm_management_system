@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import { sourceOf } from "@/lib/request-source";
 import { run } from "@/runtime";
 import { IdentityService } from "@/services/identity-service";
 
@@ -19,7 +20,26 @@ import { IdentityService } from "@/services/identity-service";
  * module-level singleton with a pool of its own.
  */
 const serve = (request: Request): Promise<Response> =>
-  run(Effect.flatMap(IdentityService, (identity) => identity.handle(request)));
+  run(
+    Effect.flatMap(IdentityService, (identity) =>
+      identity.handle(request, sourceOf(request.headers)),
+    ).pipe(
+      /**
+       * A throttled password-reset request is a `429` rather than a rejected
+       * promise, because this is a route handler and the caller is a browser
+       * following a form. `run` would turn the failure into an error page,
+       * which is a poor answer to "you have asked for this too many times".
+       */
+      Effect.catchTag("TooManyAttempts", (refusal) =>
+        Effect.succeed(
+          new Response(JSON.stringify({ message: refusal.reason }), {
+            status: 429,
+            headers: { "content-type": "application/json" },
+          }),
+        ),
+      ),
+    ),
+  );
 
 export const GET = serve;
 export const POST = serve;

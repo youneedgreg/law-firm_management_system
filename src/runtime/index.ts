@@ -3,6 +3,7 @@ import { SessionGatewayLive } from "../infra/auth/session-gateway";
 import { DocumentStoreLive } from "../infra/blob/store";
 import { AdvocateRepositoryLive } from "../infra/sql/advocate-repository";
 import { AppointmentRepositoryLive } from "../infra/sql/appointment-repository";
+import { AttemptLimiterLive } from "../infra/sql/attempt-repository";
 import { AuditRepositoryLive } from "../infra/sql/audit-repository";
 import { CaseRepositoryLive } from "../infra/sql/case-repository";
 import { PgLive } from "../infra/sql/client";
@@ -76,6 +77,7 @@ const repositories = Layer.mergeAll(
   ReportRepositoryLive,
   SearchRepositoryLive,
   AppointmentRepositoryLive,
+  AttemptLimiterLive,
   TransactorLive,
 ).pipe(Layer.provide(PgLive));
 

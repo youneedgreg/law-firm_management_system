@@ -53,6 +53,7 @@ import {
 } from "./fixtures";
 import {
   inMemoryAdvocates,
+  inMemoryLimiter,
   inMemoryAudit,
   inMemoryCases,
   inMemoryClients,
@@ -195,6 +196,7 @@ export const runningApi = (firm: Firm = {}) => {
     inMemoryDocuments(firm.documents ?? documents).both,
     inMemoryUsers(signedInAs === null ? KNOWN : [...KNOWN, signedInAs]),
     inMemorySessions(TOKENS),
+    inMemoryLimiter().layer,
     audit.layer,
     inMemoryTransactor(),
   );

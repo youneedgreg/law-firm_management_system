@@ -46,6 +46,9 @@ import firmRecords, {
 import appointments, {
   statements as appointmentsStatements,
 } from "./0017_appointments";
+import authenticationThrottle, {
+  statements as throttleStatements,
+} from "./0018_authentication_throttle";
 
 /**
  * The migration set, listed explicitly.
@@ -76,6 +79,7 @@ export const migrations = Migrator.fromRecord({
   "0015_messages": messages,
   "0016_firm_records": firmRecords,
   "0017_appointments": appointments,
+  "0018_authentication_throttle": authenticationThrottle,
 });
 
 /**
@@ -103,4 +107,5 @@ export const allStatements: readonly string[] = [
   ...messagesStatements,
   ...firmRecordsStatements,
   ...appointmentsStatements,
+  ...throttleStatements,
 ];

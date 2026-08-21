@@ -1,9 +1,10 @@
 "use server";
 
 import { Effect, Either, Schema } from "effect";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { type ActionState, refused, typedValues } from "@/lib/action-state";
+import { sourceOf } from "@/lib/request-source";
 import { attempt } from "@/runtime";
 import { IdentityService } from "@/services/identity-service";
 import type { SessionCookie } from "@/services/repositories";
@@ -76,9 +77,17 @@ export async function signIn(
     });
   }
 
+  /**
+   * The connection this attempt came from, which is what the rate limit is
+   * keyed on. Read here rather than inside the service because `next/headers`
+   * only resolves inside a request, and `services/` must stay runnable without
+   * one.
+   */
+  const from = sourceOf(await headers());
+
   const outcome = await attempt(
     Effect.flatMap(IdentityService, (identity) =>
-      identity.signIn(credentials.right),
+      identity.signIn(credentials.right, from),
     ),
   );
 

@@ -69,6 +69,7 @@ describe("the schema applies at all", () => {
       "advocates",
       "appointments",
       "audit_log",
+      "auth_attempts",
       "cases",
       "client_contacts",
       "clients",
@@ -1070,5 +1071,67 @@ describe("messages", () => {
       VALUES (gen_random_uuid(), '${client}', '${id}', 'FromClient', 'About this one')`);
 
     expect(await refuses(`DELETE FROM cases WHERE id = '${id}'`)).toBe(true);
+  });
+});
+
+/**
+ * The authentication throttle's counters.
+ *
+ * Two properties, both structural, both easy to lose in a later edit. The key
+ * is the pair — one row per bucket per window is what makes counting a single
+ * upsert rather than an aggregate — and a count cannot go below zero, which is
+ * the shape of an off-by-one in the sweep that would otherwise silently hand
+ * out free attempts.
+ */
+describe("authentication attempt counters", () => {
+  const window = "2026-08-21 10:00:00+00";
+
+  it("counts once per bucket per window", async () => {
+    await db.query(`
+      INSERT INTO auth_attempts (bucket, window_start, attempts)
+      VALUES ('bucket-a', '${window}', 1)`);
+
+    expect(
+      await refuses(`
+        INSERT INTO auth_attempts (bucket, window_start, attempts)
+        VALUES ('bucket-a', '${window}', 1)`),
+    ).toBe(true);
+  });
+
+  it("counts the same bucket separately in the next window", async () => {
+    expect(
+      await refuses(`
+        INSERT INTO auth_attempts (bucket, window_start, attempts)
+        VALUES ('bucket-a', '2026-08-21 10:15:00+00', 1)`),
+    ).toBe(false);
+  });
+
+  it("refuses a negative count", async () => {
+    expect(
+      await refuses(`
+        INSERT INTO auth_attempts (bucket, window_start, attempts)
+        VALUES ('bucket-b', '${window}', -1)`),
+    ).toBe(true);
+  });
+
+  /**
+   * The upsert the repository actually runs, exercised end to end: the second
+   * attempt increments rather than failing, and returns the count *including*
+   * itself — which is what lets the service compare against an allowance
+   * without a separate read.
+   */
+  it("increments on conflict and returns the count including this attempt", async () => {
+    const spend = `
+      INSERT INTO auth_attempts (bucket, window_start, attempts)
+      VALUES ('bucket-c', '${window}', 1)
+      ON CONFLICT (bucket, window_start)
+        DO UPDATE SET attempts = auth_attempts.attempts + 1
+      RETURNING attempts`;
+
+    const first = await db.query<{ attempts: number }>(spend);
+    const second = await db.query<{ attempts: number }>(spend);
+
+    expect(Number(first.rows[0]!.attempts)).toBe(1);
+    expect(Number(second.rows[0]!.attempts)).toBe(2);
   });
 });
