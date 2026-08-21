@@ -43,6 +43,9 @@ import messages, { statements as messagesStatements } from "./0015_messages";
 import firmRecords, {
   statements as firmRecordsStatements,
 } from "./0016_firm_records";
+import appointments, {
+  statements as appointmentsStatements,
+} from "./0017_appointments";
 
 /**
  * The migration set, listed explicitly.
@@ -72,6 +75,7 @@ export const migrations = Migrator.fromRecord({
   "0014_tasks": tasks,
   "0015_messages": messages,
   "0016_firm_records": firmRecords,
+  "0017_appointments": appointments,
 });
 
 /**
@@ -98,4 +102,5 @@ export const allStatements: readonly string[] = [
   ...tasksStatements,
   ...messagesStatements,
   ...firmRecordsStatements,
+  ...appointmentsStatements,
 ];

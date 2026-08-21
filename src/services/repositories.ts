@@ -13,6 +13,7 @@ import type * as Work from "../domain/work/task";
 import type * as Correspondence from "../domain/message/message";
 import type * as Log from "../domain/firm/contact";
 import type * as Library from "../domain/firm/precedent";
+import type * as Diary from "../domain/diary/appointment";
 import type {
   AdvocateId,
   CaseId,
@@ -570,6 +571,36 @@ export interface PrecedentRepository {
 
 export const PrecedentRepository = Context.GenericTag<PrecedentRepository>(
   "PrecedentRepository",
+);
+
+/**
+ * Appointments — the third diary.
+ *
+ * `forAdvocateOn` serves both callers that exist: the clash check, which needs
+ * one advocate's day before a booking is accepted, and the diary view, which
+ * shows it. A day rather than an arbitrary range, because a range parameter
+ * nobody passes anything but a day to is one that eventually gets passed
+ * something else.
+ */
+export interface AppointmentRepository {
+  /** Everything not yet finished, soonest first. */
+  readonly upcoming: () => Effect.Effect<
+    readonly Diary.Appointment[],
+    RepositoryFailure
+  >;
+
+  readonly forAdvocateOn: (
+    advocateId: AdvocateId,
+    day: Date,
+  ) => Effect.Effect<readonly Diary.Appointment[], RepositoryFailure>;
+
+  readonly save: (
+    appointment: Diary.Appointment,
+  ) => Effect.Effect<Diary.Appointment, RepositoryFailure>;
+}
+
+export const AppointmentRepository = Context.GenericTag<AppointmentRepository>(
+  "AppointmentRepository",
 );
 
 /**

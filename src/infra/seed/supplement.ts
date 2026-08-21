@@ -577,3 +577,96 @@ export const MATTER_SUPPLEMENT: Readonly<Record<string, MatterSupplement>> = {
     causeNumber: "HCFAM E0512 of 2025",
   },
 };
+
+/**
+ * What the prototype's appointments were actually about.
+ *
+ * The mock recorded a free-text "With" — `"Peter Kamau (Gen. Innovations)"`,
+ * `"Managing Partner"` — which is a person's name typed into a box and not a
+ * reference to anybody. The diary now holds a real advocate, and optionally a
+ * real client and matter, so each prototype row needs saying properly.
+ *
+ * `client` and `case` are `null` where there genuinely is none: an internal
+ * strategy meeting is about a matter, a performance review is about neither.
+ *
+ * The dates are the prototype's own, and they cluster around `AS_AT`. Two of
+ * the five are already behind it, which is correct rather than unfortunate —
+ * a diary is mostly past, and a seed that pushed everything into the future to
+ * make the screen look busy would be describing a firm that has never held a
+ * meeting.
+ */
+export interface AppointmentSupplement {
+  readonly type:
+    "Client consultation" | "Internal meeting" | "Site visit" | "Call";
+  readonly advocate: string;
+  readonly client: string | null;
+  readonly case: string | null;
+  readonly minutes: number;
+  readonly location: string | null;
+  /** Restated where the prototype's title was a label rather than a subject. */
+  readonly title: string | null;
+}
+
+/**
+ * Keyed by the prototype's integer id.
+ *
+ * **Appointment 3 is deliberately absent.** The prototype typed a court
+ * appearance at Milimani as an appointment, with `"Court appearance"` as its
+ * type — and that is a hearing. It has a court, a cause number and an outcome
+ * somebody must record, none of which an appointment can hold, and the court
+ * diary already carries the firm's real listings. Importing it here would put a
+ * court date in the one place the calendar cannot see it, which is the failure
+ * this module was built to prevent. The adapter refuses it by name rather than
+ * skipping it silently.
+ */
+export const APPOINTMENT_SUPPLEMENT: Readonly<
+  Record<number, AppointmentSupplement>
+> = {
+  1: {
+    type: "Client consultation",
+    advocate: "Adv. Sarah Wanjiru",
+    client: "General Innovations Ltd",
+    case: null,
+    minutes: 60,
+    location: "Boardroom",
+    title: "New client consultation",
+  },
+  2: {
+    type: "Internal meeting",
+    advocate: "Adv. Sarah Wanjiru",
+    client: null,
+    case: "OKL-2026-014",
+    minutes: 90,
+    location: "Boardroom",
+    title: "Case strategy — Wanjiku v. Nairobi Metro SACCO",
+  },
+  4: {
+    type: "Client consultation",
+    advocate: "Adv. Brian Kiptoo",
+    client: "Grace Njeri",
+    case: null,
+    minutes: 60,
+    location: null,
+    title: "Consultation — divorce matter",
+  },
+  5: {
+    type: "Internal meeting",
+    advocate: "Adv. Sarah Wanjiru",
+    client: null,
+    case: null,
+    minutes: 45,
+    location: "Managing Partner's office",
+    title: "Partner performance review",
+  },
+};
+
+/** The prototype id this seed refuses, and why, so the message can say it. */
+export const COURT_APPEARANCE_APPOINTMENT = 3;
+
+/** Times the prototype wrote as `9:00 AM`, in 24-hour UTC. */
+export const APPOINTMENT_TIMES: Readonly<Record<number, string>> = {
+  1: "09:00",
+  2: "15:00",
+  4: "13:00",
+  5: "10:00",
+};

@@ -7,6 +7,7 @@ import {
   ClientRepository,
   ContactRepository,
   DocumentRepository,
+  AppointmentRepository,
   MessageRepository,
   PrecedentRepository,
   TaskRepository,
@@ -24,6 +25,7 @@ import { PgLive } from "../sql/client";
 import { ClientRepositoryLive } from "../sql/client-repository";
 import { DocumentRepositoryLive } from "../sql/document-repository";
 import { TaskRepositoryLive } from "../sql/task-repository";
+import { AppointmentRepositoryLive } from "../sql/appointment-repository";
 import { MessageRepositoryLive } from "../sql/message-repository";
 import {
   ContactRepositoryLive,
@@ -44,6 +46,7 @@ import {
   documents,
   contacts,
   invoices,
+  appointments,
   messages,
   precedents,
   tasks,
@@ -118,6 +121,7 @@ const wipe = Effect.gen(function* () {
 
   yield* sql`DELETE FROM trust_movements`;
   yield* sql`DELETE FROM time_entries`;
+  yield* sql`DELETE FROM appointments`;
   yield* sql`DELETE FROM hearings`;
   yield* sql`DELETE FROM tasks`;
   /**
@@ -173,6 +177,7 @@ export const seed = Effect.gen(function* () {
   const store = yield* DocumentStore;
   const taskRepo = yield* TaskRepository;
   const messageRepo = yield* MessageRepository;
+  const appointmentRepo = yield* AppointmentRepository;
   const contactRepo = yield* ContactRepository;
   const precedentRepo = yield* PrecedentRepository;
 
@@ -249,6 +254,11 @@ export const seed = Effect.gen(function* () {
 
   const bank = yield* adapted("precedent", precedents(advocateIds));
 
+  const diary = yield* adapted(
+    "appointment",
+    appointments(clientIdsByName, caseIdsByNumber, advocateIds),
+  );
+
   // ── Write ──────────────────────────────────────────────────────────────
 
   yield* Effect.logInfo("Clearing the existing dataset…");
@@ -322,6 +332,11 @@ export const seed = Effect.gen(function* () {
   yield* Effect.logInfo(`Writing ${bank.length} precedents…`);
   yield* Effect.forEach(bank, (precedent) => precedentRepo.save(precedent));
 
+  yield* Effect.logInfo(`Writing ${diary.length} appointments…`);
+  yield* Effect.forEach(diary, (appointment) =>
+    appointmentRepo.save(appointment),
+  );
+
   yield* Effect.logInfo("Provisioning logins…");
   const logins = yield* provisionLogins(
     staff,
@@ -368,6 +383,7 @@ export const SeedLayer = Layer.mergeAll(
   DocumentStoreLive,
   TaskRepositoryLive,
   MessageRepositoryLive,
+  AppointmentRepositoryLive,
   ContactRepositoryLive,
   PrecedentRepositoryLive,
 ).pipe(Layer.provideMerge(PgLive), Layer.merge(AuthLive));

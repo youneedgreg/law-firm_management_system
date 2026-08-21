@@ -6,6 +6,7 @@ import * as Ledger from "@/domain/trust/ledger";
 import * as Time from "@/domain/time/entry";
 import type * as Hearing from "@/domain/court/hearing";
 import type * as Work from "@/domain/work/task";
+import type * as Diary from "@/domain/diary/appointment";
 import * as Correspondence from "@/domain/message/message";
 import type * as Log from "@/domain/firm/contact";
 import type * as Library from "@/domain/firm/precedent";
@@ -24,6 +25,7 @@ import {
 } from "@/domain/shared/ids";
 import {
   AdvocateRepository,
+  AppointmentRepository,
   AuditRepository,
   CaseNumberTaken,
   CaseRepository,
@@ -1498,3 +1500,59 @@ export const inMemorySessions = (
       handle: () => Effect.die("handle is Better Auth's; see the ADR"),
     }),
   );
+
+/**
+ * The appointment diary.
+ *
+ * `forAdvocateOn` filters by advocate *and* by day, exactly as the real query's
+ * two `WHERE` clauses do. A fake that ignored the day would make the clash
+ * check look stricter than it is — every appointment an advocate ever had would
+ * be a candidate — and the back-to-back test would still pass, which is how a
+ * green suite ends up describing behaviour nobody has.
+ */
+export const appointmentsWithStore = (
+  seed: readonly Diary.Appointment[] = [],
+): {
+  readonly layer: Layer.Layer<AppointmentRepository>;
+  readonly store: Ref.Ref<readonly Diary.Appointment[]>;
+} => {
+  const store = Ref.unsafeMake(seed);
+
+  const layer = Layer.sync(AppointmentRepository, () =>
+    AppointmentRepository.of({
+      upcoming: () =>
+        Ref.get(store).pipe(
+          Effect.map((rows) =>
+            [...rows].sort(
+              (a, b) => a.startsAt.getTime() - b.startsAt.getTime(),
+            ),
+          ),
+        ),
+
+      forAdvocateOn: (advocateId, day) =>
+        Ref.get(store).pipe(
+          Effect.map((rows) =>
+            rows
+              .filter(
+                (appointment) =>
+                  appointment.advocateId === advocateId &&
+                  appointment.startsAt.toISOString().slice(0, 10) ===
+                    day.toISOString().slice(0, 10),
+              )
+              .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime()),
+          ),
+        ),
+
+      save: (appointment) =>
+        Ref.update(store, (rows) => [...rows, appointment]).pipe(
+          Effect.as(appointment),
+        ),
+    }),
+  );
+
+  return { layer, store };
+};
+
+export const inMemoryAppointments = (
+  seed: readonly Diary.Appointment[] = [],
+): Layer.Layer<AppointmentRepository> => appointmentsWithStore(seed).layer;

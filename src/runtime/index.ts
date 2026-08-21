@@ -2,6 +2,7 @@ import { type Either, Effect, Layer, ManagedRuntime } from "effect";
 import { SessionGatewayLive } from "../infra/auth/session-gateway";
 import { DocumentStoreLive } from "../infra/blob/store";
 import { AdvocateRepositoryLive } from "../infra/sql/advocate-repository";
+import { AppointmentRepositoryLive } from "../infra/sql/appointment-repository";
 import { AuditRepositoryLive } from "../infra/sql/audit-repository";
 import { CaseRepositoryLive } from "../infra/sql/case-repository";
 import { PgLive } from "../infra/sql/client";
@@ -34,6 +35,7 @@ import { FirmService } from "../services/firm-service";
 import { LibraryService } from "../services/library-service";
 import { ReportService } from "../services/report-service";
 import { SearchService } from "../services/search-service";
+import { AppointmentService } from "../services/appointment-service";
 import { HearingService } from "../services/hearing-service";
 import { TimeService } from "../services/time-service";
 
@@ -69,6 +71,7 @@ const repositories = Layer.mergeAll(
   PrecedentRepositoryLive,
   ReportRepositoryLive,
   SearchRepositoryLive,
+  AppointmentRepositoryLive,
   TransactorLive,
 ).pipe(Layer.provide(PgLive));
 
@@ -129,6 +132,7 @@ const derived = Layer.mergeAll(
   LibraryService.Default,
   ReportService.Default,
   SearchService.Default,
+  AppointmentService.Default,
   AuditLog.Default,
   IdentityService.Default,
 ).pipe(

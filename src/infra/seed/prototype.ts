@@ -12,12 +12,13 @@ import * as Correspondence from "../../domain/message/message";
 import * as Log from "../../domain/firm/contact";
 import * as Library from "../../domain/firm/precedent";
 import * as Hearing from "../../domain/court/hearing";
+import * as Diary from "../../domain/diary/appointment";
 import * as Ledger from "../../domain/trust/ledger";
 import * as Time from "../../domain/time/entry";
 import { INVOICES, TRUST_ACCOUNTS } from "../../lib/data/billing";
 import { CASES } from "../../lib/data/cases";
 import { DOCUMENTS } from "../../lib/data/documents";
-import { TASKS } from "../../lib/data/work";
+import { APPOINTMENTS, TASKS } from "../../lib/data/work";
 import { COMMUNICATIONS, KNOWLEDGE } from "../../lib/data/firm";
 import { HEARINGS } from "../../lib/data/hearings";
 import { TIME_ENTRIES } from "../../lib/data/work";
@@ -25,8 +26,11 @@ import { CLIENTS } from "../../lib/data/clients";
 import { STAFF } from "../../lib/data/firm";
 import { stableId } from "./ids";
 import {
+  APPOINTMENT_SUPPLEMENT,
+  APPOINTMENT_TIMES,
   AS_AT,
   CERTIFICATES,
+  COURT_APPEARANCE_APPOINTMENT,
   CLIENT_SUPPLEMENT,
   COURTS,
   FILED_WITH_COURT,
@@ -1309,6 +1313,91 @@ export const precedents = (
         addedOn,
         reviewedOn: Option.fromNullable(reviewedOn),
         ...(supplied.note === undefined ? {} : { note: supplied.note }),
+      });
+    }),
+  );
+
+/**
+ * The appointment diary.
+ *
+ * The prototype's `"With"` was free text — a name typed into a box, resolving
+ * to nobody. Each row is restated through `APPOINTMENT_SUPPLEMENT` against real
+ * advocates, clients and matters, and a name that is not on the firm's list
+ * stops the import rather than being dropped.
+ *
+ * **The court appearance is refused by name.** Prototype appointment 3 was a
+ * Milimani listing typed as an appointment. It is a hearing — it has a court, a
+ * cause number and an outcome to record — and importing it here would put a
+ * court date in the one place the calendar cannot see it. That refusal is
+ * `COURT_APPEARANCE_APPOINTMENT`, and it is a stated exclusion rather than a
+ * silent skip so that anybody re-reading this seed finds the argument.
+ */
+export const appointments = (
+  clientIdsByName: ReadonlyMap<string, string>,
+  caseIdsByNumber: ReadonlyMap<string, string>,
+  advocateIdsByName: ReadonlyMap<string, string>,
+): Outcome<Diary.Appointment> =>
+  collect(
+    APPOINTMENTS.filter(
+      (entry) => entry.id !== COURT_APPEARANCE_APPOINTMENT,
+    ).map((entry): Either.Either<Diary.Appointment, SeedProblem> => {
+      const label = `appointment ${String(entry.id)}`;
+      const fail = (detail: string) =>
+        Either.left(new SeedProblem({ record: label, detail }));
+
+      const supplied = APPOINTMENT_SUPPLEMENT[entry.id];
+      if (supplied === undefined) {
+        return fail(
+          `nothing recorded in APPOINTMENT_SUPPLEMENT. The prototype's "With" ` +
+            `is free text and cannot be resolved to an advocate, a client or ` +
+            `a matter — add the row rather than guessing at it`,
+        );
+      }
+
+      const day = parsePrototypeDate(entry.date);
+      if (day === undefined)
+        return fail(`cannot read the date "${entry.date}"`);
+
+      const time = APPOINTMENT_TIMES[entry.id];
+      if (time === undefined) {
+        return fail(
+          `no 24-hour time recorded for "${entry.time}" — add it to ` +
+            `APPOINTMENT_TIMES`,
+        );
+      }
+
+      const advocateId = advocateIdsByName.get(supplied.advocate);
+      if (advocateId === undefined) {
+        return fail(`"${supplied.advocate}" is not on the firm's staff list`);
+      }
+
+      const clientId =
+        supplied.client === null
+          ? undefined
+          : clientIdsByName.get(supplied.client);
+      if (supplied.client !== null && clientId === undefined) {
+        return fail(`no seeded client named ${supplied.client}`);
+      }
+
+      const caseId =
+        supplied.case === null ? undefined : caseIdsByNumber.get(supplied.case);
+      if (supplied.case !== null && caseId === undefined) {
+        return fail(`no seeded matter numbered ${supplied.case}`);
+      }
+
+      return decoding(
+        Schema.typeSchema(Diary.Appointment),
+        label,
+      )({
+        id: stableId("appointment", entry.id),
+        title: supplied.title ?? entry.title,
+        type: supplied.type,
+        advocateId,
+        clientId: Option.fromNullable(clientId),
+        caseId: Option.fromNullable(caseId),
+        startsAt: new Date(`${day.toISOString().slice(0, 10)}T${time}:00.000Z`),
+        minutes: supplied.minutes,
+        ...(supplied.location === null ? {} : { location: supplied.location }),
       });
     }),
   );

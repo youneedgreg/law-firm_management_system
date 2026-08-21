@@ -53,6 +53,9 @@ export type ContactId = typeof ContactId.Type;
 export const PrecedentId = entityId("PrecedentId");
 export type PrecedentId = typeof PrecedentId.Type;
 
+export const AppointmentId = entityId("AppointmentId");
+export type AppointmentId = typeof AppointmentId.Type;
+
 export const TrustMovementId = entityId("TrustMovementId");
 export type TrustMovementId = typeof TrustMovementId.Type;
 

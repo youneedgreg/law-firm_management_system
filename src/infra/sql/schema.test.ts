@@ -67,6 +67,7 @@ describe("the schema applies at all", () => {
     expect(result.rows.map((row) => row.table_name)).toStrictEqual([
       "accounts",
       "advocates",
+      "appointments",
       "audit_log",
       "cases",
       "client_contacts",
