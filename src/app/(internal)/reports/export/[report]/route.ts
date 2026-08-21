@@ -50,9 +50,6 @@ export async function GET(
 
   if (Either.isLeft(outcome)) {
     const status = outcome.left._tag === "NotPermitted" ? 403 : 500;
-    if (status === 500) {
-      console.error("[reports] export failed", outcome.left);
-    }
     return new Response(status === 403 ? "Forbidden" : "Unavailable", {
       status,
     });

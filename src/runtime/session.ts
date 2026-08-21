@@ -1,10 +1,11 @@
 import { type Either, Effect, Option } from "effect";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import type { Principal } from "../domain/identity/principal";
+import { type Principal, roleLabel } from "../domain/identity/principal";
 import { IdentityService } from "../services/identity-service";
 import { CurrentUser } from "../services/policy";
 import { type AppServices, run, runtime } from ".";
+import { reported } from "./report";
 
 /**
  * The signed-in principal, for Server Components and Server Actions.
@@ -79,13 +80,24 @@ export const runAs = async <A, E>(
  *
  * The counterpart to `attempt` for Server Actions, and the same division: a
  * refusal the form should show comes back as a value, and a defect still
- * reaches the boundary.
+ * reaches the boundary. It reports the failure for the same reason `attempt`
+ * does — this is where a failure stops being a failure and becomes a sentence,
+ * so it is the last moment anything can be said about it.
+ *
+ * The principal's role is annotated onto whatever is logged. A `NotPermitted`
+ * without it says a refusal happened; with it, the line reads "a Receptionist
+ * may not open a matter", which is either a screen offering a button it should
+ * not or somebody trying doors — and the two look identical without the role.
  */
 export const attemptAs = async <A, E>(
   effect: Effect.Effect<A, E, AppServices | CurrentUser>,
 ): Promise<Either.Either<A, E>> => {
   const who = await signedIn();
   return runtime.runPromise(
-    Effect.either(Effect.provideService(effect, CurrentUser, who)),
+    Effect.either(
+      reported(Effect.provideService(effect, CurrentUser, who)).pipe(
+        Effect.annotateLogs({ role: roleLabel(who) }),
+      ),
+    ),
   );
 };

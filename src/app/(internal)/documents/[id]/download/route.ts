@@ -60,9 +60,6 @@ export async function GET(
 
   if (Either.isLeft(outcome)) {
     const status = STATUS[outcome.left._tag] ?? 500;
-    if (status >= 500) {
-      console.error("[documents] download failed", outcome.left);
-    }
     return new Response(status === 403 ? "Forbidden" : "Not found", { status });
   }
 

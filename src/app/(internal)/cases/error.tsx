@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect } from "react";
 import { BackLink } from "@/components/ui";
 
 /**
@@ -16,6 +15,19 @@ import { BackLink } from "@/components/ui";
  * `retry` re-renders the segment on the server. It is offered because the most
  * likely cause is transient: Neon scales to zero, and the first request after
  * an idle period can time out while the compute wakes.
+ *
+ * **This component deliberately logs nothing.** It used to, and the line was
+ * worth almost nothing: what reaches a client error boundary is not the error
+ * that happened. React replaces it with an opaque one carrying only a digest,
+ * precisely so that a stack trace from the server cannot be read off a browser
+ * console by whoever is sitting in front of it. Printing that placeholder into
+ * the browser told nobody anything and left the impression the failure had been
+ * recorded.
+ *
+ * It is recorded — on the server, by `onRequestError` in `instrumentation.ts`,
+ * with the real message, the stack, the route and the same digest shown below.
+ * That is why the digest is offered as a *reference* rather than as an
+ * apology: it is a key into an entry that exists.
  */
 export default function CasesError({
   error,
@@ -24,12 +36,6 @@ export default function CasesError({
   error: Error & { digest?: string };
   retry: () => void;
 }) {
-  useEffect(() => {
-    // Phase 8 replaces this with the telemetry layer. Until then the server
-    // log has the cause and the digest is what ties a report to it.
-    console.error("[cases]", error);
-  }, [error]);
-
   return (
     <>
       <BackLink href="/dashboard">Back to the dashboard</BackLink>

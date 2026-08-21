@@ -52,7 +52,6 @@ const fromParseError = (
 
 const explain = (error: { readonly _tag: string }): string => {
   if (error._tag === "RepositoryFailure") {
-    console.error("[time] repository failure", error);
     return "The entry could not be saved. The database refused the write; the details are in the server log.";
   }
 

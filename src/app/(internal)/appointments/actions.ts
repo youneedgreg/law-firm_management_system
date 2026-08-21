@@ -57,7 +57,6 @@ const fromParseError = (
  */
 const explain = (error: CannotSchedule): string => {
   if (error._tag === "RepositoryFailure") {
-    console.error("[appointments] repository failure", error);
     return "The appointment could not be saved. The database refused the write; the details are in the server log.";
   }
 

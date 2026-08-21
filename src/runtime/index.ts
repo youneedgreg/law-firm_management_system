@@ -41,6 +41,7 @@ import { AppointmentService } from "../services/appointment-service";
 import { DashboardService } from "../services/dashboard-service";
 import { HearingService } from "../services/hearing-service";
 import { TimeService } from "../services/time-service";
+import { reported } from "./report";
 
 /**
  * Where the layers meet the framework.
@@ -231,7 +232,14 @@ export const run = <A, E>(
  * boundary. That is the distinction Effect already draws between an error the
  * signature promised and one it did not, and it is exactly the distinction a
  * `try`/`catch` around an action erases.
+ *
+ * It is also the only boundary that *has* to log. A failure that rejects
+ * reaches `onRequestError` with the route it happened on; a failure turned into
+ * an `Either` is seen by the action, rendered as a sentence, and then gone. So
+ * `reported` sits inside the `either`, and the fourteen `console.error` lines
+ * that used to do this one module at a time are gone with it.
  */
 export const attempt = <A, E>(
   effect: Effect.Effect<A, E, AppServices>,
-): Promise<Either.Either<A, E>> => runtime.runPromise(Effect.either(effect));
+): Promise<Either.Either<A, E>> =>
+  runtime.runPromise(Effect.either(reported(effect)));

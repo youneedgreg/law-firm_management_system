@@ -58,7 +58,6 @@ const fromParseError = (
 
 const explain = (error: { readonly _tag: string }): string => {
   if (error._tag === "RepositoryFailure") {
-    console.error("[documents] repository failure", error);
     return "The document could not be saved. The database refused the write; the details are in the server log.";
   }
 
@@ -68,7 +67,6 @@ const explain = (error: { readonly _tag: string }): string => {
    * neither — but whoever they call can.
    */
   if (error._tag === "StorageFailure") {
-    console.error("[documents] storage failure", error);
     return "The file could not be stored. Nothing was recorded, so the upload can be retried; the details are in the server log.";
   }
 

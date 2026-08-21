@@ -55,7 +55,6 @@ export async function sendMessage(
     const error = outcome.left;
 
     if (error._tag === "RepositoryFailure") {
-      console.error("[messages] repository failure", error);
       return refused(
         "The message could not be sent. Nothing was recorded, so it can be retried.",
       );

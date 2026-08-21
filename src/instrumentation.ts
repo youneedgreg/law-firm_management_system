@@ -1,6 +1,8 @@
 import { registerOTel } from "@vercel/otel";
 import { Effect } from "effect";
+import type { Instrumentation } from "next";
 import { ServiceIdentity } from "./infra/config";
+import { LoggingLive } from "./infra/telemetry/logging";
 
 /**
  * The first thing this process does.
@@ -48,3 +50,73 @@ export function register(): void {
     attributes: { "service.version": identity.version },
   });
 }
+
+/**
+ * The other half of the failure story, and the half that used to be missing.
+ *
+ * `attempt` and `attemptAs` report the failures they *swallow* — the ones that
+ * become a sentence beside a form and are then gone. This hook catches the
+ * opposite case: a failure that was allowed to propagate. A `RepositoryFailure`
+ * out of a Server Component, a defect from anywhere, a render that threw. Next
+ * catches it, replaces it with a digest, and shows the nearest `error.tsx`.
+ *
+ * Without this hook the digest is all anybody gets, on both sides. The screen
+ * says "reference 3f9a2c" and the log says nothing, so the reference points at
+ * an entry that was never written. This is the entry.
+ *
+ * ## Why the digest is the thing to log
+ *
+ * The trace id is not available here — by the time Next reports the error the
+ * request's span is finished, so there is nothing for the logger to read. The
+ * digest is the identifier that *does* survive: it is on the screen the person
+ * is looking at, and it is stable for the same error, which is what makes "read
+ * me the reference" a support conversation that terminates.
+ *
+ * The route context is worth as much. `routeType` says whether this was a
+ * render, a route handler, a Server Action or the proxy — four very different
+ * things, all of which otherwise arrive as "an error on /cases".
+ *
+ * ## Why not an error-tracking SDK
+ *
+ * See ADR 0011 and D-10: an exception already reaches the traces backend
+ * through the span it failed, and this line reaches the log drain with the
+ * digest and the route. A second vendor SDK would add a build-time wrapper, a
+ * client bundle and a DSN, to send a third copy of the same event somewhere
+ * else. When one of those is the alerting surface the firm actually watches,
+ * this is the hook that feeds it.
+ */
+export const onRequestError: Instrumentation.onRequestError = (
+  error,
+  request,
+  context,
+) =>
+  Effect.runPromise(
+    Effect.logError("Unhandled failure while serving a request").pipe(
+      Effect.annotateLogs({
+        /**
+         * `digest` is what the error boundary puts on the screen. Read through
+         * a guard because the caught value is `unknown` — React replaces the
+         * original error on the way out of a Server Component render, and what
+         * arrives here is not always an `Error`.
+         */
+        digest:
+          typeof error === "object" && error !== null && "digest" in error
+            ? String((error as { digest: unknown }).digest)
+            : undefined,
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        method: request.method,
+        path: request.path,
+        route: context.routePath,
+        routeType: context.routeType,
+      }),
+      Effect.provide(LoggingLive),
+      /**
+       * A logger that cannot be built because `LOG_LEVEL` is a typo must not
+       * turn a reported error into a second, unreported one. The configuration
+       * failure has already taken the process down elsewhere; here the job is
+       * to get the line out.
+       */
+      Effect.catchAll(() => Effect.logError("Unhandled failure", error)),
+    ),
+  );
