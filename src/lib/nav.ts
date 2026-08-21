@@ -188,9 +188,32 @@ export const NAV_SECTIONS: NavSection[] = [
       },
       {
         href: "/users",
-        label: "Users & Settings",
+        label: "Users & Permissions",
         icon: "ph-duotone ph-gear",
-        roles: ["System Administrator"],
+        /**
+         * Opened up in Phase 7, because what the page *is* changed.
+         *
+         * It was "Users & Settings" and held two things only an administrator
+         * should touch: a form that created accounts, and firm-wide settings.
+         * Both are gone — accounts are provisioned by the seed with sign-up
+         * closed, and every settings field was inert.
+         *
+         * What is left is the staff directory and the permission table, and
+         * neither is privileged: `permissionsForRole` is the same data every
+         * refusal in the system already discloses to whoever trips it, and a
+         * firm where only the administrator may find out what a Receptionist
+         * can reach is a firm where nobody checks.
+         *
+         * `staff:read` is the underlying grant, and every staff role holds it.
+         */
+        roles: [
+          "System Administrator",
+          "Managing Partner",
+          "Advocate",
+          "Legal Assistant",
+          "Finance Officer",
+          "Receptionist",
+        ],
       },
     ],
   },
