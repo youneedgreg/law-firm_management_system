@@ -23,7 +23,22 @@ export default defineConfig({
     globals: false,
     coverage: {
       provider: "v8",
-      reporter: ["text", "lcov"],
+      reporter: ["text", "lcov", "json-summary"],
+      /**
+       * The floor the badge in the README claims, enforced.
+       *
+       * `docs/coverage.svg` is generated from the last measurement and is a
+       * static file, so on its own it could go stale in the flattering
+       * direction. These thresholds are what stop that: CI runs
+       * `npm run test:coverage`, and coverage falling below the badge's number
+       * fails the build rather than quietly making the badge a lie (ADR 0014).
+       *
+       * Set a little under the current figures rather than at them. A floor
+       * pinned to the exact measurement fails on any refactor that deletes a
+       * well-covered file, which trains people to lower it — and a threshold
+       * somebody lowers on a red build is not a threshold.
+       */
+      thresholds: { lines: 90, statements: 90, branches: 90, functions: 78 },
       // Only code we have actually started testing. Raised as layers land —
       // a coverage target that includes unwritten code measures nothing.
       include: ["src/domain/**", "src/services/**", "src/lib/**", "src/rx/**"],

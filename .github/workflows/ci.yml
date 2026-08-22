@@ -41,8 +41,13 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Unit tests
-        run: npm run test
+      # With coverage, because the thresholds in vitest.config.ts are the floor
+      # the README's badge claims. Measuring it only locally would make the
+      # badge an assertion nothing checks (ADR 0014). The pre-push hook still
+      # runs the plain suite — the instrumentation costs a few seconds, and the
+      # gate that matters is this one.
+      - name: Unit tests, with coverage thresholds
+        run: npm run test:coverage
 
       - name: Build
         run: npm run build
