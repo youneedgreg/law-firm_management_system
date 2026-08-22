@@ -116,19 +116,81 @@ export class AuthConfig extends Effect.Service<AuthConfig>()("AuthConfig", {
 }) {}
 
 /**
- * The secret the nightly demo reset is called with (D-5).
+ * Whether this deployment is the public demonstration (D-11).
+ *
+ * This repository runs in two places: the portfolio demo, where strangers are
+ * invited to press destructive buttons in fixtures for a firm that does not
+ * exist, and a law firm's installation, where the same buttons would be a
+ * breach. The difference between them is one variable, read here.
+ *
+ * ## The default is the control
+ *
+ * `false`, and that is the whole design. An unset variable, a misspelt one, one
+ * somebody deleted while tidying the Vercel dashboard, and a project created
+ * tomorrow by someone who has never read this file all have to mean the same
+ * thing: **a real deployment, with the demonstration affordances off.** Absence
+ * must never mean "demo", because the two mistakes are not comparable — a demo
+ * that quietly becomes real is a dull afternoon, and a real deployment that
+ * quietly becomes a demo publishes a one-click Managing Partner login and
+ * empties the client account at midnight.
+ *
+ * So it is `withDefault` rather than required, and the temptation to "tidy" it
+ * into a required value should be resisted: that would make a client deployment
+ * fail to start until somebody set a variable whose entire purpose is to be
+ * unset there.
+ *
+ * ## What it is not
+ *
+ * It is not a security boundary by itself, and nothing should treat it as one.
+ * Every control it takes part in requires it **in addition to** that control's
+ * own check, never instead of it — see `CronConfig` below, where the reasoning
+ * that argument had to survive is written out.
+ */
+export class DeploymentConfig extends Effect.Service<DeploymentConfig>()(
+  "DeploymentConfig",
+  {
+    effect: Effect.gen(function* () {
+      return {
+        isDemo: yield* Config.boolean("DEMO_DEPLOYMENT").pipe(
+          Config.withDefault(false),
+        ),
+      };
+    }),
+  },
+) {}
+
+/**
+ * The secret the nightly demo reset is called with (D-5, D-11).
  *
  * Vercel sets `Authorization: Bearer $CRON_SECRET` on every cron invocation
  * when the variable is present, and sets nothing at all when it is not — so
  * "unset" must mean the endpoint refuses, never that it runs unauthenticated.
  * Reading it as a required value is what makes that structural: with no
  * variable there is no `CronConfig`, so there is nothing for the route to
- * compare against and it answers 503. There is no flag, for the reason Phase 8
- * gave for having none on tracing: a flag is a second way for a control to be
- * silently absent.
+ * compare against and it answers 503.
  *
- * Redacted, and length-checked. The endpoint behind it empties every table the
- * seed owns; a four-character secret is a public button for doing that.
+ * ## Why there is now a flag, having argued there should not be
+ *
+ * This comment used to end: *there is no flag, for the reason Phase 8 gave for
+ * having none on tracing — a flag is a second way for a control to be silently
+ * absent.* That reasoning was right and still is. `DEMO_DEPLOYMENT` does not
+ * contradict it, because of how the two are combined.
+ *
+ * A flag that can be checked **instead of** the secret is a second way to be
+ * absent: two doors, and an attacker needs whichever is unlocked. A flag that
+ * is required **alongside** it is a second way to *refuse*: two locks on one
+ * door, and absence closes it rather than opening it. `DEMO_DEPLOYMENT` is the
+ * second kind, and it must stay that way — the day somebody rewrites the reset
+ * to run when *either* holds, this paragraph is what they have broken.
+ *
+ * The second lock exists because the first one's failure mode is total.
+ * `vercel.json` is committed, so a second Vercel project built from this
+ * repository registers the same nightly cron, and one environment variable
+ * being set by mistake is then the whole distance between a firm's trust
+ * ledger and a `DELETE` across every table the seed owns.
+ *
+ * Redacted, and length-checked. A four-character secret is a public button for
+ * doing that.
  */
 export class CronConfig extends Effect.Service<CronConfig>()("CronConfig", {
   effect: Effect.gen(function* () {
