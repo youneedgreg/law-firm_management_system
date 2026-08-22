@@ -141,10 +141,20 @@ export function CaseDetail({ file }: { file: CaseFile }) {
           </div>
 
           <SectionTitle spaced>Hearings, documents and invoices</SectionTitle>
+          {/*
+            This said "still on the wireframe's mock data" until Phase 10, which
+            stopped being true in Phase 7 and stayed on the screen — the kind of
+            claim nothing tests and everybody reads. All three are real now, and
+            each is read on its own screen rather than assembled here: a matter
+            file that duplicated three modules would be a fourth place for them
+            to disagree.
+          */}
           <p className="dek">
-            Still on the wireframe&rsquo;s mock data. Each arrives with its own
-            module, on the same repository and service boundary this matter now
-            uses.
+            Kept by their own modules — the{" "}
+            <Link href="/calendar">court diary</Link>,{" "}
+            <Link href="/documents">the register</Link> and{" "}
+            <Link href="/billing">billing</Link> — each on the same repository
+            and service boundary this matter uses.
           </p>
         </section>
       </div>
