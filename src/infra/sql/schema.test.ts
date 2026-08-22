@@ -104,6 +104,31 @@ describe("the schema applies at all", () => {
   });
 });
 
+/**
+ * Unique-by-construction references, replacing a `Math.random()` that was a
+ * flake with a measurable rate.
+ *
+ * `cases.number` and `clients.number` are both `UNIQUE`, and both helpers used
+ * to draw a random value from a small space — three digits for a matter, which
+ * is 900 possibilities across at least ten inserts in this file. That is a
+ * **4.9% chance per run** of two colliding, and a collision does not look like
+ * a collision: the insert is refused, `refuses()` returns `true`, and whichever
+ * test expected an *accepted* insert fails claiming a constraint rejected
+ * something legal. It sat in the suite from Phase 2 until a push drew the
+ * losing number, which is precisely the shape §7's "no flakes" exists to
+ * forbid — a test that fails one run in twenty for a reason unrelated to the
+ * code teaches people to press the button again.
+ *
+ * A counter cannot collide, and starts clear of the fixed references this file
+ * also inserts (`OKL-2026-777`, `-778`, `-999`; `CLT-1001`–`1004`, `2999`,
+ * `9001`), which the format's own width leaves room for.
+ */
+let nextMatter = 100;
+let nextClient = 3000;
+
+const matterNumber = () => `OKL-2026-${String(nextMatter++)}`;
+const clientNumber = () => `CLT-${String(nextClient++)}`;
+
 describe("client constraints", () => {
   it("refuses a client number in the wrong format", async () => {
     expect(
@@ -146,7 +171,7 @@ describe("client constraints", () => {
 describe("case constraints", () => {
   const insertCase = (columns: string, values: string) => `
     INSERT INTO cases (id, number, title, type, status, client_id, advocate_id, opened_on${columns})
-    VALUES (gen_random_uuid(), 'OKL-2026-${Math.floor(Math.random() * 900 + 100)}',
+    VALUES (gen_random_uuid(), '${matterNumber()}',
             'A v B', 'Civil', 'New', '${client}', '${advocate}', '2026-02-14'${values})`;
 
   it("refuses a magistrates' court with no rank", async () => {
@@ -473,7 +498,7 @@ describe("M-Pesa reconciliation", () => {
 describe("phone numbers", () => {
   const insertClient = (phone: string) => `
     INSERT INTO clients (id, number, kind, name, email, phone, onboarded_on)
-    VALUES (gen_random_uuid(), 'CLT-${Math.floor(Math.random() * 9000 + 1000)}',
+    VALUES (gen_random_uuid(), '${clientNumber()}',
             'Corporate', 'Zenith Ltd', 'legal@zenith.co.ke', '${phone}', '2026-01-10')`;
 
   it("accepts a Nairobi switchboard landline", async () => {
@@ -509,7 +534,7 @@ describe("phone numbers", () => {
 describe("filing dates and contact order", () => {
   const insertCase = (columns: string, values: string) => `
     INSERT INTO cases (id, number, title, type, status, client_id, advocate_id, opened_on${columns})
-    VALUES (gen_random_uuid(), 'OKL-2026-${Math.floor(Math.random() * 900 + 100)}',
+    VALUES (gen_random_uuid(), '${matterNumber()}',
             'A v B', 'Civil', 'New', '${client}', '${advocate}', '2026-02-14'${values})`;
 
   it("leaves filed_on null rather than defaulting it to the epoch", async () => {
