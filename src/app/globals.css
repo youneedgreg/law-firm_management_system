@@ -180,13 +180,48 @@ body:has(.shell) {
   outline-offset: 2px;
 }
 
+/* Below the breakpoint the masthead was overlapping itself: the brand, the
+   name, the role, the badge and "Sign out" all still laid out at their desktop
+   sizes in 390px, and flex let them run over one another rather than admitting
+   there was no room.
+
+   What is dropped, and why in this order. The **tagline** and the **search**
+   go first: one is decoration and the other is a whole screen away at
+   `/search`. The **avatar** goes next — it is `aria-hidden` decoration, a
+   picture of the name printed beside it. The **role** goes last of the three,
+   because it is the least surprising thing to look up.
+
+   The **name** stays, and that is the decision worth stating: it is the only
+   thing in the masthead saying who the session belongs to, and on a shared
+   phone that is the first question. It truncates rather than disappearing. */
 @media (max-width: 899px) {
+  .topbar {
+    gap: var(--space-3);
+    padding-inline: var(--space-3);
+  }
   .nav-toggle {
     display: inline-flex;
   }
   .topbar-search,
-  .topbar-tagline {
+  .topbar-tagline,
+  .avatar {
     display: none;
+  }
+}
+
+@media (max-width: 599px) {
+  .topbar {
+    gap: var(--space-2);
+    padding-inline: var(--space-2);
+  }
+  .topbar-brand {
+    font-size: 20px;
+  }
+  .topbar-role {
+    display: none;
+  }
+  .topbar-name {
+    max-width: 110px;
   }
 }
 
@@ -433,6 +468,24 @@ body:has(.shell) {
   margin-top: var(--space-1);
 }
 
+/* A grid item defaults to `min-width: auto`, which refuses to shrink below its
+   content — so "Ksh 795,000.00" at 30px did not wrap or shrink, it simply
+   reached past the column and made the content pane scroll sideways. This is
+   the fix for the overflow; the smaller type below is the fix for it being
+   unreadable at the width it now fits into. */
+.stat-grid > * {
+  min-width: 0;
+}
+
+@media (max-width: 599px) {
+  .stat-value {
+    font-size: 22px;
+  }
+  .stat-value-sm {
+    font-size: 20px;
+  }
+}
+
 .stat-value-sm {
   font-size: 26px;
 }
@@ -466,6 +519,7 @@ body:has(.shell) {
 @media (max-width: 899px) {
   .stat-grid {
     grid-template-columns: 1fr 1fr;
+    gap: var(--space-4);
   }
   .widget-grid,
   .detail-grid,
@@ -1062,6 +1116,10 @@ body:has(.shell) {
   gap: var(--space-3) var(--space-4);
   min-height: 36px;
   align-items: center;
+}
+
+.btn {
+  white-space: nowrap;
 }
 
 .form-actions {
