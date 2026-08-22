@@ -1005,3 +1005,27 @@ One line per session. Keeps momentum visible across a long project.
 | 2026-08-22 | 9     | The design system split into primitives and roles and checked from the stylesheet — which found six contrast failures, an invisible chart and seven margins that were never applied. Keyboard routes out of the drawer, a skip link, loading skeletons on 25 segments, input constraints derived from the server's own schemas, dark mode through `light-dark()`, 29 end-to-end specs, and Lighthouse at 100 on everything the rig can measure honestly. 1,071 unit tests |
 | 2026-08-21 | 8     | Observability and resilience: Effect's spans nested under Next's, the trace id as the correlation id, retry classified by what the previous attempt did, budgets on every external call, a durable auth throttle, `/api/health`. 1,000 unit tests                                                                                                                                                                                                                         |
 | 2026-08-22 | 10    | Portfolio packaging: a one-click role switcher that is the same audited sign-in, a nightly reset on cron, an ERD generated from the migrations, an architecture diagram checked against the linter's own boundaries, three ADRs and a narrative index, a 1,600-word case study, a coverage badge with the number enforced as a floor, and a README that had drifted two phases. 1,097 unit tests                                                                          |
+
+---
+
+## 10. Open, and getting to it shortly
+
+Recorded 2026-08-22, at the end of Phase 10. None of these is blocked on
+thinking; they are blocked on an hour, a click, or somebody else's release. Left
+here rather than in a head, because the point of this document is that nothing
+important lives only in one.
+
+| Open                                  | What it needs                                                                                                                                                                                                       |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Two engineers, honest review**      | The last Phase 10 item, and the only one the author cannot do. Everything else in that phase is self-review                                                                                                         |
+| **Honeycomb sends nothing**           | `OTEL_EXPORTER_OTLP_HEADERS` holds a bare API key. OTLP wants a key=value list, so it needs the `x-honeycomb-team=` prefix — locally and in `vercel env` — and a redeploy. The wiring is right; the variable is not |
+| **The first cron run**                | Midnight UTC. A 401 in the logs would mean the secret pairing is wrong, which cannot be checked from outside                                                                                                        |
+| **Phase 12 — Docker, Testcontainers** | Two or three days, and it flips the `integration` job off `if: false`                                                                                                                                               |
+| **The end-to-end job in CI**          | A Neon branch and one secret. The specs write, so pointing them at the demo database from an unattended push is the thing being avoided                                                                             |
+| **Headless primitives**               | The one Phase 9 item still open — the dialog and the date picker are hand-rolled                                                                                                                                    |
+| **Phase 11 — Effect 4**               | `@effect-rx` shipping a v4 track. Genuinely not startable                                                                                                                                                           |
+
+One thing that is not on the list because it is not yet a problem: two
+`hearing-service` tests timed out at the 5s default on one pre-push run, under
+load, and passed on the retry and in CI. If it happens again the per-test
+timeout is where to look, not the service.
