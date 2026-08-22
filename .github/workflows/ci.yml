@@ -68,3 +68,42 @@ jobs:
 
       - name: Integration tests
         run: npm run test:integration
+
+  e2e:
+    name: End-to-end (browser, real database)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Off until a database is wired to CI, and that is a decision rather than
+    # an omission. These specs drive the real application against the real
+    # Postgres and *write* to it: a matter is opened, hours are recorded, a fee
+    # note is raised and paid. Pointing them at the deployment's own database
+    # from CI would put a run's debris in front of whoever opened the demo,
+    # which is tolerable when a person runs `npm run test:e2e` and watches the
+    # sweep report, and is not when a push does it unattended.
+    #
+    # To turn on: give the job a `DATABASE_URL` for a Neon *branch* of its own
+    # — which is a click, and is what preview environments should have anyway
+    # (Phase 2 records the shared database as deliberate at portfolio scale and
+    # per-preview branches as the obvious upgrade). Nothing in the specs
+    # changes; `sweep.ts` already assumes it may be running after a crash.
+    if: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install the browser
+        run: npx playwright install --with-deps chromium
+
+      - name: End-to-end tests
+        run: npm run test:e2e
+        env:
+          DATABASE_URL: ${{ secrets.E2E_DATABASE_URL }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}

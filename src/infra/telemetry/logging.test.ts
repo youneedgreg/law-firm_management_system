@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Logger } from "effect";
-import { correlated } from "./logging";
+import { clientWentAway, correlated } from "./logging";
 
 /**
  * The claim under test is narrow and is the one the whole logging story rests
@@ -128,5 +128,49 @@ describe("log correlation", () => {
       expect(line?.annotations.operation).toBe("byId");
       expect(line?.annotations.traceId).toEqual(expect.any(String));
     }).pipe(Effect.provide(collected.layer));
+  });
+});
+
+/**
+ * The second claim, and the one an end-to-end run found rather than a person.
+ *
+ * Next prefetches the next route as a stream and cancels it the moment
+ * somebody navigates, so `onRequestError` sees an abandoned write constantly
+ * during ordinary use. Reported at `Error` it is a steady drip of noise into
+ * the one view that exists to hold real faults — and the failure mode of noise
+ * is not that it is annoying, it is that it teaches people to skim.
+ */
+describe("telling a client's departure from a fault", () => {
+  it.each([
+    ["The destination stream closed early.", "the RSC prefetch Next cancels"],
+    ["read ECONNRESET", "a connection dropped under us"],
+    ["The operation was aborted", "an explicit abort"],
+  ])("treats %j as the client going away — %s", (message) => {
+    expect(clientWentAway(new Error(message))).toBe(true);
+  });
+
+  it("names an AbortError however it is worded", () => {
+    const aborted = new Error("something else entirely");
+    aborted.name = "AbortError";
+
+    expect(clientWentAway(aborted)).toBe(true);
+  });
+
+  it.each([
+    ["PgClient: Connection timed out"],
+    ["Advocates (Accounts) Rules r.10: cannot withdraw"],
+    ["Cannot read properties of undefined"],
+  ])("leaves a real failure alone: %j", (message) => {
+    // The bar this has to clear: a database that stopped answering must not be
+    // quietly demoted because its message happens to mention a connection.
+    expect(clientWentAway(new Error(message))).toBe(false);
+  });
+
+  it("does not guess about a value that is not an Error", () => {
+    // React replaces the error on the way out of a Server Component render, so
+    // what arrives is not always an `Error` — and a string nobody can inspect
+    // is a fault until proven otherwise.
+    expect(clientWentAway("closed early")).toBe(false);
+    expect(clientWentAway(undefined)).toBe(false);
   });
 });

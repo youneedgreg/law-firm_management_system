@@ -123,3 +123,27 @@ export const LoggingLive: Layer.Layer<never, ConfigError.ConfigError> =
       );
     }),
   ).pipe(Layer.provide(TelemetryConfig.Default));
+
+/**
+ * Whether the browser simply went away mid-response.
+ *
+ * Next prefetches the next route as a stream, and cancels that stream the
+ * moment somebody navigates or the link leaves the viewport — which is
+ * constant during ordinary use and constant in an end-to-end run, which is
+ * where this was found. The framework reports the cancelled write here, and
+ * reporting it at `Error` puts a steady drip of noise into the one view that
+ * exists to hold real faults.
+ *
+ * This is the same judgement Phase 8's `reported` makes about typed failures
+ * and for the same reason: nothing failed. The request was abandoned by the
+ * only party who wanted it. It is still logged, at `Debug`, because a *flood*
+ * of them means something else — a proxy cutting connections, a page
+ * prefetching far more than it should.
+ */
+export const clientWentAway = (error: unknown): boolean => {
+  if (!(error instanceof Error)) return false;
+  return (
+    error.name === "AbortError" ||
+    /closed early|aborted|ECONNRESET/i.test(error.message)
+  );
+};

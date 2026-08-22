@@ -2,7 +2,7 @@ import { registerOTel } from "@vercel/otel";
 import { Effect } from "effect";
 import type { Instrumentation } from "next";
 import { ServiceIdentity } from "./infra/config";
-import { LoggingLive } from "./infra/telemetry/logging";
+import { clientWentAway, LoggingLive } from "./infra/telemetry/logging";
 
 /**
  * The first thing this process does.
@@ -91,7 +91,10 @@ export const onRequestError: Instrumentation.onRequestError = (
   context,
 ) =>
   Effect.runPromise(
-    Effect.logError("Unhandled failure while serving a request").pipe(
+    (clientWentAway(error)
+      ? Effect.logDebug("Request abandoned by the client")
+      : Effect.logError("Unhandled failure while serving a request")
+    ).pipe(
       Effect.annotateLogs({
         /**
          * `digest` is what the error boundary puts on the screen. Read through

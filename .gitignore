@@ -69,3 +69,9 @@ desktop.ini
 # logs
 logs/
 *.log
+
+# Playwright — a signed-in cookie, and the artefacts of a failed run.
+/e2e/.session.json
+/test-results/
+/playwright-report/
+/blob-report/
