@@ -22,20 +22,32 @@
    ══════════════════════════════════════════════════════════════════════════ */
 
 :root {
+  /* Both themes are declared here, once, and `color-scheme` chooses.
+
+     `light-dark()` reads the *used* colour scheme, so every role states its
+     two values side by side instead of the whole block being written twice —
+     once in a `prefers-color-scheme` media query and once under a
+     `[data-theme]` selector, which is the arrangement where the two copies
+     drift. Nothing below is duplicated and there is no media query at all;
+     the only theme-aware declaration in the file is `color-scheme`.
+
+     Dark mode is what showed the split below was half done. Three grounds and
+     every tag were naming ramp steps directly, which is fine while there is
+     one palette and wrong the moment there are two: a ramp step cannot be
+     redefined per theme without moving every other use of it. They are roles
+     now, and `background:` and `border-color:` are held to the same rule
+     `color:` already was. */
+  color-scheme: light dark;
+
   /* ══ Primitives ══════════════════════════════════════════════════════════
-     The raw material. A primitive says what a colour *is*; a role below says
-     what it is *for*, and carries the contrast obligation that comes with the
-     job. Rules reach for roles — a primitive named directly in a rule is a
-     value with no stated obligation, which is how the six contrast failures
-     this layer was written to fix got in.
+     The raw material, and the one part that is *not* theme-aware. A primitive
+     says what a colour *is*; a role below says what it is *for*, and carries
+     the contrast obligation that comes with the job. Rules reach for roles —
+     a primitive named directly in a rule is a value with no stated
+     obligation, which is how the six contrast failures this layer was written
+     to fix got in.
 
-     Grounds are primitives rather than roles because they are the fixed
-     points: every ink role is defined as "clears its bar on all three". */
-
-  --color-bg: #f3f2f2;
-  --color-surface: #eae9e9;
-
-  /* Tonal ramps — generated in OKLCH on one shared lightness scale, so the
+     Tonal ramps — generated in OKLCH on one shared lightness scale, so the
      same step of any role matches the others in visual value. */
   --color-neutral-100: #f8f4f4;
   --color-neutral-200: #eae7e7;
@@ -68,12 +80,22 @@
   --color-accent-2-800: #790e3d;
   --color-accent-2-900: #4b1528;
 
-  /* The two brand hues at full strength. Both are **non-text** roles: set as
-     a label on the page they measure 3.4:1, which is why `--ink-link` exists
-     and is a darker step of the same ramp. As a focus ring, a bar or a tick
-     they clear the 3:1 WCAG 1.4.11 asks of a non-text indicator. */
-  --color-accent: #0088b0;
-  --color-accent-2: #d6006c;
+  /* ══ Grounds ═══════════════════════════════════════════════════════════
+     The three fills text is ever set on, and the fixed points every ink role
+     is measured against. Light keeps Broadsheet's own arrangement — a raised
+     surface is *darker* than the page, an inset one lighter — and dark
+     inverts the direction while keeping the relationship. */
+  --color-bg: light-dark(#f3f2f2, #1a1918);
+  --color-surface: light-dark(#eae9e9, #262423);
+  --color-inset: light-dark(var(--color-neutral-100), #121110);
+
+  /* The two brand hues. Both are **non-text** roles: set as a label on the
+     page the teal measures 3.4:1, which is why `--ink-link` exists and is a
+     different step of the same ramp. As a focus ring, a bar or a tick they
+     clear the 3:1 WCAG 1.4.11 asks of a non-text indicator, in both themes —
+     which takes a lighter step on dark, because the light one disappears. */
+  --color-accent: light-dark(#0088b0, var(--color-accent-400));
+  --color-accent-2: light-dark(#d6006c, var(--color-accent-2-400));
 
   /* ══ Ink — the roles text is set in ═════════════════════════════════════
      Four, and there is no fifth, because a light newsprint ground has room
@@ -87,21 +109,89 @@
      ground, so "does it pass" has one answer per ground and nobody
      re-measures; each of these has one answer. The figure quoted is the worst
      of the three grounds, which is always `--color-surface`. */
-  --ink: var(--color-neutral-950); /* 13.7:1 */
-  --ink-muted: var(--color-neutral-700); /*  5.4:1 */
-  --ink-link: var(--color-accent-700); /*  5.3:1 */
-  --ink-alert: var(--color-accent-2-700); /*  6.0:1 */
+  --ink: light-dark(
+    var(--color-neutral-950),
+    var(--color-neutral-100)
+  ); /* 13.7 · 14.2 */
+  --ink-muted: light-dark(
+    var(--color-neutral-700),
+    var(--color-neutral-500)
+  ); /*  5.4 ·  5.4 */
+  --ink-link: light-dark(
+    var(--color-accent-700),
+    var(--color-accent-400)
+  ); /*  5.3 ·  7.9 */
+  --ink-alert: light-dark(
+    var(--color-accent-2-700),
+    var(--color-accent-2-400)
+  ); /*  6.0 ·  7.3 */
   /* A label on a saturated fill, so it is measured against `--fill-accent`
-     rather than against a ground. */
+     rather than against a ground — and the one role needing no dark value of
+     its own. The page ground is the right label colour on a saturated fill in
+     both themes, because the fill moves to the other end of its ramp when the
+     ground does: dark ink on light teal, light ink on dark teal. */
   --ink-inverse: var(--color-bg);
 
   /* ══ Fills that carry a label ═══════════════════════════════════════════
      Separate from `--color-accent` because something is written on them, so
      the bar is 4.5:1 rather than 3:1. The brand teal misses it at 3.7:1; one
      step down its own ramp makes it, which is what a tonal ramp is for. */
-  --fill-accent: var(--color-accent-700); /* 5.7:1 vs --ink-inverse */
-  --fill-accent-hover: var(--color-accent-800);
-  --fill-accent-active: var(--color-accent-900);
+  --fill-accent: light-dark(
+    var(--color-accent-700),
+    var(--color-accent-400)
+  ); /* 5.7 · 9.0 vs --ink-inverse */
+  /* Toward the far end of the ramp from the ground, so a press reads as more
+     emphatic in both themes rather than darker in one and washed out in the
+     other. */
+  --fill-accent-hover: light-dark(
+    var(--color-accent-800),
+    var(--color-accent-300)
+  );
+  --fill-accent-active: light-dark(
+    var(--color-accent-900),
+    var(--color-accent-200)
+  );
+
+  /* A tinted panel that is not a control: the day the diary is showing, the
+     initials in the masthead. `--ink` and `--ink-link` both stay legible on
+     it, which is what it is for. */
+  --fill-highlight: light-dark(
+    var(--color-accent-100),
+    var(--color-accent-900)
+  );
+
+  /* A track or a placeholder — something with no content yet. */
+  --fill-inert: light-dark(var(--color-neutral-200), var(--color-neutral-800));
+
+  /* Tags draw their own ground, so each is a *pair* and is measured against
+     itself rather than against the page. They named ramp steps directly until
+     dark mode, which is the one thing a ramp step cannot do — its value is
+     fixed, and a tag needs to be light-on-dark in one theme and the reverse in
+     the other. */
+  --tag-accent-fill: light-dark(
+    var(--color-accent-100),
+    var(--color-accent-900)
+  );
+  --tag-accent-ink: light-dark(
+    var(--color-accent-800),
+    var(--color-accent-200)
+  ); /* 9.1 · 11.4 */
+  --tag-alert-fill: light-dark(
+    var(--color-accent-2-100),
+    var(--color-accent-2-900)
+  );
+  --tag-alert-ink: light-dark(
+    var(--color-accent-2-800),
+    var(--color-accent-2-200)
+  ); /* 9.9 · 11.7 */
+  --tag-neutral-fill: light-dark(
+    var(--color-neutral-100),
+    var(--color-neutral-900)
+  );
+  --tag-neutral-ink: light-dark(
+    var(--color-neutral-800),
+    var(--color-neutral-200)
+  ); /* 9.3 · 11.5 */
 
   /* ══ Lines ══════════════════════════════════════════════════════════════
      A control's edge is the only thing saying the control is there, so it
@@ -110,8 +200,16 @@
      the whole job and a 16%-ink hairline was not doing it. A rule between two
      table rows says nothing the text does not, so it is exempt and stays a
      hairline. */
-  --line-control: var(--color-neutral-600); /* 3.6:1 on the input fill */
-  --line-control-hover: var(--color-neutral-800);
+  /* The same ramp step in both themes, which is not a shortcut: the middle of
+     a ramp is the one place that clears 3:1 against both ends of it. It
+     measures 3.6 on the light input fill and 3.6 on the dark one. */
+  --line-control: var(--color-neutral-600);
+  --line-control-hover: light-dark(
+    var(--color-neutral-800),
+    var(--color-neutral-400)
+  );
+  /* The hairline between rows of a list, and the edge of the sidebar. */
+  --line-soft: light-dark(var(--color-neutral-200), var(--color-neutral-800));
   --line-divider: color-mix(in srgb, var(--ink) 16%, transparent);
   --line-rule: color-mix(in srgb, var(--ink) 8%, transparent);
 
@@ -131,7 +229,19 @@
   );
   --wash-alert: color-mix(in srgb, var(--color-accent-2) 6%, transparent);
   --wash-selection: color-mix(in srgb, var(--color-accent) 30%, transparent);
-  --wash-scrim: color-mix(in srgb, var(--color-neutral-900) 50%, transparent);
+  /* The ink-tinted washes above need no dark value at all: they are mixed
+     from `--ink`, which is already near-white there, so a hover that was 7%
+     ink over paper becomes 7% paper over ink without a second declaration.
+     That is the whole reason they were defined against the role rather than
+     against a literal.
+
+     The scrim is the exception, because it is not a tint of the foreground —
+     it is the page being pushed back, and on a dark page 50% of a dark grey
+     does not push anything. */
+  --wash-scrim: light-dark(
+    color-mix(in srgb, var(--color-neutral-900) 50%, transparent),
+    color-mix(in srgb, #000000 70%, transparent)
+  );
 
   /* ══ Type, measure, elevation ═══════════════════════════════════════════ */
 
@@ -154,13 +264,46 @@
   --radius-md: 2px;
   --radius-lg: 4px;
 
-  /* Elevation — derived from the ground: soft ink-tinted shadows. */
+  /* Elevation — soft ink-tinted shadows on paper. On a dark ground an ink
+     tint is invisible, so the dark side is black at roughly three times the
+     strength; a dialog still has to sit off the page it covers. */
   --shadow-sm: 0 1px 2px
-    color-mix(in srgb, var(--color-neutral-900) 14%, transparent);
+    light-dark(
+      color-mix(in srgb, var(--color-neutral-900) 14%, transparent),
+      color-mix(in srgb, #000000 45%, transparent)
+    );
   --shadow-md: 0 3px 10px
-    color-mix(in srgb, var(--color-neutral-900) 16%, transparent);
+    light-dark(
+      color-mix(in srgb, var(--color-neutral-900) 16%, transparent),
+      color-mix(in srgb, #000000 50%, transparent)
+    );
   --shadow-lg: 0 12px 32px
-    color-mix(in srgb, var(--color-neutral-900) 22%, transparent);
+    light-dark(
+      color-mix(in srgb, var(--color-neutral-900) 22%, transparent),
+      color-mix(in srgb, #000000 60%, transparent)
+    );
+}
+
+/* ══ Choosing a theme ══════════════════════════════════════════════════════
+   The whole of the theme switch, and there is nothing else to it: every token
+   above reads `light-dark()`, which resolves against the *used* colour scheme,
+   so setting the scheme sets the palette.
+
+   `color-scheme` is not only a signal to this stylesheet. The user agent reads
+   it too, and it is what keeps the native date picker, the select popup, the
+   scrollbars and the form-validation bubble in step with the page instead of
+   a white panel opening over a dark one.
+
+   `[data-theme]` is written by an inline script in `app/layout.tsx` before the
+   first paint, from a choice held in `localStorage`. Its absence is the third
+   state and the default — follow the system — which is why it is an attribute
+   the script *adds* rather than one the markup ships with a value. */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 *,
@@ -497,16 +640,16 @@ textarea.input {
   border-radius: calc(var(--radius-md) * 0.75);
 }
 .tag-accent {
-  background: var(--color-accent-100);
-  color: var(--color-accent-800);
+  background: var(--tag-accent-fill);
+  color: var(--tag-accent-ink);
 }
 .tag-accent-2 {
-  background: var(--color-accent-2-100);
-  color: var(--color-accent-2-800);
+  background: var(--tag-alert-fill);
+  color: var(--tag-alert-ink);
 }
 .tag-neutral {
-  background: var(--color-neutral-100);
-  color: var(--color-neutral-800);
+  background: var(--tag-neutral-fill);
+  color: var(--tag-neutral-ink);
 }
 .tag-outline {
   border: 1px solid var(--ink-link);

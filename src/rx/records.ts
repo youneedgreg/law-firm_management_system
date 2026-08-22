@@ -283,6 +283,21 @@ export const DEFAULT_SETTINGS: FirmSettings = {
  * ids are numbers and TypeScript indexes a string-keyed record with one
  * happily, which is the same coercion the browser does anyway.
  */
+/**
+ * Which palette to draw in.
+ *
+ * Three states, and `"system"` is the default rather than a fourth option
+ * meaning "unset": a browser that has expressed no preference should follow
+ * the one the operating system already holds, and making that an explicit
+ * choice is what lets somebody go *back* to it after picking a side.
+ *
+ * Decoded like every other stored value, so a key holding something this build
+ * has never heard of falls back to the default rather than reaching the
+ * `<html>` element.
+ */
+export const Theme = Schema.Literal("system", "light", "dark");
+export type Theme = typeof Theme.Type;
+
 export const InvoiceOverrides = Schema.mutable(
   Schema.Record({
     key: Schema.String,

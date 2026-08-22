@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "@/app/(auth)/sign-in/actions";
 import { type Session, SessionProvider } from "@/components/Session";
+import { ThemeChoice } from "@/components/ThemeChoice";
 import { PORTAL_NAV } from "@/lib/nav";
 
 /**
@@ -47,6 +48,7 @@ export function PortalShell({
               gap: "var(--space-4)",
             }}
           >
+            <ThemeChoice />
             <span className="portal-kicker">{session.principal.name}</span>
             <form action={signOut}>
               <button type="submit" className="btn btn-ghost">

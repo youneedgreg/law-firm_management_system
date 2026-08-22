@@ -9,6 +9,7 @@ import {
   InvoiceOverrides,
   NO_RECORDS,
   Settings,
+  Theme,
 } from "./records";
 
 /**
@@ -115,6 +116,16 @@ const stored = <A, I>(
 const settings = stored("oklaw.settings.v1", Settings, DEFAULT_SETTINGS);
 const records = stored("oklaw.records.v1", CreatedRecords, NO_RECORDS);
 const overrides = stored("oklaw.invoice-status.v1", InvoiceOverrides, {});
+/**
+ * The key the no-flash script in `app/layout.tsx` reads.
+ *
+ * It is read twice by two different things — once synchronously before the
+ * first paint, and once here — so the name is exported rather than written out
+ * again in the script, where a typo would be silent: the page would simply
+ * always start in the system palette and settle a frame later.
+ */
+export const THEME_KEY = "oklaw.theme.v1";
+const theme = stored(THEME_KEY, Theme, "system");
 
 /** The firm-wide preferences an administrator sets. */
 export const settingsRx: Rx.Writable<FirmSettings> = settings.atom;
@@ -126,6 +137,19 @@ export const recordsRx: Rx.Writable<CreatedRecords> = records.atom;
 export const invoiceOverridesRx: Rx.Writable<InvoiceOverrides> = overrides.atom;
 
 /**
+ * The chosen palette, or `"system"`.
+ *
+ * The atom is not what paints the page — `light-dark()` and `color-scheme`
+ * do, from a `data-theme` attribute the inline script sets before the first
+ * paint. This holds the same choice for the control that changes it, and
+ * `themeReadyRx` is what stops that control from clearing the attribute the
+ * script just set: until the store has answered, the atom reads `"system"`,
+ * and acting on that would undo the very thing the script is for.
+ */
+export const themeRx: Rx.Writable<Theme> = theme.atom;
+export const themeReadyRx: Rx.Rx<boolean> = theme.ready;
+
+/**
  * False until every stored value has been read.
  *
  * Screens that would otherwise flash a wrong answer — "no such client" for one
@@ -134,7 +158,11 @@ export const invoiceOverridesRx: Rx.Writable<InvoiceOverrides> = overrides.atom;
  * wants to be sure about all of it.
  */
 export const hydratedRx: Rx.Rx<boolean> = Rx.readable(
-  (get) => get(settings.ready) && get(records.ready) && get(overrides.ready),
+  (get) =>
+    get(settings.ready) &&
+    get(records.ready) &&
+    get(overrides.ready) &&
+    get(theme.ready),
 ).pipe(Rx.withServerValue(() => false));
 
 /** The effective status of an invoice, override applied. */

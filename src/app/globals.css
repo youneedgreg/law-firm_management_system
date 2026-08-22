@@ -152,7 +152,7 @@ body:has(.shell) {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: var(--color-accent-100);
+  background: var(--fill-highlight);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -197,7 +197,7 @@ body:has(.shell) {
   width: 240px;
   flex-shrink: 0;
   padding: var(--space-6) var(--space-4);
-  border-right: 1px solid var(--color-neutral-200);
+  border-right: 1px solid var(--line-soft);
   overflow-y: auto;
   /* Reaching the end of the nav must not hand the wheel to the content pane. */
   overscroll-behavior: contain;
@@ -237,6 +237,30 @@ body:has(.shell) {
 .sidebar-link[aria-current="page"] {
   color: var(--ink-link);
   font-weight: 700;
+}
+
+/* Below the navigation, set apart from it: a preference about the page rather
+   than a place to go. Reuses `.sidebar-label` for its own label so it reads as
+   one more section heading in the column. */
+.theme-choice {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line-soft);
+}
+
+.theme-choice > .select > select.input {
+  font-size: 13px;
+  min-height: 30px;
+}
+
+/* In the portal there is no sidebar, so it sits in the masthead — inline, and
+   without the label above it that the column has room for. */
+.portal-header .theme-choice {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.portal-header .theme-choice > .sidebar-label {
+  display: none;
 }
 
 .scrim {
@@ -393,7 +417,7 @@ body:has(.shell) {
 .stat-grid-ruled {
   margin-bottom: var(--space-8);
   padding-bottom: var(--space-8);
-  border-bottom: 1px solid var(--color-neutral-200);
+  border-bottom: 1px solid var(--line-soft);
 }
 
 .stat-label {
@@ -462,7 +486,7 @@ body:has(.shell) {
 
 .row {
   padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--color-neutral-200);
+  border-bottom: 1px solid var(--line-soft);
 }
 
 .row-split {
@@ -482,7 +506,7 @@ body:has(.shell) {
   display: flex;
   gap: var(--space-3);
   padding: var(--space-2) 0;
-  border-bottom: 1px solid var(--color-neutral-200);
+  border-bottom: 1px solid var(--line-soft);
 }
 
 .fact-label {
@@ -551,7 +575,7 @@ body:has(.shell) {
 }
 
 .bar-track {
-  background: var(--color-neutral-200);
+  background: var(--fill-inert);
   height: 8px;
   border-radius: 2px;
 }
@@ -597,7 +621,7 @@ body:has(.shell) {
 }
 
 .day-today {
-  background: var(--color-accent-100);
+  background: var(--fill-highlight);
 }
 
 .day-name {
@@ -684,7 +708,7 @@ body:has(.shell) {
   display: flex;
   gap: var(--space-6);
   padding: var(--space-4) var(--space-6);
-  border-bottom: 1px solid var(--color-neutral-300);
+  border-bottom: 1px solid var(--line-divider);
   flex-wrap: wrap;
   flex-shrink: 0;
 }
@@ -774,12 +798,6 @@ body:has(.shell) {
    layout furniture the screens need around them. Every value comes from a
    token; nothing here introduces a new colour, font or measure. */
 
-:root {
-  /* The palette is a light one. Telling the UA so keeps the native date, time
-     and select popups in step with the page instead of inverting them. */
-  color-scheme: light;
-}
-
 /* The dropdown. `appearance: none` removes the platform arrow, and the caret is
    redrawn as a rotated corner in ink so it matches the rest of the system at
    any zoom. Only wrapped selects are stripped, so a bare <select> keeps a
@@ -802,14 +820,14 @@ body:has(.shell) {
   right: var(--space-3);
   width: 7px;
   height: 7px;
-  border: solid var(--color-neutral-700);
+  border: solid var(--ink-muted);
   border-width: 0 1.5px 1.5px 0;
   transform: translateY(-70%) rotate(45deg);
   pointer-events: none;
 }
 
 .select:hover::after {
-  border-color: var(--color-accent-700);
+  border-color: var(--ink-link);
 }
 
 .select > select.input:disabled {
@@ -966,7 +984,7 @@ body:has(.shell) {
 .form-refusal {
   margin: var(--space-3) 0 0;
   padding: var(--space-3);
-  border: 1px solid var(--color-accent-2-700);
+  border: 1px solid var(--ink-alert);
   border-left-width: 3px;
   border-radius: var(--radius-md);
   font-size: 13px;
@@ -981,7 +999,7 @@ body:has(.shell) {
   display: grid;
   place-items: center;
   padding: var(--space-6) var(--space-4);
-  background: var(--color-neutral-100);
+  background: var(--color-inset);
 }
 
 .signin-card {
@@ -1004,7 +1022,7 @@ body:has(.shell) {
 .signin-demo {
   margin-top: var(--space-6);
   padding-top: var(--space-4);
-  border-top: 1px solid var(--color-neutral-300);
+  border-top: 1px solid var(--line-divider);
   font-size: 13px;
   color: var(--ink-muted);
 }
@@ -1017,7 +1035,7 @@ body:has(.shell) {
 .signin-demo code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
-  background: var(--color-neutral-100);
+  background: var(--color-inset);
   padding: 1px 4px;
   border-radius: var(--radius-sm);
 }
@@ -1119,7 +1137,7 @@ body:has(.shell) {
    ground and wants to be the same grey on all of them. It is never text, so
    the contrast bar does not reach it. */
 .skeleton {
-  background: var(--color-neutral-200);
+  background: var(--fill-inert);
   border-radius: var(--radius-md);
   height: 1em;
   width: 100%;

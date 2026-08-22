@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
+import { ThemeChoice } from "@/components/ThemeChoice";
 import { itemForPath, visibleSections } from "@/lib/nav";
 import type { Role } from "@/domain/firm/advocate";
 
@@ -116,6 +117,7 @@ export function Sidebar({ role, open, onClose, returnFocusTo }: SidebarProps) {
             ))}
           </div>
         ))}
+        <ThemeChoice />
       </nav>
     </>
   );

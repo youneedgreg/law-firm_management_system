@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Source_Serif_4 } from "next/font/google";
 import { RxRegistry } from "@/rx/provider";
+import { THEME_KEY } from "@/rx/session";
 import "@phosphor-icons/web/duotone";
 import "./globals.css";
 
@@ -22,9 +23,49 @@ export const metadata: Metadata = {
     "Case, client, court, document, billing and trust management for OKLaw Advocates.",
 };
 
+/**
+ * Applies a stored palette choice before anything is drawn.
+ *
+ * It has to be inline and it has to be synchronous. Every other way of doing
+ * this — an effect, an atom, a layout read — runs *after* the first paint, so
+ * somebody who chose dark gets a white page for a frame on every navigation
+ * into the app. That flash is the entire problem, and a blocking script in
+ * `<head>` is the only thing that happens early enough to prevent it.
+ *
+ * It reads the same key `rx/session.ts` writes, imported rather than repeated,
+ * because a typo here would be silent: the page would just always start in the
+ * system palette and settle a moment later, which is the bug this prevents.
+ *
+ * A stored value this build does not recognise is ignored, leaving the
+ * attribute absent — which is `system`, and the right thing to fall back to.
+ */
+const applyTheme = `
+try {
+  var t = JSON.parse(localStorage.getItem(${JSON.stringify(THEME_KEY)}));
+  if (t === "dark" || t === "light") document.documentElement.dataset.theme = t;
+} catch (e) {}
+`;
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={sourceSerif.variable}>
+    /*
+      `suppressHydrationWarning` is load-bearing here rather than a silencer,
+      and it is the exact cost of the script below.
+
+      The server cannot know which palette this browser chose — the choice is
+      in `localStorage`, which only exists in the browser — so the HTML it
+      sends has no `data-theme`, the script adds one before React starts, and
+      React finds an attribute on the element it did not render. It reports
+      that and *keeps* the attribute, which is the outcome wanted; without
+      this the console carries a mismatch error on every load in development.
+
+      It applies to this element's own attributes and not to any descendant,
+      so nothing inside the page is being excused.
+    */
+    <html lang="en" className={sourceSerif.variable} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: applyTheme }} />
+      </head>
       <body>
         <RxRegistry>{children}</RxRegistry>
       </body>
