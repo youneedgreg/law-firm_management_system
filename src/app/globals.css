@@ -1111,6 +1111,64 @@ body:has(.shell) {
   color: var(--ink-muted);
 }
 
+/* ── waiting ───────────────────────────────────────────────────────────── */
+
+/* A block standing in for text that has not arrived.
+
+   `--color-neutral-200` rather than a wash, because a skeleton sits on a known
+   ground and wants to be the same grey on all of them. It is never text, so
+   the contrast bar does not reach it. */
+.skeleton {
+  background: var(--color-neutral-200);
+  border-radius: var(--radius-md);
+  height: 1em;
+  width: 100%;
+}
+
+/* The pulse is what separates "still loading" from "loaded, and empty" — two
+   states that a static grey block renders identically, and only one of which
+   is worth waiting through.
+
+   Declared inside `no-preference` rather than switched off inside `reduce`.
+   Same result for the two settled cases and a better default for the third:
+   a user agent that reports nothing gets the still version, which is the one
+   that is safe to guess wrong about. This is the only animation in the
+   application. */
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton {
+    animation: skeleton-pulse 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* Widths are varied per line so a paragraph of them reads as text rather than
+   as a bar chart. */
+.skeleton-sm {
+  width: 40%;
+}
+.skeleton-md {
+  width: 65%;
+}
+.skeleton-lg {
+  width: 85%;
+}
+
+.skeleton-title {
+  height: 32px;
+  width: 260px;
+  margin-bottom: var(--space-2);
+}
+
+.skeleton-stack {
+  display: grid;
+  gap: var(--space-3);
+}
+
 /* ── getting past the furniture ────────────────────────────────────────── */
 
 /* WCAG 2.4.1. Every internal screen puts a masthead and about twenty
