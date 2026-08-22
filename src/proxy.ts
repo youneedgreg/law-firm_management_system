@@ -49,11 +49,20 @@ export function proxy(request: NextRequest): NextResponse {
 export const config = {
   /**
    * Everything except: the sign-in page itself (which would be a loop), the
-   * API (see above), Next's own asset routes, and the favicon.
+   * API (see above), Next's own asset routes, and the metadata files.
+   *
+   * The metadata files were the omission, and it was silent in the way these
+   * always are: `app/robots.ts` and `app/icon.svg` are served at `/robots.txt`
+   * and `/icon.svg`, neither of which the original lookahead named, so a
+   * crawler asking for the one file that tells it what to crawl was **302'd to
+   * the sign-in page**, and the browser asking for the tab icon was too. Both
+   * are public by definition; there is nothing behind either to protect.
    *
    * Written as one negative lookahead because the matcher is evaluated before
    * the function runs — a route that does not match never wakes this up at all,
    * which is the difference between a redirect check and a per-asset cost.
    */
-  matcher: ["/((?!sign-in|api|_next/static|_next/image|favicon.ico).*)"],
+  matcher: [
+    "/((?!sign-in|api|_next/static|_next/image|favicon.ico|icon|apple-icon|robots.txt|sitemap.xml|manifest.webmanifest).*)",
+  ],
 };

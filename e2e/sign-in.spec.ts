@@ -52,4 +52,24 @@ test.describe("signing in", () => {
 
     await expect(page).toHaveURL(/\/sign-in/);
   });
+
+  test("leaves the public metadata files public", async ({ request }) => {
+    /*
+      `app/robots.ts` and `app/icon.svg` are served at `/robots.txt` and
+      `/icon.svg`, and the proxy's matcher named neither — so the one file that
+      tells a crawler what to crawl was answered with a 302 to the sign-in
+      page, and the browser asking for the tab icon got one too. Both are
+      public by definition; there is nothing behind either to protect.
+
+      A signed-out request, deliberately, because that is the only state in
+      which the bug exists.
+    */
+    const robots = await request.get("/robots.txt");
+    expect(robots.status()).toBe(200);
+    expect(await robots.text()).toContain("User-Agent");
+
+    const icon = await request.get("/icon.svg");
+    expect(icon.status()).toBe(200);
+    expect(icon.headers()["content-type"]).toContain("svg");
+  });
 });

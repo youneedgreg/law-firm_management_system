@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="OKLaw">
+  <!--
+    A masthead, not a monogram.
+
+    Text in a favicon depends on a font being present and is illegible at 16px
+    anyway; this is the thing the design system already is — a column of
+    newsprint under a heavy rule. It reads as a shape at 16px and as a masthead
+    at 32px, which is the whole job.
+
+    The colours are the tokens' values rather than `var()`: an SVG served as an
+    icon is a separate document and inherits nothing from the page.
+  -->
+  <rect width="32" height="32" rx="2" fill="#201e1d"/>
+  <rect x="6" y="7" width="20" height="3" fill="#f3f2f2"/>
+  <rect x="6" y="14" width="20" height="2" fill="#0088b0"/>
+  <rect x="6" y="19" width="14" height="2" fill="#9b9797"/>
+  <rect x="6" y="23" width="17" height="2" fill="#9b9797"/>
+</svg>
