@@ -147,7 +147,7 @@ export default async function ReportsPage() {
                       <Bar
                         of={row.collected}
                         peak={peak}
-                        tone="var(--accent)"
+                        tone="var(--color-accent)"
                       />
                     </td>
                   </tr>
