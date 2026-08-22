@@ -5,6 +5,7 @@ import { Credentials } from "./forms";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { type ActionState, refused, typedValues } from "@/lib/action-state";
+import { DEMO_PASSWORD, demoAccount } from "@/lib/demo";
 import { sourceOf } from "@/lib/request-source";
 import { attempt } from "@/runtime";
 import { IdentityService } from "@/services/identity-service";
@@ -41,9 +42,12 @@ import type { SessionCookie } from "@/services/repositories";
  * would send somebody who just typed their password to somebody else's site,
  * from a link that looks like ours.
  */
-const destination = (next: FormDataEntryValue | null): string => {
+const destination = (
+  next: FormDataEntryValue | null,
+  fallback = "/dashboard",
+): string => {
   const path = typeof next === "string" ? next : "";
-  return path.startsWith("/") && !path.startsWith("//") ? path : "/dashboard";
+  return path.startsWith("/") && !path.startsWith("//") ? path : fallback;
 };
 
 const write = async (jar: readonly SessionCookie[]): Promise<void> => {
@@ -98,6 +102,80 @@ export async function signIn(
   // Outside the `attempt` above: `redirect` throws a control-flow value for
   // Next to catch, and thrown inside an Effect it would be caught as a defect.
   redirect(destination(form.get("next")));
+}
+
+/**
+ * One click, one role (D-5).
+ *
+ * ## It is the same sign-in, and that is the whole design
+ *
+ * The button posts a *key* — `finance-officer` — and the roster in `lib/demo.ts`
+ * turns it into an address. It could have posted the address and the password
+ * in hidden fields, since both are printed on the page a few centimetres above;
+ * a key is better anyway, because it makes the set of accounts this endpoint
+ * will sign in as a closed list in the source rather than whatever the form
+ * happened to submit. An unknown key is refused, not attempted.
+ *
+ * From there it is `IdentityService.signInAsDemo`, which is
+ * `signIn` with one more counter in front of it: the password is checked, the
+ * attempt is audited, the session is issued by the same gateway. There is no
+ * second door, no "demo mode" branch inside the services, and nothing here that
+ * a real deployment would have to be trusted to remove — deleting the roster
+ * deletes the feature.
+ *
+ * ## Where it lands
+ *
+ * `?next=` is honoured only when the account could actually use it. A signed-out
+ * client following a bookmark to `/portal/invoices` should be returned there,
+ * and the same client sent to `/cases` — because the proxy turned a *staff* URL
+ * away before anybody chose a role — should not be bounced through a dashboard
+ * they may not see. So a portal account follows `next` only into `/portal`, and
+ * otherwise each account goes to its own landing.
+ */
+export async function signInAs(
+  _previous: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  const account = demoAccount(form.get("account"));
+
+  if (account === undefined) {
+    return refused("That demo account is not one of the seeded roles.");
+  }
+
+  const from = sourceOf(await headers());
+
+  const outcome = await attempt(
+    Effect.flatMap(IdentityService, (identity) =>
+      identity.signInAsDemo(
+        { email: account.email, password: DEMO_PASSWORD },
+        from,
+      ),
+    ),
+  );
+
+  if (Either.isLeft(outcome)) {
+    /**
+     * `InvalidCredentials` here does not mean what it means on the form above.
+     * Nobody typed anything: it means the database this deployment is pointed
+     * at has not been seeded, or has been seeded with a different password. The
+     * refusal says so, because "invalid email or password" would send a visitor
+     * looking for a typo in a form they never filled in.
+     */
+    return refused(
+      outcome.left._tag === "InvalidCredentials"
+        ? "The demo accounts are not present in this database. Run npm run db:seed."
+        : `${outcome.left.reason}.`,
+    );
+  }
+
+  await write(outcome.right);
+
+  const next = destination(form.get("next"), account.landing);
+  redirect(
+    account.landing === "/portal" && !next.startsWith("/portal")
+      ? "/portal"
+      : next,
+  );
 }
 
 export async function signOut(): Promise<void> {

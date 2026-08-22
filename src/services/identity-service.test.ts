@@ -272,6 +272,99 @@ describe("a successful sign-in", () => {
   });
 });
 
+/**
+ * The one-click switcher on the sign-in page (D-5).
+ *
+ * Everything above is built around a caller who types a password and sometimes
+ * gets it wrong. This caller never does — the button carries the seeded
+ * account's own password — so every press succeeds, and a control that forgives
+ * every success is not a control at all. The demo bucket is the one counter in
+ * the system that survives a successful sign-in, and these are the two claims
+ * that make it worth having.
+ */
+describe("signing in through the demo switcher", () => {
+  it.effect("is the same sign-in: same gateway, same audit entry", () => {
+    const app = firm();
+
+    return Effect.gen(function* () {
+      const cookies = yield* Effect.flatMap(IdentityService, (identity) =>
+        identity.signInAsDemo(RIGHT, SOURCE),
+      );
+
+      expect(cookies).toEqual([COOKIE]);
+      expect(app.asked.times).toBe(1);
+
+      const recorded = yield* app.recorded;
+      expect(recorded.map((entry) => entry.action)).toContain(
+        "session.signed-in",
+      );
+    }).pipe(Effect.provide(app.layer));
+  });
+
+  /**
+   * The claim that matters, and the mutation that breaks it: point
+   * `signInAsDemo` at `signIn` and this test fails on the very next press,
+   * because `signIn` clears its own counters on the way out and would clear
+   * this one too if it knew about it.
+   */
+  it.effect("keeps a counter that success does not clear", () => {
+    const app = firm();
+
+    return Effect.gen(function* () {
+      const [allowance] = Throttle.forDemo(SOURCE);
+      const allowed = allowance?.attempts ?? 0;
+
+      const outcomes = yield* Effect.flatMap(IdentityService, (identity) =>
+        Effect.forEach(Array.from({ length: allowed + 1 }), () =>
+          Effect.either(identity.signInAsDemo(RIGHT, SOURCE)),
+        ),
+      );
+
+      /** Every press up to the allowance signs in… */
+      for (const outcome of outcomes.slice(0, allowed)) {
+        expect(outcome._tag).toBe("Right");
+      }
+
+      /** …and the one after it is refused, having succeeded every time. */
+      const last = outcomes[allowed];
+      expect(last?._tag === "Left" ? last.left._tag : "ok").toBe(
+        "TooManyAttempts",
+      );
+
+      /** The refused press never reached Better Auth. */
+      expect(app.asked.times).toBe(allowed);
+    }).pipe(Effect.provide(app.layer));
+  });
+
+  /**
+   * Keyed on the source alone, so one visitor exhausting the roster cannot stop
+   * the next one from looking at the demo — the same isolation property the
+   * password buckets have, for the same reason.
+   */
+  it.effect("cannot spend another connection's presses", () => {
+    const app = firm();
+
+    return Effect.gen(function* () {
+      const [allowance] = Throttle.forDemo(SOURCE);
+      const allowed = allowance?.attempts ?? 0;
+
+      yield* Effect.flatMap(IdentityService, (identity) =>
+        Effect.forEach(Array.from({ length: allowed + 1 }), () =>
+          Effect.either(identity.signInAsDemo(RIGHT, SOURCE)),
+        ),
+      );
+
+      const elsewhere = yield* Effect.either(
+        Effect.flatMap(IdentityService, (identity) =>
+          identity.signInAsDemo(RIGHT, ELSEWHERE),
+        ),
+      );
+
+      expect(elsewhere._tag).toBe("Right");
+    }).pipe(Effect.provide(app.layer));
+  });
+});
+
 describe("the password-reset endpoint", () => {
   const reset = new Request(
     "https://oklaw.example/api/auth/request-password-reset",

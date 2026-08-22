@@ -79,6 +79,32 @@ export const forSignIn = (
 ];
 
 /**
+ * What a one-click demo sign-in spends from (D-5).
+ *
+ * The switcher is a public button that mints a real session — no password is
+ * typed, so every press succeeds. That breaks the assumption the two buckets
+ * above are built on. `signIn` *forgets* its counters on success, which is
+ * right when success means somebody proved who they are and wrong here, where
+ * success is the thing being spent: a script pressing the button in a loop
+ * would be forgiven every time and could open sessions and write audit rows
+ * without limit.
+ *
+ * So this bucket exists and **is never forgotten**, and it is keyed on the
+ * source alone because the account is not the visitor's choice in any
+ * meaningful sense — there are six, and pressing all six is the intended use.
+ *
+ * Thirty in fifteen minutes is set for a person, not a fleet: a reviewer
+ * clicking down the roster twice, plus room to be wrong about how many times
+ * that is. What it bounds is a loop, which is the only thing here worth
+ * bounding — the accounts are fixtures and the password is printed on the page,
+ * so nothing behind the button is a secret. It buys back the property the
+ * button gives away, and nothing more.
+ */
+export const forDemo = (source: string): readonly Allowance[] => [
+  { bucket: `demo|${source}`, attempts: 30 },
+];
+
+/**
  * What a password-reset request spends from.
  *
  * Keyed on the source only, and tighter than a sign-in. A reset endpoint is an

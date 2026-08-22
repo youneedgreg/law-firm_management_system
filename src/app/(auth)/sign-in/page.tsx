@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { DEMO_PASSWORD } from "@/lib/demo";
 import { principal } from "@/runtime/session";
+import { DemoAccounts } from "./DemoAccounts";
 import { SignInForm } from "./SignInForm";
 
 export const metadata: Metadata = {
@@ -44,14 +45,14 @@ export default async function SignInPage({
         <div className="signin-demo">
           <strong>Demo accounts</strong>
           <p>
-            Every seeded account uses the password <code>{DEMO_PASSWORD}</code>.
-            Sign in as <code>sarah.wanjiru@oklaw.co.ke</code> for a managing
-            partner, <code>peter@oklaw.co.ke</code> for a finance officer — who
-            may see the fee notes and may not move a matter — or{" "}
-            <code>pkamau@geninnovations.co.ke</code> for the client portal,
-            which shows one client&rsquo;s matters and answers{" "}
-            <em>not found</em> for every other client&rsquo;s.
+            Every seeded account uses the password <code>{DEMO_PASSWORD}</code>,
+            and the addresses are on the firm&rsquo;s pattern —{" "}
+            <code>sarah.wanjiru@oklaw.co.ke</code> for the managing partner. The
+            buttons below fill both in. Read down them: each role can do
+            strictly less than the one above it.
           </p>
+
+          <DemoAccounts next={typeof next === "string" ? next : ""} />
         </div>
       </div>
     </main>

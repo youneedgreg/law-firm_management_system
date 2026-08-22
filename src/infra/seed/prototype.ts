@@ -220,6 +220,20 @@ export const parseContact = (
 export const clientIdsByPrototypeKey = (): ReadonlyMap<number, string> =>
   new Map(CLIENTS.map((client) => [client.id, stableId("client", client.id)]));
 
+/**
+ * The one client with a portal login.
+ *
+ * The prototype's `lib/data/portal.ts` picked the same client for the same
+ * reason — it has the fullest file — and hard-coded it because there was no
+ * session to read one from. There is now, so this is the number the login is
+ * provisioned against rather than a stand-in for authentication.
+ *
+ * Here rather than in `program.ts` so that `demo.test.ts` can check the roster
+ * on the sign-in page against it without importing the seed's whole layer
+ * stack. The seed still owns the decision; this is where it is written down.
+ */
+export const PORTAL_CLIENT_NUMBER = "CLT-2001";
+
 export const clients = (): Outcome<ClientDomain.Client> =>
   collect(
     CLIENTS.map((client) => {

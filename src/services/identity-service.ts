@@ -163,23 +163,119 @@ export class IdentityService extends Effect.Service<IdentityService>()(
             ),
           );
 
+      /**
+       * Signs in, and records the attempt either way.
+       *
+       * The refused case is the one worth having: a run of `session.refused`
+       * entries against one address at three in the morning is the single most
+       * useful line an audit trail can produce, and it exists only because the
+       * failure is recorded rather than merely returned.
+       *
+       * The cookies come back for the caller to write. This service has no
+       * response to attach them to, and the two callers that do — a Server
+       * Action and a route handler — attach them differently.
+       *
+       * Hoisted rather than written into the object below because
+       * `signInAsDemo` is this operation with one more counter in front of it.
+       * Two copies of the audit and throttle sequence would be two doors, which
+       * is exactly what `handle` refuses `/sign-in/email` to prevent.
+       */
+      const signIn = (
+        credentials: {
+          readonly email: string;
+          readonly password: string;
+        },
+        from: string,
+      ): Effect.Effect<
+        readonly SessionCookie[],
+        InvalidCredentials | Throttle.TooManyAttempts | RepositoryFailure
+      > =>
+        Effect.suspend(() => {
+          const allowances = Throttle.forSignIn(from, credentials.email);
+
+          return throttled(allowances, credentials.email).pipe(
+            Effect.andThen(sessions.signIn(credentials)),
+            /**
+             * The counters are forgotten on success, and only on success.
+             * Otherwise somebody who mistypes their password four times and
+             * then gets it right carries those four attempts for the rest of
+             * the window, and is refused on their next visit for something
+             * already resolved.
+             *
+             * `ignore`, because a limiter that cannot be cleared must not
+             * fail a sign-in that has already succeeded — the session exists,
+             * the cookies are in hand, and the worst case is that this
+             * connection has fewer attempts left than it should.
+             */
+            Effect.tap(() =>
+              Effect.ignore(
+                limiter.forget(allowances.map((allowance) => allowance.bucket)),
+              ),
+            ),
+          );
+        }).pipe(
+          Effect.tapError((failure) =>
+            failure._tag === "InvalidCredentials"
+              ? recorded(
+                  audit.recordSession(
+                    Audit.attemptedBy(credentials.email),
+                    "session.refused",
+                  ),
+                )
+              : Effect.void,
+          ),
+          Effect.tap((signedIn) =>
+            users.principalOf(signedIn.userId).pipe(
+              Effect.flatMap((principal) =>
+                audit.recordSession(
+                  Audit.actorOf(principal),
+                  "session.signed-in",
+                  principal.userId,
+                ),
+              ),
+              /**
+               * A sign-in that cannot be attributed is still recorded,
+               * against the address that was typed. Better a line saying
+               * somebody signed in and we could not say who, than no line.
+               */
+              Effect.catchTag("NotFound", () =>
+                audit.recordSession(
+                  Audit.attemptedBy(credentials.email),
+                  "session.signed-in",
+                ),
+              ),
+              recorded,
+            ),
+          ),
+          Effect.map((signedIn) => signedIn.cookies),
+        );
+
       return {
         identify,
+        signIn,
 
         /**
-         * Signs in, and records the attempt either way.
+         * The same sign-in, with the counter the demo switcher needs (D-5).
          *
-         * The refused case is the one worth having: a run of
-         * `session.refused` entries against one address at three in the
-         * morning is the single most useful line an audit trail can produce,
-         * and it exists only because the failure is recorded rather than
-         * merely returned.
+         * The one-click roster on the sign-in page presses a button rather than
+         * typing a password, so every press *succeeds* — and `signIn` forgets
+         * its counters on success, which is right when success means somebody
+         * proved who they are and wrong when success is the thing being spent.
+         * A loop on that button would open sessions and write audit rows
+         * without limit, forgiven each time.
          *
-         * The cookies come back for the caller to write. This service has no
-         * response to attach them to, and the two callers that do — a Server
-         * Action and a route handler — attach them differently.
+         * So one more allowance goes in front of it, keyed on the source and
+         * never forgotten. Everything else is the operation above, unchanged
+         * and undivided: the password is still checked, the attempt is still
+         * audited, and there is still one door.
+         *
+         * The credentials come from the caller rather than from here. The demo
+         * password lives in `lib/`, which `services/` may not import — and that
+         * boundary is doing real work in this instance, because a service that
+         * knew a password would be a service with a way in that does not
+         * involve checking one.
          */
-        signIn: (
+        signInAsDemo: (
           credentials: {
             readonly email: string;
             readonly password: string;
@@ -189,66 +285,8 @@ export class IdentityService extends Effect.Service<IdentityService>()(
           readonly SessionCookie[],
           InvalidCredentials | Throttle.TooManyAttempts | RepositoryFailure
         > =>
-          Effect.suspend(() => {
-            const allowances = Throttle.forSignIn(from, credentials.email);
-
-            return throttled(allowances, credentials.email).pipe(
-              Effect.andThen(sessions.signIn(credentials)),
-              /**
-               * The counters are forgotten on success, and only on success.
-               * Otherwise somebody who mistypes their password four times and
-               * then gets it right carries those four attempts for the rest of
-               * the window, and is refused on their next visit for something
-               * already resolved.
-               *
-               * `ignore`, because a limiter that cannot be cleared must not
-               * fail a sign-in that has already succeeded — the session exists,
-               * the cookies are in hand, and the worst case is that this
-               * connection has fewer attempts left than it should.
-               */
-              Effect.tap(() =>
-                Effect.ignore(
-                  limiter.forget(
-                    allowances.map((allowance) => allowance.bucket),
-                  ),
-                ),
-              ),
-            );
-          }).pipe(
-            Effect.tapError((failure) =>
-              failure._tag === "InvalidCredentials"
-                ? recorded(
-                    audit.recordSession(
-                      Audit.attemptedBy(credentials.email),
-                      "session.refused",
-                    ),
-                  )
-                : Effect.void,
-            ),
-            Effect.tap((signedIn) =>
-              users.principalOf(signedIn.userId).pipe(
-                Effect.flatMap((principal) =>
-                  audit.recordSession(
-                    Audit.actorOf(principal),
-                    "session.signed-in",
-                    principal.userId,
-                  ),
-                ),
-                /**
-                 * A sign-in that cannot be attributed is still recorded,
-                 * against the address that was typed. Better a line saying
-                 * somebody signed in and we could not say who, than no line.
-                 */
-                Effect.catchTag("NotFound", () =>
-                  audit.recordSession(
-                    Audit.attemptedBy(credentials.email),
-                    "session.signed-in",
-                  ),
-                ),
-                recorded,
-              ),
-            ),
-            Effect.map((signedIn) => signedIn.cookies),
+          throttled(Throttle.forDemo(from), credentials.email).pipe(
+            Effect.andThen(signIn(credentials, from)),
           ),
 
         /**

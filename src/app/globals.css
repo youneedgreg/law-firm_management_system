@@ -1094,6 +1094,77 @@ body:has(.shell) {
   border-radius: var(--radius-sm);
 }
 
+/* ── the one-click role switcher (D-5) ─────────────────────────────────── */
+
+.demo-switcher {
+  margin-top: var(--space-3);
+}
+
+/* A two-column grid rather than a button with a caption underneath it: the
+   buttons then share one column and line up at the same width whatever their
+   labels say, which is what makes the list read as a set of choices rather
+   than as six unrelated controls. `max-content` sizes that column to the
+   longest label and no wider.
+
+   The columns are declared on the list and adopted by each row through
+   `subgrid`, which is the whole reason this works: a grid on each `<li>` would
+   give every row its own idea of how wide "max-content" is, and the buttons
+   would step in and out by a few pixels down the column. The alternative —
+   `display: contents` on the row — flattens the list items out of the
+   accessibility tree in more than one browser, and a list of six choices that
+   announces as six loose buttons is a worse trade than a modern layout
+   feature. */
+.demo-roles {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-2);
+}
+
+.demo-roles li {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  gap: var(--space-2);
+  align-items: baseline;
+}
+
+.demo-roles button {
+  /* The grid item stretches this to the column, so every button is one width. */
+  width: 100%;
+  border-color: var(--line-control);
+}
+
+.demo-roles button:hover:not(:disabled) {
+  background: var(--wash-ink);
+}
+
+.demo-roles span {
+  font-size: 12px;
+  line-height: 1.5;
+  /* `min-width: 0` for the reason Phase 9 found the hard way: a grid item
+     refuses to shrink below its content by default, so a long sentence would
+     push the row past the card instead of wrapping inside it. */
+  min-width: 0;
+}
+
+/* Below the width where two columns leaves the sentence a ribbon four words
+   wide. The button keeps its own width rather than stretching to the card,
+   because a full-width button reads as the primary action and the password
+   form above it is. */
+@media (max-width: 520px) {
+  .demo-roles,
+  .demo-roles li {
+    grid-template-columns: 1fr;
+  }
+
+  .demo-roles button {
+    width: max-content;
+  }
+}
+
 /* ── the audit trail ───────────────────────────────────────────────────── */
 
 /* One line per field that moved, rather than two blobs of JSON side by side. */

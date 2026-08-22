@@ -116,6 +116,36 @@ export class AuthConfig extends Effect.Service<AuthConfig>()("AuthConfig", {
 }) {}
 
 /**
+ * The secret the nightly demo reset is called with (D-5).
+ *
+ * Vercel sets `Authorization: Bearer $CRON_SECRET` on every cron invocation
+ * when the variable is present, and sets nothing at all when it is not — so
+ * "unset" must mean the endpoint refuses, never that it runs unauthenticated.
+ * Reading it as a required value is what makes that structural: with no
+ * variable there is no `CronConfig`, so there is nothing for the route to
+ * compare against and it answers 503. There is no flag, for the reason Phase 8
+ * gave for having none on tracing: a flag is a second way for a control to be
+ * silently absent.
+ *
+ * Redacted, and length-checked. The endpoint behind it empties every table the
+ * seed owns; a four-character secret is a public button for doing that.
+ */
+export class CronConfig extends Effect.Service<CronConfig>()("CronConfig", {
+  effect: Effect.gen(function* () {
+    return {
+      secret: yield* Config.redacted("CRON_SECRET").pipe(
+        Config.validate({
+          message:
+            "CRON_SECRET must be at least 16 characters. " +
+            "Generate one with: openssl rand -base64 24",
+          validation: (value) => Redacted.value(value).length >= 16,
+        }),
+      ),
+    };
+  }),
+}) {}
+
+/**
  * What this process calls itself when it writes a log line or opens a span.
  *
  * Three facts, and the third is the one that earns the service its own tag: a

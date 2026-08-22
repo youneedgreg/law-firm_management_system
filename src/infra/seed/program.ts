@@ -52,6 +52,7 @@ import {
   tasks,
   hearings,
   matters,
+  PORTAL_CLIENT_NUMBER,
   type SeedProblem,
   timeEntries,
   trustMovements,
@@ -77,16 +78,6 @@ import {
  * breaches Rule 10 stops the import, because a demo that ships with a rule
  * violation baked in is a demo that teaches the wrong thing.
  */
-
-/**
- * The one client with a portal login.
- *
- * The prototype's `lib/data/portal.ts` picked the same client for the same
- * reason — it has the fullest file — and hard-coded it because there was no
- * session to read one from. There is now, so this is the number the login is
- * provisioned against rather than a stand-in for authentication.
- */
-const PORTAL_CLIENT_NUMBER = "CLT-2001";
 
 const report = (stage: string, problems: readonly SeedProblem[]) =>
   Effect.fail(
