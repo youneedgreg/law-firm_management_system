@@ -8,6 +8,11 @@ import type { CaseFile } from "@/services/case-service";
 import { amendCase } from "../actions";
 import { COURT_OPTIONS, keyFor } from "../courts";
 import { dateInputValue } from "../display";
+import { constraintsOf } from "@/lib/form-constraints";
+import { AmendMatterForm } from "../forms";
+
+/** The constraints `AmendMatterForm` already carries. See `lib/form-constraints.ts`. */
+const field = constraintsOf(AmendMatterForm);
 
 /**
  * Editing a matter's particulars.
@@ -57,14 +62,14 @@ export function AmendCaseForm({ file }: { file: CaseFile }) {
               wide
               label="Case title"
               name="title"
-              required
+              {...field("title")}
               defaultValue={kept("title", matter.title)}
               error={state.fields["title"]}
             />
             <SelectField
               label="Matter type"
               name="type"
-              required
+              {...field("type")}
               defaultValue={kept("type", matter.type)}
               options={[...MATTER_TYPES]}
               error={state.fields["type"]}
@@ -72,7 +77,7 @@ export function AmendCaseForm({ file }: { file: CaseFile }) {
             <SelectField
               label="Assigned advocate"
               name="advocateId"
-              required
+              {...field("advocateId")}
               defaultValue={kept("advocateId", matter.advocateId)}
               options={[{ value: file.advocate.id, label: file.advocate.name }]}
               hint="Reassignment arrives with the staff module; this shows who carries it."
@@ -82,6 +87,7 @@ export function AmendCaseForm({ file }: { file: CaseFile }) {
             <SelectField
               label="Court"
               name="court"
+              {...field("court")}
               defaultValue={kept("court", keyFor(matter.court))}
               placeholder="Not filed in a court on the list"
               options={COURT_OPTIONS}
@@ -90,6 +96,7 @@ export function AmendCaseForm({ file }: { file: CaseFile }) {
             <TextField
               label="Filed in court"
               name="filedOn"
+              {...field("filedOn")}
               type="date"
               defaultValue={kept("filedOn", dateInputValue(matter.filedOn))}
               hint="Setting this is the act of filing, and needs a current practising certificate."
@@ -98,6 +105,7 @@ export function AmendCaseForm({ file }: { file: CaseFile }) {
             <TextField
               label="Cause number"
               name="causeNumber"
+              {...field("causeNumber")}
               defaultValue={kept("causeNumber", matter.causeNumber ?? "")}
               placeholder="e.g. MCCC E0412 of 2026"
               error={state.fields["causeNumber"]}
@@ -106,6 +114,7 @@ export function AmendCaseForm({ file }: { file: CaseFile }) {
             <TextField
               label="Claim value (KES)"
               name="claimValueShillings"
+              {...field("claimValueShillings")}
               type="number"
               min={0}
               step="0.01"
@@ -139,6 +148,7 @@ export function AmendCaseForm({ file }: { file: CaseFile }) {
             <TextField
               label="Cause of action accrued"
               name="accruedOn"
+              {...field("accruedOn")}
               type="date"
               defaultValue={kept("accruedOn", dateInputValue(matter.accruedOn))}
               error={state.fields["accruedOn"]}
@@ -146,6 +156,7 @@ export function AmendCaseForm({ file }: { file: CaseFile }) {
             <SelectField
               label="Limitation basis"
               name="limitationBasis"
+              {...field("limitationBasis")}
               defaultValue={kept(
                 "limitationBasis",
                 matter.limitationBasis ?? "",

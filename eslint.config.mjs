@@ -186,6 +186,30 @@ const eslintConfig = defineConfig([
     },
   },
 
+  {
+    /**
+     * Restores the rule's own default for the one pattern this codebase uses
+     * it for: naming a prop in order to *drop* it.
+     *
+     * `const { pattern, ...select } = props` is how a component says "this one
+     * is not forwarded" — `SelectField` does it for the text-input constraints
+     * a `<select>` cannot honour. `eslint-config-next` turns
+     * `ignoreRestSiblings` off, which reports every such prop as unused, and
+     * the alternative to naming them is deleting keys off a spread and losing
+     * the types that make the omission checkable.
+     *
+     * It only applies where there is a rest element, so it cannot hide an
+     * ordinary unused variable.
+     */
+    files: ["src/**/*.ts", "src/**/*.tsx"],
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { ignoreRestSiblings: true, argsIgnorePattern: "^_" },
+      ],
+    },
+  },
+
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

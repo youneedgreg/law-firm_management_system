@@ -5,6 +5,11 @@ import { Checkbox, SelectField, TextField } from "@/components/form";
 import { ACTIVITIES } from "@/domain/time/entry";
 import type { CaseId } from "@/domain/shared/ids";
 import { recordTime } from "./actions";
+import { constraintsOf } from "@/lib/form-constraints";
+import { RecordTimeForm } from "./forms";
+
+/** The constraints `RecordTimeForm` already carries. See `lib/form-constraints.ts`. */
+const field = constraintsOf(RecordTimeForm);
 
 /**
  * Recording work.
@@ -51,7 +56,7 @@ export function LogTimeForm({
               wide
               label="Matter"
               name="caseId"
-              required
+              {...field("caseId")}
               defaultValue={kept("caseId")}
               placeholder="Select a matter"
               options={matters.map((matter) => ({
@@ -64,7 +69,7 @@ export function LogTimeForm({
             <SelectField
               label="Activity"
               name="activity"
-              required
+              {...field("activity")}
               defaultValue={kept("activity")}
               placeholder="Select an activity"
               options={[...ACTIVITIES]}
@@ -74,7 +79,7 @@ export function LogTimeForm({
               label="Date"
               name="workedOn"
               type="date"
-              required
+              {...field("workedOn")}
               defaultValue={kept("workedOn", today)}
               error={state.fields["workedOn"]}
             />
@@ -83,7 +88,7 @@ export function LogTimeForm({
               label="Start"
               name="start"
               type="time"
-              required
+              {...field("start")}
               defaultValue={kept("start")}
               error={state.fields["start"]}
             />
@@ -91,7 +96,7 @@ export function LogTimeForm({
               label="End"
               name="end"
               type="time"
-              required
+              {...field("end")}
               defaultValue={kept("end")}
               hint="Work running past midnight is two entries, on the two days."
               error={state.fields["end"]}
@@ -103,7 +108,7 @@ export function LogTimeForm({
               type="number"
               min="0"
               step="500"
-              required
+              {...field("hourlyRate")}
               defaultValue={kept("hourlyRate")}
               placeholder="20000"
               error={state.fields["hourlyRate"]}
@@ -127,7 +132,7 @@ export function LogTimeForm({
               wide
               label="Narrative"
               name="narrative"
-              required
+              {...field("narrative")}
               defaultValue={kept("narrative")}
               placeholder="e.g. Drafting the plaint and verifying affidavit"
               hint="What a client would read if the bill were challenged."

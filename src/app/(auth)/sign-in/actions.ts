@@ -1,6 +1,7 @@
 "use server";
 
 import { Effect, Either, Schema } from "effect";
+import { Credentials } from "./forms";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { type ActionState, refused, typedValues } from "@/lib/action-state";
@@ -30,11 +31,6 @@ import type { SessionCookie } from "@/services/repositories";
  * deliberate: `services/` decides that a session exists, and this — the layer
  * that has a response — decides how it is carried.
  */
-
-const Credentials = Schema.Struct({
-  email: Schema.NonEmptyTrimmedString,
-  password: Schema.NonEmptyTrimmedString,
-});
 
 /**
  * Where to go after signing in.

@@ -5,7 +5,14 @@ import { SelectField, TextField } from "@/components/form";
 import { TYPES } from "@/domain/diary/appointment";
 import type { DiaryChoices } from "@/services/appointment-service";
 import { scheduleAppointment } from "./actions";
-import { LENGTHS } from "./forms";
+import { constraintsOf } from "@/lib/form-constraints";
+import {
+  LENGTHS,
+  ScheduleAppointmentForm as ScheduleAppointmentSchema,
+} from "./forms";
+
+/** The constraints `ScheduleAppointmentSchema` already carries. See `lib/form-constraints.ts`. */
+const field = constraintsOf(ScheduleAppointmentSchema);
 
 /**
  * Booking an appointment.
@@ -50,7 +57,7 @@ export function ScheduleAppointmentForm({
               wide
               label="What it is"
               name="title"
-              required
+              {...field("title")}
               defaultValue={kept("title")}
               placeholder="e.g. Consultation — settlement terms"
               error={state.fields["title"]}
@@ -59,7 +66,7 @@ export function ScheduleAppointmentForm({
             <SelectField
               label="Type"
               name="type"
-              required
+              {...field("type")}
               defaultValue={kept("type", "Client consultation")}
               options={[...TYPES]}
               error={state.fields["type"]}
@@ -67,7 +74,7 @@ export function ScheduleAppointmentForm({
             <SelectField
               label="Who is taking it"
               name="advocateId"
-              required
+              {...field("advocateId")}
               defaultValue={kept("advocateId")}
               placeholder="Select"
               options={choices.staff.map((each) => ({
@@ -82,7 +89,7 @@ export function ScheduleAppointmentForm({
               label="Date"
               name="startsOn"
               type="date"
-              required
+              {...field("startsOn")}
               defaultValue={kept("startsOn", today)}
               error={state.fields["startsOn"]}
             />
@@ -90,7 +97,7 @@ export function ScheduleAppointmentForm({
               label="Time"
               name="startsAt"
               type="time"
-              required
+              {...field("startsAt")}
               defaultValue={kept("startsAt", "09:00")}
               error={state.fields["startsAt"]}
             />
@@ -98,7 +105,7 @@ export function ScheduleAppointmentForm({
             <SelectField
               label="How long"
               name="minutes"
-              required
+              {...field("minutes")}
               defaultValue={kept("minutes", "60")}
               options={LENGTHS.map((length) => ({
                 value: length.value,
@@ -109,6 +116,7 @@ export function ScheduleAppointmentForm({
             <TextField
               label="Where"
               name="location"
+              {...field("location")}
               defaultValue={kept("location")}
               placeholder="e.g. Boardroom"
               error={state.fields["location"]}
@@ -118,6 +126,7 @@ export function ScheduleAppointmentForm({
               wide
               label="Client"
               name="clientId"
+              {...field("clientId")}
               defaultValue={kept("clientId")}
               placeholder="Nobody outside the firm"
               options={choices.clients.map((client) => ({
@@ -131,6 +140,7 @@ export function ScheduleAppointmentForm({
               wide
               label="Matter"
               name="caseId"
+              {...field("caseId")}
               defaultValue={kept("caseId")}
               placeholder="Not about a particular matter"
               options={choices.matters.map((matter) => ({

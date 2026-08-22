@@ -5,7 +5,8 @@ import { SelectField, TextField } from "@/components/form";
 import type { AdvocateId, CaseId } from "@/domain/shared/ids";
 import { PRIORITIES } from "@/domain/work/task";
 import { raiseTask } from "./actions";
-import { NO_MATTER } from "./forms";
+import { constraintsOf } from "@/lib/form-constraints";
+import { NO_MATTER, RaiseTaskForm } from "./forms";
 
 /**
  * Raising work.
@@ -25,6 +26,14 @@ import { NO_MATTER } from "./forms";
  * work is given to a named person deliberately, and finishing it is a statement
  * about yourself.
  */
+/**
+ * The constraints the server's own schema already carries, read once.
+ *
+ * Everything below that used to say `required` in JSX now says it here, from
+ * the schema that actually enforces it — see `lib/form-constraints.ts`.
+ */
+const field = constraintsOf(RaiseTaskForm);
+
 export function NewTaskForm({
   matters,
   staff,
@@ -58,7 +67,7 @@ export function NewTaskForm({
               wide
               label="Task"
               name="title"
-              required
+              {...field("title")}
               defaultValue={kept("title")}
               placeholder="e.g. Draft the affidavit of service"
               error={state.fields["title"]}
@@ -67,6 +76,7 @@ export function NewTaskForm({
               wide
               label="Matter"
               name="caseId"
+              {...field("caseId")}
               defaultValue={kept("caseId", NO_MATTER)}
               options={[
                 /*
@@ -87,7 +97,7 @@ export function NewTaskForm({
             <SelectField
               label="Assigned to"
               name="assignedTo"
-              required
+              {...field("assignedTo")}
               defaultValue={kept("assignedTo")}
               placeholder="Select a person"
               options={staff.map((person) => ({
@@ -99,7 +109,7 @@ export function NewTaskForm({
             <SelectField
               label="Priority"
               name="priority"
-              required
+              {...field("priority")}
               defaultValue={kept("priority", "Medium")}
               options={[...PRIORITIES]}
               error={state.fields["priority"]}
@@ -109,7 +119,7 @@ export function NewTaskForm({
               label="Due"
               name="dueOn"
               type="date"
-              required
+              {...field("dueOn")}
               defaultValue={kept("dueOn", today)}
               min={today}
               hint="A task cannot fall due before it was raised."

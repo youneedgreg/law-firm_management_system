@@ -3,7 +3,16 @@
 import { ActionDialog } from "@/components/ActionDialog";
 import { TextField } from "@/components/form";
 import type { Client } from "@/domain/client/client";
+import { constraintsOf } from "@/lib/form-constraints";
 import { amendClient } from "../actions";
+import { AmendClientForm as AmendClientSchema } from "../forms";
+
+/**
+ * Every field here is optional and the schema says so — an amendment carries
+ * what changed. What the constraints still bring is the shape of each value:
+ * a name that is not only spaces, a PIN in the right form.
+ */
+const field = constraintsOf(AmendClientSchema);
 
 /**
  * Correcting a client's particulars.
@@ -38,6 +47,7 @@ export function AmendClientForm({ client }: { client: Client }) {
               wide
               label="Name"
               name="name"
+              {...field("name")}
               defaultValue={kept("name", client.name)}
               error={state.fields["name"]}
             />
@@ -51,12 +61,14 @@ export function AmendClientForm({ client }: { client: Client }) {
             <TextField
               label="Telephone"
               name="phone"
+              {...field("phone")}
               defaultValue={kept("phone", client.phone)}
               error={state.fields["phone"]}
             />
             <TextField
               label="KRA PIN"
               name="kraPin"
+              {...field("kraPin")}
               defaultValue={kept("kraPin", client.kraPin ?? "")}
               error={state.fields["kraPin"]}
             />
@@ -64,6 +76,7 @@ export function AmendClientForm({ client }: { client: Client }) {
               <TextField
                 label="Registration number"
                 name="registrationNumber"
+                {...field("registrationNumber")}
                 defaultValue={kept(
                   "registrationNumber",
                   client.registrationNumber ?? "",

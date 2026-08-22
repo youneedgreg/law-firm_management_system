@@ -4,6 +4,11 @@ import { ActionDialog } from "@/components/ActionDialog";
 import { SelectField, TextField } from "@/components/form";
 import type { ClientId } from "@/domain/shared/ids";
 import { recordDeposit } from "./actions";
+import { constraintsOf } from "@/lib/form-constraints";
+import { RecordDepositForm } from "./forms";
+
+/** The constraints `RecordDepositForm` already carries. See `lib/form-constraints.ts`. */
+const field = constraintsOf(RecordDepositForm);
 
 /**
  * Receiving client money.
@@ -46,7 +51,7 @@ export function NewDepositForm({
               wide
               label="Client"
               name="clientId"
-              required
+              {...field("clientId")}
               defaultValue={kept("clientId")}
               placeholder="Select a client"
               options={clients.map((client) => ({
@@ -61,7 +66,7 @@ export function NewDepositForm({
               type="number"
               min="0"
               step="0.01"
-              required
+              {...field("amount")}
               defaultValue={kept("amount")}
               placeholder="250000"
               error={state.fields["amount"]}
@@ -70,7 +75,7 @@ export function NewDepositForm({
               label="Received"
               name="receivedOn"
               type="date"
-              required
+              {...field("receivedOn")}
               defaultValue={kept("receivedOn", today)}
               error={state.fields["receivedOn"]}
             />
@@ -78,6 +83,7 @@ export function NewDepositForm({
               wide
               label="Reference"
               name="reference"
+              {...field("reference")}
               defaultValue={kept("reference")}
               placeholder="e.g. Funds on account of costs"
               hint="What the deposit was for, as it should read on the ledger."

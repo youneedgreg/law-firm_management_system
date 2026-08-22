@@ -42,6 +42,7 @@ export function ReviseDocumentForm({
           label="File"
           name="file"
           type="file"
+          /* The bytes, not a schema field. See `UploadDocumentForm`. */
           required
           hint={`Up to ${String(MAX_UPLOAD_BYTES / 1024 / 1024)} MB.`}
           error={state.fields["file"]}

@@ -5,7 +5,11 @@ import { SelectField, TextField } from "@/components/form";
 import { CATEGORIES, SIGNATURE_STATUSES } from "@/domain/document/document";
 import type { CaseId } from "@/domain/shared/ids";
 import { uploadDocument } from "./actions";
-import { MAX_UPLOAD_BYTES } from "./forms";
+import { constraintsOf } from "@/lib/form-constraints";
+import { MAX_UPLOAD_BYTES, UploadForm } from "./forms";
+
+/** The constraints `UploadForm` already carries. See `lib/form-constraints.ts`. */
+const field = constraintsOf(UploadForm);
 
 /**
  * Putting a document on a matter file.
@@ -51,6 +55,12 @@ export function UploadDocumentForm({
               label="File"
               name="file"
               type="file"
+              /*
+                Hand-written, and the only kind of field that stays that way.
+                `UploadForm` describes what the *record* needs; the bytes are
+                not a schema field at all — they go to the blob store before
+                the row is written, so there is nothing here to derive from.
+              */
               required
               hint={
                 `Up to ${String(MAX_UPLOAD_BYTES / 1024 / 1024)} MB. ` +
@@ -63,7 +73,7 @@ export function UploadDocumentForm({
               wide
               label="Document name"
               name="name"
-              required
+              {...field("name")}
               defaultValue={kept("name")}
               placeholder="e.g. Supplementary affidavit.pdf"
               hint="What it should be called on the file — not necessarily the filename."
@@ -73,7 +83,7 @@ export function UploadDocumentForm({
               wide
               label="Matter"
               name="caseId"
-              required
+              {...field("caseId")}
               defaultValue={kept("caseId")}
               placeholder="Select a matter"
               options={matters.map((matter) => ({
@@ -85,7 +95,7 @@ export function UploadDocumentForm({
             <SelectField
               label="Category"
               name="category"
-              required
+              {...field("category")}
               defaultValue={kept("category")}
               placeholder="Select a category"
               options={[...CATEGORIES]}
@@ -94,7 +104,7 @@ export function UploadDocumentForm({
             <SelectField
               label="Signature status"
               name="signatureStatus"
-              required
+              {...field("signatureStatus")}
               defaultValue={kept("signatureStatus", "Not required")}
               options={[...SIGNATURE_STATUSES]}
               error={state.fields["signatureStatus"]}

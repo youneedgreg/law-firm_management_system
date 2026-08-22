@@ -6,7 +6,11 @@ import { SelectField, TextAreaField, TextField } from "@/components/form";
 import { CHANNELS, DIRECTIONS } from "@/domain/firm/contact";
 import type { CaseId, ClientId } from "@/domain/shared/ids";
 import { logContact } from "./actions";
-import { NO_MATTER } from "./forms";
+import { constraintsOf } from "@/lib/form-constraints";
+import { LogContactForm as LogContactSchema, NO_MATTER } from "./forms";
+
+/** The constraints `LogContactSchema` already carries. See `lib/form-constraints.ts`. */
+const field = constraintsOf(LogContactSchema);
 
 /**
  * Recording a conversation that happened elsewhere.
@@ -60,7 +64,7 @@ export function LogContactForm({
               wide
               label="Client"
               name="clientId"
-              required
+              {...field("clientId")}
               defaultValue={kept("clientId")}
               placeholder="Select a client"
               options={clients.map((each) => ({
@@ -74,6 +78,7 @@ export function LogContactForm({
               wide
               label="Matter"
               name="caseId"
+              {...field("caseId")}
               defaultValue={kept("caseId", NO_MATTER)}
               options={[
                 { value: NO_MATTER, label: "No particular matter" },
@@ -92,7 +97,7 @@ export function LogContactForm({
             <SelectField
               label="Channel"
               name="channel"
-              required
+              {...field("channel")}
               defaultValue={kept("channel")}
               placeholder="How"
               options={[...CHANNELS]}
@@ -101,7 +106,7 @@ export function LogContactForm({
             <SelectField
               label="Direction"
               name="direction"
-              required
+              {...field("direction")}
               defaultValue={kept("direction", "Outgoing")}
               options={[...DIRECTIONS]}
               hint="Did we contact them, or they us?"
@@ -112,7 +117,7 @@ export function LogContactForm({
               label="When"
               name="occurredOn"
               type="date"
-              required
+              {...field("occurredOn")}
               max={today}
               defaultValue={kept("occurredOn", today)}
               hint="A conversation that has not happened yet is an appointment."
@@ -122,7 +127,7 @@ export function LogContactForm({
               wide
               label="Summary"
               name="summary"
-              required
+              {...field("summary")}
               rows={3}
               defaultValue={kept("summary")}
               placeholder="What was discussed, agreed or sent"

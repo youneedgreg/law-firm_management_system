@@ -5,7 +5,17 @@ import { SelectField, TextField } from "@/components/form";
 import { PAYMENT_METHODS } from "@/domain/billing/invoice";
 import type { InvoiceId } from "@/domain/shared/ids";
 import * as Money from "@/domain/shared/money";
+import { constraintsOf } from "@/lib/form-constraints";
 import { recordPayment, settleFromTrust } from "../../actions";
+import { ReceivePaymentForm, SettleFromTrustForm } from "../../forms";
+
+/**
+ * Two forms, two schemas. `settle` takes no `reason` — the purpose of a costs
+ * transfer is fixed by Rule 9 — so the two do not share a shape and must not
+ * share a set of constraints.
+ */
+const payment = constraintsOf(ReceivePaymentForm);
+const settlement = constraintsOf(SettleFromTrustForm);
 
 /**
  * The two ways a fee note gets paid, side by side.
@@ -90,7 +100,7 @@ export function PaymentPanel({
                 type="number"
                 min="0"
                 step="0.01"
-                required
+                {...payment("amount")}
                 defaultValue={kept("amount", String(outstanding / 100))}
                 hint={`${Money.format(outstanding)} outstanding.`}
                 error={state.fields["amount"]}
@@ -99,14 +109,14 @@ export function PaymentPanel({
                 label="Received"
                 name="receivedOn"
                 type="date"
-                required
+                {...payment("receivedOn")}
                 defaultValue={kept("receivedOn", today)}
                 error={state.fields["receivedOn"]}
               />
               <SelectField
                 label="Method"
                 name="method"
-                required
+                {...payment("method")}
                 defaultValue={kept("method", "M-Pesa")}
                 options={[...PAYMENT_METHODS]}
                 error={state.fields["method"]}
@@ -114,6 +124,7 @@ export function PaymentPanel({
               <TextField
                 label="Reference"
                 name="reference"
+                {...payment("reference")}
                 defaultValue={kept("reference")}
                 placeholder="e.g. QGH7XYZ12A"
                 hint="Required for M-Pesa: the confirmation code is the only thing the statement reconciles against."
@@ -149,7 +160,7 @@ export function PaymentPanel({
                   type="number"
                   min="0"
                   step="0.01"
-                  required
+                  {...settlement("amount")}
                   defaultValue={kept("amount", String(coverable / 100))}
                   hint={`${Money.format(heldOnTrust ?? Money.zero)} held for this client; ${Money.format(outstanding)} outstanding.`}
                   error={state.fields["amount"]}
@@ -158,7 +169,7 @@ export function PaymentPanel({
                   label="Transferred"
                   name="settledOn"
                   type="date"
-                  required
+                  {...settlement("settledOn")}
                   defaultValue={kept("settledOn", today)}
                   error={state.fields["settledOn"]}
                 />

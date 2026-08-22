@@ -54,6 +54,11 @@ export function Composer({
         ref={field}
         className="input"
         name="body"
+        /*
+          Hand-written: `sendMessage` reads one field and checks it inline
+          rather than through a schema, because a schema for a single
+          non-empty string would be a module to hold one line.
+        */
         required
         disabled={pending}
         style={{ flex: 1 }}

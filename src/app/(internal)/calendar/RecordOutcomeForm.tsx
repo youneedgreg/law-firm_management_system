@@ -5,6 +5,11 @@ import { ActionDialog } from "@/components/ActionDialog";
 import { SelectField, TextAreaField, TextField } from "@/components/form";
 import type { HearingId } from "@/domain/shared/ids";
 import { recordOutcome } from "./actions";
+import { constraintsOf } from "@/lib/form-constraints";
+import { RecordOutcomeForm as RecordOutcomeSchema } from "./forms";
+
+/** The constraints `RecordOutcomeSchema` already carries. See `lib/form-constraints.ts`. */
+const field = constraintsOf(RecordOutcomeSchema);
 
 /**
  * Recording how a hearing went.
@@ -52,7 +57,7 @@ export function RecordOutcomeForm({
               wide
               label="Outcome"
               name="outcome"
-              required
+              {...field("outcome")}
               defaultValue={kept("outcome", "Heard")}
               options={[
                 { value: "Heard", label: "Heard" },
@@ -70,7 +75,7 @@ export function RecordOutcomeForm({
                   label="Adjourned to"
                   name="adjournedOn"
                   type="date"
-                  required
+                  {...field("adjournedOn")}
                   defaultValue={kept("adjournedOn")}
                   hint="Must be after this hearing. The matter is listed for that date."
                   error={state.fields["adjournedOn"]}
@@ -79,7 +84,7 @@ export function RecordOutcomeForm({
                   label="At"
                   name="adjournedAt"
                   type="time"
-                  required
+                  {...field("adjournedAt")}
                   defaultValue={kept("adjournedAt", "09:00")}
                   error={state.fields["adjournedAt"]}
                 />
@@ -88,7 +93,7 @@ export function RecordOutcomeForm({
                   label="Why"
                   name="reason"
                   rows={2}
-                  required
+                  {...field("reason")}
                   defaultValue={kept("reason")}
                   placeholder="e.g. Respondent's counsel not ready"
                   error={state.fields["reason"]}
@@ -99,6 +104,7 @@ export function RecordOutcomeForm({
                 wide
                 label="Note"
                 name="note"
+                {...field("note")}
                 rows={2}
                 defaultValue={kept("note")}
                 placeholder="Anything worth recording about the day"

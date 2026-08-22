@@ -14,6 +14,11 @@ import { intakeChoicesRx } from "@/rx/cases";
 import { explain } from "@/rx/failure";
 import { openCase } from "./actions";
 import { COURT_OPTIONS } from "./courts";
+import { constraintsOf } from "@/lib/form-constraints";
+import { OpenMatterForm } from "./forms";
+
+/** The constraints `OpenMatterForm` already carries. See `lib/form-constraints.ts`. */
+const field = constraintsOf(OpenMatterForm);
 
 /**
  * Opening a matter.
@@ -77,7 +82,7 @@ export function NewCaseForm() {
               wide
               label="Case title"
               name="title"
-              required
+              {...field("title")}
               placeholder="e.g. Wanjiku Mwangi v. Nairobi Metro SACCO"
               defaultValue={kept("title")}
               error={state.fields["title"]}
@@ -85,7 +90,7 @@ export function NewCaseForm() {
             <SelectField
               label="Client"
               name="clientId"
-              required
+              {...field("clientId")}
               defaultValue={kept("clientId")}
               placeholder={
                 Result.isSuccess(result)
@@ -102,6 +107,7 @@ export function NewCaseForm() {
               wide
               label="Other side"
               name="opposingParties"
+              {...field("opposingParties")}
               rows={2}
               defaultValue={kept("opposingParties")}
               placeholder="One party per line"
@@ -111,7 +117,7 @@ export function NewCaseForm() {
             <SelectField
               label="Matter type"
               name="type"
-              required
+              {...field("type")}
               defaultValue={kept("type")}
               placeholder="Select a type"
               options={[...MATTER_TYPES]}
@@ -121,7 +127,7 @@ export function NewCaseForm() {
               wide
               label="Assigned advocate"
               name="advocateId"
-              required
+              {...field("advocateId")}
               defaultValue={kept("advocateId")}
               placeholder={
                 Result.isSuccess(result)
@@ -142,13 +148,14 @@ export function NewCaseForm() {
               label="File opened"
               name="openedOn"
               type="date"
-              required
+              {...field("openedOn")}
               defaultValue={kept("openedOn", today)}
               error={state.fields["openedOn"]}
             />
             <TextField
               label="Filed in court"
               name="filedOn"
+              {...field("filedOn")}
               type="date"
               defaultValue={kept("filedOn")}
               hint="Leave blank until the matter is lodged."
@@ -158,6 +165,7 @@ export function NewCaseForm() {
             <SelectField
               label="Court"
               name="court"
+              {...field("court")}
               defaultValue={kept("court")}
               placeholder="Not yet filed"
               options={COURT_OPTIONS}
@@ -166,6 +174,7 @@ export function NewCaseForm() {
             <TextField
               label="Cause number"
               name="causeNumber"
+              {...field("causeNumber")}
               defaultValue={kept("causeNumber")}
               placeholder="e.g. MCCC E0412 of 2026"
               hint="Assigned by the court on filing."
@@ -175,6 +184,7 @@ export function NewCaseForm() {
             <TextField
               label="Claim value (KES)"
               name="claimValueShillings"
+              {...field("claimValueShillings")}
               type="number"
               min={0}
               step="0.01"
@@ -200,6 +210,7 @@ export function NewCaseForm() {
             <TextField
               label="Cause of action accrued"
               name="accruedOn"
+              {...field("accruedOn")}
               type="date"
               defaultValue={kept("accruedOn")}
               hint="When the limitation clock started running."
@@ -208,6 +219,7 @@ export function NewCaseForm() {
             <SelectField
               label="Limitation basis"
               name="limitationBasis"
+              {...field("limitationBasis")}
               defaultValue={kept("limitationBasis")}
               placeholder="Not applicable"
               options={[...LIMITATION_BASES]}

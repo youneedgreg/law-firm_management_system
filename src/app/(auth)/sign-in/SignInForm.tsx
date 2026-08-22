@@ -3,7 +3,9 @@
 import { useActionState } from "react";
 import { TextField } from "@/components/form";
 import { type ActionState, IDLE } from "@/lib/action-state";
+import { constraintsOf } from "@/lib/form-constraints";
 import { signIn } from "./actions";
+import { Credentials } from "./forms";
 
 /**
  * The sign-in form.
@@ -17,6 +19,9 @@ import { signIn } from "./actions";
  * The action validates it as a relative path before redirecting — see the note
  * on `destination`.
  */
+/** The constraints `Credentials` already carries. See `lib/form-constraints.ts`. */
+const field = constraintsOf(Credentials);
+
 export function SignInForm({ next }: { next: string }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(
     signIn,
@@ -32,7 +37,7 @@ export function SignInForm({ next }: { next: string }) {
         name="email"
         type="email"
         autoComplete="username"
-        required
+        {...field("email")}
         wide
         defaultValue={state.values["email"] ?? ""}
       />
@@ -47,7 +52,7 @@ export function SignInForm({ next }: { next: string }) {
          * is the weaker outcome by a distance.
          */
         autoComplete="current-password"
-        required
+        {...field("password")}
         wide
       />
 

@@ -6,6 +6,11 @@ import { HEARING_KINDS } from "@/domain/court/hearing";
 import type { HearingChoices } from "@/services/hearing-service";
 import { COURT_OPTIONS } from "../cases/courts";
 import { listHearing } from "./actions";
+import { constraintsOf } from "@/lib/form-constraints";
+import { ListHearingForm as ListHearingSchema } from "./forms";
+
+/** The constraints `ListHearingSchema` already carries. See `lib/form-constraints.ts`. */
+const field = constraintsOf(ListHearingSchema);
 
 /**
  * Listing a matter for hearing.
@@ -43,7 +48,7 @@ export function ListHearingForm({ choices }: { choices: HearingChoices }) {
               wide
               label="Matter"
               name="caseId"
-              required
+              {...field("caseId")}
               defaultValue={kept("caseId")}
               placeholder="Select a matter"
               options={choices.matters.map((matter) => ({
@@ -57,7 +62,7 @@ export function ListHearingForm({ choices }: { choices: HearingChoices }) {
             <SelectField
               label="What for"
               name="kind"
-              required
+              {...field("kind")}
               defaultValue={kept("kind")}
               placeholder="Select"
               options={[...HEARING_KINDS]}
@@ -66,7 +71,7 @@ export function ListHearingForm({ choices }: { choices: HearingChoices }) {
             <SelectField
               label="Court"
               name="court"
-              required
+              {...field("court")}
               defaultValue={kept("court")}
               placeholder="Select a court"
               options={COURT_OPTIONS}
@@ -77,7 +82,7 @@ export function ListHearingForm({ choices }: { choices: HearingChoices }) {
               label="Date"
               name="scheduledOn"
               type="date"
-              required
+              {...field("scheduledOn")}
               defaultValue={kept("scheduledOn", today)}
               hint="A date behind today is refused — it is almost always the year."
               error={state.fields["scheduledOn"]}
@@ -86,7 +91,7 @@ export function ListHearingForm({ choices }: { choices: HearingChoices }) {
               label="Time"
               name="scheduledAt"
               type="time"
-              required
+              {...field("scheduledAt")}
               defaultValue={kept("scheduledAt", "09:00")}
               error={state.fields["scheduledAt"]}
             />
@@ -94,7 +99,7 @@ export function ListHearingForm({ choices }: { choices: HearingChoices }) {
             <SelectField
               label="Attending"
               name="advocateId"
-              required
+              {...field("advocateId")}
               defaultValue={kept("advocateId")}
               placeholder="Select"
               options={choices.advocates.map((advocate) => ({
@@ -106,6 +111,7 @@ export function ListHearingForm({ choices }: { choices: HearingChoices }) {
             <TextField
               label="Court room"
               name="room"
+              {...field("room")}
               defaultValue={kept("room")}
               placeholder="e.g. 14"
               error={state.fields["room"]}

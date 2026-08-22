@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { ActionDialog } from "@/components/ActionDialog";
 import { SegmentedField, TextField } from "@/components/form";
+import { constraintsOf } from "@/lib/form-constraints";
 import { takeOnClient } from "./actions";
+import { TakeOnCorporateForm, TakeOnIndividualForm } from "./forms";
 
 /**
  * Taking a client on.
@@ -22,10 +24,21 @@ import { takeOnClient } from "./actions";
  * There is no conflict-check step inside this form. That is its own act, in its
  * own dialog, performed *before* deciding whether to act at all — see
  * `ConflictScreen`.
+ *
+ * **Two sets of constraints, and the switch between them is the union.** Every
+ * other form in the application derives its input attributes from one schema;
+ * this one is the only place a `Schema.Union` reaches the markup, and what it
+ * produces is exactly the shape the domain asserts — `contactName` is required
+ * in one half and absent from the other, and neither fact is written down here.
  */
+const CONSTRAINTS = {
+  Individual: constraintsOf(TakeOnIndividualForm),
+  Corporate: constraintsOf(TakeOnCorporateForm),
+} as const;
 export function NewClientForm() {
   const today = new Date().toISOString().slice(0, 10);
   const [kind, setKind] = useState<"Individual" | "Corporate">("Individual");
+  const field = CONSTRAINTS[kind];
 
   return (
     <ActionDialog
@@ -63,7 +76,7 @@ export function NewClientForm() {
               wide
               label="Name"
               name="name"
-              required
+              {...field("name")}
               defaultValue={kept("name")}
               placeholder={
                 kind === "Corporate"
@@ -76,14 +89,14 @@ export function NewClientForm() {
               label="Email"
               name="email"
               type="email"
-              required
+              {...field("email")}
               defaultValue={kept("email")}
               error={state.fields["email"]}
             />
             <TextField
               label="Telephone"
               name="phone"
-              required
+              {...field("phone")}
               defaultValue={kept("phone")}
               placeholder="0722 445 109"
               hint="Any Kenyan number; a switchboard landline is fine."
@@ -93,6 +106,7 @@ export function NewClientForm() {
             <TextField
               label="KRA PIN"
               name="kraPin"
+              {...field("kraPin")}
               defaultValue={kept("kraPin")}
               placeholder={kind === "Corporate" ? "P051234876T" : "A004521987Z"}
               hint={
@@ -106,7 +120,7 @@ export function NewClientForm() {
               label="Onboarded"
               name="onboardedOn"
               type="date"
-              required
+              {...field("onboardedOn")}
               defaultValue={kept("onboardedOn", today)}
               error={state.fields["onboardedOn"]}
             />
@@ -116,6 +130,7 @@ export function NewClientForm() {
                 <TextField
                   label="Registration number"
                   name="registrationNumber"
+                  {...field("registrationNumber")}
                   defaultValue={kept("registrationNumber")}
                   placeholder="e.g. PVT-8XYZ4K"
                   error={state.fields["registrationNumber"]}
@@ -123,7 +138,7 @@ export function NewClientForm() {
                 <TextField
                   label="Contact"
                   name="contactName"
-                  required
+                  {...field("contactName")}
                   defaultValue={kept("contactName")}
                   hint="A company cannot give instructions; a person does."
                   error={state.fields["contactName"]}
@@ -131,7 +146,7 @@ export function NewClientForm() {
                 <TextField
                   label="Their role"
                   name="contactRole"
-                  required
+                  {...field("contactRole")}
                   defaultValue={kept("contactRole")}
                   placeholder="e.g. Finance Director"
                   error={state.fields["contactRole"]}

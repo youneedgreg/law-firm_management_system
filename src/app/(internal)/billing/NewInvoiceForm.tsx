@@ -5,6 +5,11 @@ import { ActionDialog } from "@/components/ActionDialog";
 import { SelectField, TextField } from "@/components/form";
 import type { BillingChoices } from "@/services/billing-service";
 import { raiseInvoice } from "./actions";
+import { constraintsOf } from "@/lib/form-constraints";
+import { RaiseInvoiceForm } from "./forms";
+
+/** The constraints `RaiseInvoiceForm` already carries. See `lib/form-constraints.ts`. */
+const field = constraintsOf(RaiseInvoiceForm);
 
 /**
  * Raising a fee note.
@@ -77,7 +82,7 @@ export function NewInvoiceForm({ choices }: { choices: BillingChoices }) {
             <SelectField
               label="Client"
               name="clientId"
-              required
+              {...field("clientId")}
               defaultValue={kept("clientId")}
               placeholder="Select a client"
               options={choices.clients.map((client) => ({
@@ -90,6 +95,7 @@ export function NewInvoiceForm({ choices }: { choices: BillingChoices }) {
             <SelectField
               label="Matter"
               name="caseId"
+              {...field("caseId")}
               defaultValue={kept("caseId")}
               placeholder="No matter"
               options={matters.map((matter) => ({
@@ -104,7 +110,7 @@ export function NewInvoiceForm({ choices }: { choices: BillingChoices }) {
               label="Issued"
               name="issuedOn"
               type="date"
-              required
+              {...field("issuedOn")}
               defaultValue={kept("issuedOn", today)}
               error={state.fields["issuedOn"]}
             />
@@ -112,7 +118,7 @@ export function NewInvoiceForm({ choices }: { choices: BillingChoices }) {
               label="Due"
               name="dueOn"
               type="date"
-              required
+              {...field("dueOn")}
               defaultValue={kept("dueOn", inThirtyDays)}
               hint="The status derives from this: past it and unpaid is Overdue."
               error={state.fields["dueOn"]}
@@ -122,7 +128,7 @@ export function NewInvoiceForm({ choices }: { choices: BillingChoices }) {
               wide
               label="Description"
               name="description"
-              required
+              {...field("description")}
               placeholder="e.g. Professional fees — drafting and filing"
               defaultValue={kept("description")}
               error={state.fields["description"]}
@@ -133,7 +139,7 @@ export function NewInvoiceForm({ choices }: { choices: BillingChoices }) {
               type="number"
               min="0"
               step="0.25"
-              required
+              {...field("quantity")}
               defaultValue={kept("quantity", "1")}
               hint="Hours, or 1 for a fixed fee."
               error={state.fields["quantity"]}
@@ -144,7 +150,7 @@ export function NewInvoiceForm({ choices }: { choices: BillingChoices }) {
               type="number"
               min="0"
               step="0.01"
-              required
+              {...field("unitPrice")}
               defaultValue={kept("unitPrice")}
               placeholder="15000"
               error={state.fields["unitPrice"]}

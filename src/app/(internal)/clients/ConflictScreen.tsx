@@ -56,6 +56,11 @@ export function ConflictScreen() {
         wide
         label="Prospective client"
         name="clientName"
+        /*
+          Hand-written: this form never reaches a Server Action. The screen is
+          an atom — a name goes to `ConflictService` and findings come back —
+          so there is no submitted `FormData` and no schema decoding one.
+        */
         required
         placeholder="e.g. Coastal Freight Ltd"
         value={clientName}

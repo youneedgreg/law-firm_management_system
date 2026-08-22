@@ -171,6 +171,20 @@ export function SelectControl({
   );
 }
 
+/**
+ * Constraints a `<select>` cannot honour, accepted and dropped.
+ *
+ * `constraintsOf` answers for a *field*, not for a control: it reads the
+ * schema, which says a matter id matches a UUID pattern and knows nothing
+ * about whether that id is typed or chosen. Rather than make every caller
+ * remember which of its fields are dropdowns, the dropdown drops what does not
+ * apply to it — `pattern`, `minLength` and `maxLength` are all defined by HTML
+ * only for text-like inputs, so forwarding them would be inert at best and a
+ * type error at worst. `required` is the one that survives, and it is the one
+ * that matters here.
+ */
+type NotForSelects = "minLength" | "maxLength" | "pattern";
+
 export function SelectField({
   label,
   hint,
@@ -178,11 +192,15 @@ export function SelectField({
   wide,
   options,
   placeholder,
+  minLength,
+  maxLength,
+  pattern,
   ...select
 }: FieldProps & {
   options: readonly Option[];
   placeholder?: string | undefined;
-} & React.ComponentProps<"select">) {
+} & Partial<Record<NotForSelects, string | number | undefined>> &
+  React.ComponentProps<"select">) {
   const generatedId = useId();
   const id = select.id ?? generatedId;
   return (
