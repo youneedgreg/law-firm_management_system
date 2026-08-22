@@ -87,7 +87,9 @@ export function DocumentDetail({
               <th>Uploaded</th>
               <th>By</th>
               <th>Size</th>
-              <th />
+              <th>
+                <span className="visually-hidden">Actions</span>
+              </th>
             </tr>
           </thead>
           <tbody>

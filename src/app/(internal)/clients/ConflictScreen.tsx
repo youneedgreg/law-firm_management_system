@@ -79,9 +79,15 @@ export function ConflictScreen() {
           ))
           .onWaiting(() => <p className="field-hint">Screening…</p>)
           .onErrorTag("NotPermitted", (error) => (
-            <p className="form-error">{error.reason}.</p>
+            <p className="form-refusal" role="alert">
+              {error.reason}.
+            </p>
           ))
-          .onError((error) => <p className="form-error">{explain(error)}</p>)
+          .onError((error) => (
+            <p className="form-refusal" role="alert">
+              {explain(error)}
+            </p>
+          ))
           .onSuccess((screening) =>
             screening.findings.length === 0 ? (
               <p className="field-hint">
@@ -92,7 +98,7 @@ export function ConflictScreen() {
               </p>
             ) : (
               <>
-                <p className="form-error">
+                <p className="finding-count">
                   {screening.findings.length}{" "}
                   {screening.findings.length === 1 ? "finding" : "findings"}{" "}
                   across {screening.mattersSearched}{" "}

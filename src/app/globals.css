@@ -73,6 +73,14 @@ body:has(.shell) {
   flex: 1;
 }
 
+/* The form is the flex item; the input inside it carries the measure. Without
+   a rule here the form was a block of intrinsic width and the box only looked
+   right by accident of the input's own `width`. */
+.topbar-search-form {
+  display: flex;
+  min-width: 0;
+}
+
 .topbar-search {
   width: 280px;
 }
@@ -104,12 +112,19 @@ body:has(.shell) {
   white-space: nowrap;
 }
 
+/* The 22px glyph measured 22×22, which is under the 24×24 WCAG 2.2 asks of a
+   target (2.5.8). It would have squeaked through on the spacing exception —
+   nothing else is within 24px of it — but an exception is a let-off rather
+   than a size to design to, and the fix is a floor. */
 .topbar-icon-btn {
   all: unset;
   cursor: pointer;
   position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
   border-radius: var(--radius-md);
 }
 
@@ -1094,6 +1109,89 @@ body:has(.shell) {
   margin: 0;
   font-size: 14px;
   color: var(--ink-muted);
+}
+
+/* ── getting past the furniture ────────────────────────────────────────── */
+
+/* WCAG 2.4.1. Every internal screen puts a masthead and about twenty
+   navigation links in front of its content, and a keyboard or switch user
+   walks all of them on every page unless there is a way through.
+
+   Moved off-screen rather than hidden: `display: none` and `visibility:
+   hidden` both take it out of the tab order, which is the one thing it needs
+   to be in. `:focus` rather than `:focus-visible`, because a link that only
+   appears for some kinds of focus is a link somebody will not find. */
+.skip-link {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 100;
+  margin: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 14px;
+  color: var(--ink-link);
+  background: var(--color-bg);
+  border: 1px solid var(--ink-link);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  translate: 0 -200%;
+}
+
+.skip-link:focus {
+  translate: 0;
+}
+
+/* Available to assistive technology, absent from the page. The clip-path form
+   rather than `width: 0`, so the text is still laid out and still read. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The content pane is focused programmatically by the skip link, so it takes
+   a ring like anything else — but only when it was reached that way. */
+.content:focus-visible,
+.portal-content:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+/* ── the conflict screen's findings ────────────────────────────────────── */
+
+/* Deliberately not `.form-refusal`. A refusal is the system declining; a
+   finding is the firm's own records answering a question that was asked, and
+   the module exists precisely because that answer is a judgement for an
+   advocate rather than a verdict the software reaches. Framing it as an error
+   would be the software taking the decision. */
+.finding-count {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 15px;
+  color: var(--ink-alert);
+}
+
+.finding-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-3);
+  font-size: 14px;
+}
+
+.finding-list > li {
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--ink-alert);
 }
 
 /* ── utilities ─────────────────────────────────────────────────────────── */

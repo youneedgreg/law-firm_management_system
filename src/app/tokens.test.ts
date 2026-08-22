@@ -269,9 +269,9 @@ describe("every colour in the sheets comes from a role", () => {
   });
 });
 
-// ── 3. nothing reaches for a token that does not exist ────────────────────
+// ── 3. nothing reaches for a name that does not exist ─────────────────────
 
-describe("every token referenced anywhere resolves", () => {
+describe("every name the markup reaches for resolves", () => {
   /**
    * Published by `next/font` onto the <html> element rather than by a
    * stylesheet, so it is legitimately absent from `:root`.
@@ -301,5 +301,43 @@ describe("every token referenced anywhere resolves", () => {
       }
     }
     expect([...dangling].sort()).toEqual([]);
+  });
+
+  /**
+   * The same failure in the other namespace, and just as silent: an unknown
+   * class is not an error, the element simply has no rules. It had cost four
+   * live defects — `.form-error` carried the sign-in refusal and three
+   * conflict-screen messages and was never defined anywhere, so "that password
+   * is wrong" rendered as ordinary body text; `.btn-sm` left every row-level
+   * button full size; `.finding-list` fell back to browser bullets; and
+   * `.topbar-search-form` did nothing, so the search box only looked right by
+   * accident of the input's own width.
+   */
+  it("finds no undefined className in src/", () => {
+    const defined = new Set<string>();
+    for (const css of [broadsheet, globals]) {
+      for (const [, name] of stripComments(css).matchAll(
+        /\.([a-z][a-z0-9-]*)/g,
+      )) {
+        if (name !== undefined) defined.add(name);
+      }
+    }
+    const unknown = new Set<string>();
+    for (const file of sources("src")) {
+      if (!file.endsWith(".tsx")) continue;
+      const source = readFileSync(join(process.cwd(), file), "utf8");
+      // Only the literal `className="…"` form. A template or a ternary is
+      // assembled at runtime and is not decidable here; the classes those
+      // build are all literals somewhere else in the same file.
+      for (const [, value] of source.matchAll(/className="([^"{]*)"/g)) {
+        for (const name of (value ?? "").split(/\s+/).filter(Boolean)) {
+          // Phosphor ships its own sheet, under one reserved prefix.
+          if (name.startsWith("ph-")) continue;
+          if (defined.has(name)) continue;
+          unknown.add(`${name} (${file})`);
+        }
+      }
+    }
+    expect([...unknown].sort()).toEqual([]);
   });
 });

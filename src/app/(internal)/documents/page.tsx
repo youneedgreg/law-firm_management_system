@@ -157,7 +157,9 @@ export default async function DocumentsPage({
                 <th>Version</th>
                 <th>Size</th>
                 <th>Signature</th>
-                <th />
+                <th>
+                  <span className="visually-hidden">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody>

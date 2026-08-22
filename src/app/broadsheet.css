@@ -331,6 +331,14 @@ figcaption {
   height: 36px;
   padding: 0;
 }
+/* The row-level button — "Open", "Complete", "Revise". Small, and floored at
+   the 24px WCAG 2.2 asks of a target (2.5.8) rather than at whatever the type
+   size happened to produce. */
+.btn-sm {
+  font-size: 13px;
+  padding: var(--space-1) var(--space-2);
+  min-height: 26px;
+}
 .btn-block {
   width: 100%;
   margin-top: var(--space-2);

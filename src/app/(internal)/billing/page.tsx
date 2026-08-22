@@ -122,7 +122,9 @@ export default async function BillingPage() {
                 <th>Total</th>
                 <th>Outstanding</th>
                 <th>Status</th>
-                <th />
+                <th>
+                  <span className="visually-hidden">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody>

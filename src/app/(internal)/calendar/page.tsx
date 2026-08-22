@@ -119,7 +119,11 @@ function DiaryTable({
             <th>Court</th>
             <th>Advocate</th>
             <th>Outcome</th>
-            {mayWrite ? <th /> : null}
+            {mayWrite ? (
+              <th>
+                <span className="visually-hidden">Actions</span>
+              </th>
+            ) : null}
           </tr>
         </thead>
         <tbody>

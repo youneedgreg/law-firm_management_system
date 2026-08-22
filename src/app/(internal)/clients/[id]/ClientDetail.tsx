@@ -81,7 +81,9 @@ export function ClientDetail({
                 <th>Against</th>
                 <th>Type</th>
                 <th>Status</th>
-                <th />
+                <th>
+                  <span className="visually-hidden">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody>

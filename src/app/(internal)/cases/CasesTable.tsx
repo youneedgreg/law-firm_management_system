@@ -47,65 +47,83 @@ export function CasesTable({ status }: { status: CaseStatus | "all" }) {
   const mine = ownMatters(useSession().principal);
   const caseload = useRxValue(caseloadRx({ status, advocateId: mine }));
 
-  return Result.builder(caseload)
-    .onInitial(() => <p className="dek">Reading the caseload…</p>)
-    .onError((error) => (
-      <p className="form-refusal" role="alert">
-        {explain(error)}
-      </p>
-    ))
-    .onSuccess((caseload) => {
-      const rows = caseload;
+  return (
+    Result.builder(caseload)
+      /*
+       * `role="status"` because the table that replaces this appears with no
+       * other signal: the filter above is a link, so a sighted user sees the
+       * page change and a screen-reader user is told nothing at all. A polite
+       * live region announces the wait and then the count below it.
+       */
+      .onInitial(() => (
+        <p className="dek" role="status">
+          Reading the caseload…
+        </p>
+      ))
+      .onError((error) => (
+        <p className="form-refusal" role="alert">
+          {explain(error)}
+        </p>
+      ))
+      .onSuccess((caseload) => {
+        const rows = caseload;
 
-      if (rows.length === 0) {
-        return <p className="dek">No matters match this filter.</p>;
-      }
+        if (rows.length === 0) {
+          return (
+            <p className="dek" role="status">
+              No matters match this filter.
+            </p>
+          );
+        }
 
-      return (
-        <TableWrap>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Case #</th>
-                <th>Title</th>
-                <th>Type</th>
-                <th>Client</th>
-                <th>Court</th>
-                <th>Advocate</th>
-                <th>Status</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(({ matter, clientName, advocateName }) => (
-                <tr key={matter.id}>
-                  <td>{matter.number}</td>
-                  <td>{matter.title}</td>
-                  <td>{matter.type}</td>
-                  <td>{clientName}</td>
-                  <td>{courtName(matter.court)}</td>
-                  <td>{advocateName}</td>
-                  <td>
-                    <span className={caseStatusTag(matter.status)}>
-                      {matter.status}
-                    </span>
-                  </td>
-                  <td className="cell-action">
-                    <Link
-                      href={`/cases/${matter.id}`}
-                      className="btn btn-ghost"
-                    >
-                      Open
-                    </Link>
-                  </td>
+        return (
+          <TableWrap>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Case #</th>
+                  <th>Title</th>
+                  <th>Type</th>
+                  <th>Client</th>
+                  <th>Court</th>
+                  <th>Advocate</th>
+                  <th>Status</th>
+                  <th>
+                    <span className="visually-hidden">Actions</span>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </TableWrap>
-      );
-    })
-    .render();
+              </thead>
+              <tbody>
+                {rows.map(({ matter, clientName, advocateName }) => (
+                  <tr key={matter.id}>
+                    <td>{matter.number}</td>
+                    <td>{matter.title}</td>
+                    <td>{matter.type}</td>
+                    <td>{clientName}</td>
+                    <td>{courtName(matter.court)}</td>
+                    <td>{advocateName}</td>
+                    <td>
+                      <span className={caseStatusTag(matter.status)}>
+                        {matter.status}
+                      </span>
+                    </td>
+                    <td className="cell-action">
+                      <Link
+                        href={`/cases/${matter.id}`}
+                        className="btn btn-ghost"
+                      >
+                        Open
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableWrap>
+        );
+      })
+      .render()
+  );
 }
 
 export function CasesTitle() {

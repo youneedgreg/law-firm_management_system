@@ -130,7 +130,9 @@ export default async function TimeTrackingPage() {
                   <th>Matter</th>
                   <th>Hours</th>
                   <th>Value</th>
-                  <th />
+                  <th>
+                    <span className="visually-hidden">Actions</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>

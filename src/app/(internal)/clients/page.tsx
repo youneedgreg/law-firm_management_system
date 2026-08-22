@@ -87,7 +87,9 @@ export default async function ClientsPage({
                   <th>Client</th>
                   <th>Asked</th>
                   <th>Waiting</th>
-                  <th />
+                  <th>
+                    <span className="visually-hidden">Actions</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -148,7 +150,9 @@ export default async function ClientsPage({
                 <th>Instructions from</th>
                 <th>Open matters</th>
                 <th>Total</th>
-                <th />
+                <th>
+                  <span className="visually-hidden">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody>

@@ -52,7 +52,7 @@ export function SignInForm({ next }: { next: string }) {
       />
 
       {state.status === "refused" && (
-        <p className="form-error" role="alert">
+        <p className="form-refusal" role="alert">
           {state.reason}
         </p>
       )}

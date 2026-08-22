@@ -32,6 +32,9 @@ export function PortalShell({
   return (
     <SessionProvider session={session}>
       <div className="shell">
+        <a href="#content" className="skip-link">
+          Skip to content
+        </a>
         <header className="portal-header">
           <div className="portal-brand">
             <span className="portal-wordmark">OKLaw</span>
@@ -65,7 +68,7 @@ export function PortalShell({
           ))}
         </nav>
 
-        <main className="portal-content">
+        <main className="portal-content" id="content" tabIndex={-1}>
           <div className="portal-content-inner">{children}</div>
         </main>
       </div>

@@ -51,7 +51,9 @@ export default async function PortalDocumentsPage() {
                 <th>Category</th>
                 <th>Version</th>
                 <th>Size</th>
-                <th />
+                <th>
+                  <span className="visually-hidden">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody>

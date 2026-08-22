@@ -140,7 +140,9 @@ function Tasks({
             <th>Assigned to</th>
             <th>Priority</th>
             <th>Due</th>
-            <th />
+            <th>
+              <span className="visually-hidden">Actions</span>
+            </th>
           </tr>
         </thead>
         <tbody>

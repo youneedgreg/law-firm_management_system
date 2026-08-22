@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { type Session, SessionProvider } from "@/components/Session";
 import { Sidebar } from "@/components/Sidebar";
 import { Topbar } from "@/components/Topbar";
@@ -36,6 +36,7 @@ export function InternalShell({
 }) {
   const pathname = usePathname();
   const [navOpen, setNavOpen] = useState(false);
+  const toggleRef = useRef<HTMLButtonElement>(null);
 
   const role =
     session.principal._tag === "Staff" ? session.principal.role : undefined;
@@ -43,8 +44,21 @@ export function InternalShell({
   return (
     <SessionProvider session={session}>
       <div className="shell">
+        {/*
+          Twenty navigation links stand between the masthead and the content on
+          every screen, and without this a keyboard or switch user walks all of
+          them every time (WCAG 2.4.1). `tabIndex={-1}` on the target is what
+          makes the jump actually move focus rather than only scroll: without
+          it the browser moves the *scroll position* and leaves focus on the
+          link, so the next Tab goes back into the navigation.
+        */}
+        <a href="#content" className="skip-link">
+          Skip to content
+        </a>
         <Topbar
+          navOpen={navOpen}
           onToggleNav={() => setNavOpen((open) => !open)}
+          toggleRef={toggleRef}
           needsAttention={needsAttention}
         />
         <div className="shell-body">
@@ -52,10 +66,11 @@ export function InternalShell({
             <Sidebar
               role={role}
               open={navOpen}
-              onNavigate={() => setNavOpen(false)}
+              onClose={() => setNavOpen(false)}
+              returnFocusTo={toggleRef}
             />
           )}
-          <main className="content">
+          <main className="content" id="content" tabIndex={-1}>
             {role !== undefined && canAccessPath(pathname, role) ? (
               children
             ) : (

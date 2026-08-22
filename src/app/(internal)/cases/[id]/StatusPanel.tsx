@@ -88,7 +88,15 @@ export function StatusPanel({
 
   return (
     <div>
-      <div className="row row-tight">
+      {/*
+        The whole point of this panel is that the status changes under you —
+        optimistically, and then again if the server disagrees. On screen that
+        is obvious and to a screen reader it is silent, so the region that
+        holds the status is the region that announces it. `role="status"` is
+        polite: it waits for a pause rather than cutting across whatever is
+        being read.
+      */}
+      <div className="row row-tight" role="status">
         <span className={caseStatusTag(showing)}>{showing}</span>
         {pending && (
           <span className="dek" style={{ marginLeft: "var(--space-2)" }}>

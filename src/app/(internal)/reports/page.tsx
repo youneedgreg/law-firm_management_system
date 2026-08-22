@@ -127,7 +127,11 @@ export default async function ReportsPage() {
                   <th>Month</th>
                   <th>Billed</th>
                   <th>Collected</th>
-                  <th />
+                  <th>
+                    <span className="visually-hidden">
+                      Billed against collected, as bars
+                    </span>
+                  </th>
                 </tr>
               </thead>
               <tbody>

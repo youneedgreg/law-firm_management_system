@@ -30,10 +30,16 @@ import { initials } from "@/lib/format";
  * is watching.
  */
 export function Topbar({
+  navOpen,
   onToggleNav,
+  toggleRef,
   needsAttention,
 }: {
+  /** Whether the mobile drawer is showing, for `aria-expanded`. */
+  navOpen: boolean;
   onToggleNav: () => void;
+  /** So the drawer can put focus back here when it closes. */
+  toggleRef: React.RefObject<HTMLButtonElement | null>;
   needsAttention: number;
 }) {
   /**
@@ -50,11 +56,21 @@ export function Topbar({
 
   return (
     <header className="topbar">
+      {/*
+        `aria-expanded` and `aria-controls` are what make this a disclosure
+        rather than a button that does something invisible: without them the
+        only way to learn whether the navigation is showing is to see it, and
+        the label alone ("Toggle navigation") says what it does and never what
+        state it is in.
+      */}
       <button
+        ref={toggleRef}
         type="button"
         className="nav-toggle"
         onClick={onToggleNav}
-        aria-label="Toggle navigation"
+        aria-label="Navigation"
+        aria-expanded={navOpen}
+        aria-controls="main-nav"
       >
         <i
           className="ph-duotone ph-list"
@@ -125,7 +141,13 @@ export function Topbar({
         <span className="topbar-role">{role}</span>
       </div>
 
-      <div className="avatar" title={`${principal.name} · ${role}`}>
+      {/*
+        Hidden rather than labelled. The initials are a picture of the name and
+        the role printed immediately to their left, so anything announced here
+        is the same fact a third time — and the `title` attribute it used to
+        carry is not reliably surfaced anyway.
+      */}
+      <div className="avatar" aria-hidden>
         {initials(principal.name)}
       </div>
 
