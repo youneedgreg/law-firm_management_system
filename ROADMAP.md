@@ -721,13 +721,21 @@ that is Effect's best sales pitch.
   - [x] **Source maps are shipped, and the argument is D-8.** The usual reason not to is that a map hands out the source; this repository has been public since Phase 0, so it hands out nothing GitHub does not — and it buys a stack trace from `onRequestError` that points at a line somebody can read rather than at `1ed4xtf-yn7bz.js:1:48210`, which is the difference between Phase 8's error tracking being useful and being a receipt. No visitor downloads one; a map is fetched only when devtools is open
   - [x] The favicon is a **masthead rather than a monogram**: text in an icon depends on a font being present and is illegible at 16px anyway, so it is the thing the design system already is — a column of newsprint under a heavy rule
   - [x] **Lighthouse independently found the contrast failures this phase opened with.** The deployed Phase 8 build scores Accessibility 96 on twelve nodes with insufficient contrast — the same defect `tokens.test.ts` found by parsing the stylesheet, arrived at from the other direction. It is 100 on this build
-  - [x] Local, this build: **100 / 100 / 100 / 100** on the public page, and **100 accessibility, 100 best practices, 100 SEO** on every authenticated one. Deployed, the Phase 8 build: 96–98 performance, and 96 / 96 / 91 on exactly the three audits above
+  - [x] **Measured against the deployment once this was pushed, which is the honest rig: 98–100 performance and 100 / 100 / 100 on every one of five screens**, with the root document at 70ms, LCP between 0.4s and 1.0s and CLS at 0. The three audits the Phase 8 build failed — twelve contrast nodes, the favicon console error, the invalid `robots.txt` — are all closed
   - [x] **`llms.txt` is out of scope, stated rather than skipped.** Lighthouse has a new "Agentic Browsing" category scoring 67 on a file that did not exist when this item was written. It is a manifest for AI crawlers, not a property of the application, and chasing a number for it would be optimising for the scoreboard
 
-  **Status:** Phase 9 complete. 1,071 unit tests and 29 end-to-end specs pass;
-  the design system is documented and checked in both themes; the app is usable
-  from a keyboard, on a phone, and in the dark. **Not pushed** — every commit is
-  local, so the live URL still serves Phase 8 until somebody deploys it.
+  **Status:** Phase 9 complete, pushed and deployed. 1,071 unit tests and 29
+  end-to-end specs pass; the design system is documented and checked in both
+  themes; the app is usable from a keyboard, on a phone, and in the dark; and
+  the live URL measures 98–100 / 100 / 100 / 100.
+
+  Two things the push itself found, both pre-existing and neither in Phase 9's
+  scope. The pre-push hook refused an incomplete lockfile — the second time
+  `sharp`'s optional dependencies have done that, and worth a look at whether
+  the check should also run on `npm i`. And CI failed a schema test that had
+  passed locally: two fixtures drew a `UNIQUE` reference from `Math.random()`
+  over 900 values, which is a **4.9% chance per run** and had been in the suite
+  since Phase 2. Both fixed.
 
 - [x] Playwright E2E covering the critical paths: login, create case, log time, invoice, pay
   - [x] **One test for the whole path, not four.** Each step needs what the one before produced — you cannot bill hours you have not recorded — so splitting them would mean four tests that each rebuild the state, or four that depend on execution order, which is one test pretending to be four. They are `test.step`s, so a failure still names which one broke
