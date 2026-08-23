@@ -67,7 +67,10 @@ control, placed in `resetDemoData` and not only in the route) and verified by
 **C2** and **C4** — call the endpoint on the real deployment before there is any
 data in it.
 
-- [ ] Closed and verified
+- [ ] Closed and verified — **code done, deployment check outstanding.** The
+      guard is in `resetDemoData` and in `seed`, and the route answers 404.
+      What remains is C2/C4: calling the endpoint on the client deployment
+      before it holds data.
 
 ### ☐ F2 — There is no way to create a real user
 
@@ -83,7 +86,12 @@ provisioned everything and want to show the firm their system.
 _Closed by:_ **C0**. Build the script and test it on a scratch database
 **before** C1, not after.
 
-- [ ] Closed and verified
+- [ ] Closed and verified — **code done, one manual run outstanding.**
+      `npm run provision:admin` exists, with its refusals covered by test
+      against the in-memory repositories. What remains is running it once
+      against a real database, which no test can stand in for: `provision` in
+      the in-memory harness deliberately dies rather than pretend to enforce
+      `users_exactly_one_subject`, because that constraint is Postgres's.
 
 ### ☐ F3 — The one-click switcher is a public session-minting endpoint
 
@@ -99,9 +107,12 @@ _Severity:_ full account takeover of every role. _Closed by:_ **A4** — the gua
 goes in the action, on the server, before the roster is resolved. Verified by
 **C4**, by hand-posting to it.
 
-- [ ] Closed and verified
+- [ ] Closed and verified — **code done, deployment check outstanding.**
+      `signInAs` refuses before it reads the roster, and every roster key is
+      covered by test. What remains is C4: hand-posting to the action on the
+      client deployment.
 
-### ☐ F4 — The flag must fail closed, or it makes things worse
+### ☑ F4 — The flag must fail closed, or it makes things worse
 
 `DEMO_DEPLOYMENT` defaults to `false`: an unset variable, a typo'd variable, one
 someone deleted while tidying, and a brand-new Vercel project must all mean
@@ -117,9 +128,10 @@ _Severity:_ determines whether Phase A is protection or decoration. _Closed by:_
 **A1**, and locked in by the test in **A6** that asserts refusal with the
 variable unset.
 
-- [ ] Closed and verified
+- [x] Closed and verified — `config.test.ts` pins the default, the misspelt key,
+      and the spellings `Config.boolean` will and will not read.
 
-### ☐ F5 — The repository will argue with itself
+### ☑ F5 — The repository will argue with itself
 
 `CronConfig`'s doc comment currently reasons _against_ having a flag: _"a flag
 is a second way for a control to be silently absent."_ That is correct, and
@@ -132,9 +144,10 @@ comment standing and the next reader has to guess which of the two claims the
 code means.
 
 _Severity:_ low today, high the day someone acts on the stale comment. _Closed
-by:_ **A2**.
+by:_ **A2**, and by the amendment to ADR 0013, which carried the same stale
+claim in two more places.
 
-- [ ] Closed and verified
+- [x] Closed and verified
 
 ---
 
@@ -152,7 +165,7 @@ F1 is the one to be frightened of. The rest are recoverable.
 
 ### A1. A `DeploymentConfig` that says what kind of deployment this is
 
-- [ ] Add `DeploymentConfig` to `src/infra/config.ts`, following the
+- [x] Add `DeploymentConfig` to `src/infra/config.ts`, following the
       `Effect.Service` + `Config` shape every other service in that file uses.
 
 ```ts
@@ -177,10 +190,16 @@ direction is a demo that quietly becomes real; the safe direction is a real
 deployment that quietly becomes... a real deployment. Absence must never mean
 "demo".
 
-- [ ] Write the doc comment in the style of its neighbours: state that the
+- [x] Write the doc comment in the style of its neighbours: state that the
       default is load-bearing and why, or the next person will "simplify" it to
       `Config.boolean` with no default and turn an unset variable into a startup
       crash on the client's deployment.
+
+**Set it lowercase.** `Config.boolean` accepts `true`, `yes`, `on` and `1` — and
+is case-sensitive, so `DEMO_DEPLOYMENT=True` is not "true", it is a deployment
+that refuses to start. That direction is the safe one, since a capitalised value
+can only ever be typed on the deployment that _wants_ to be a demo, but it is a
+confusing ten minutes if you do not know it. Pinned by test in `config.test.ts`.
 
 ### A2. Amend the comment that argues against exactly this
 
@@ -189,7 +208,7 @@ second way for a control to be silently absent."_ That reasoning is correct and
 this phase appears to contradict it. Resolve it explicitly rather than leaving
 the repository arguing with itself.
 
-- [ ] Update the `CronConfig` comment in `src/infra/config.ts` to say that
+- [x] Update the `CronConfig` comment in `src/infra/config.ts` to say that
       `DEMO_DEPLOYMENT` is an **additional** condition, never an alternative
       one: the reset requires the secret **and** the flag. A second control that
       is ANDed cannot be a second way to be silently absent — it can only be a
@@ -198,15 +217,15 @@ the repository arguing with itself.
 
 ### A3. Gate the reset, in the runtime and not only in the route
 
-- [ ] In `src/runtime/reset.ts`, make `resetDemoData` check `DeploymentConfig`
+- [x] In `src/runtime/reset.ts`, make `resetDemoData` check `DeploymentConfig`
       and refuse before it runs `seed` when `isDemo` is false. Return the
       refusal as a value — the existing signature already hands failures back as
       an `Either`, so this fits.
-- [ ] Log the refusal at `Error`. A reset that was attempted against a real
+- [x] Log the refusal at `Error`. A reset that was attempted against a real
       deployment is not a routine "no": it means the demo cron is registered
       somewhere it should not be, and you want to find out from a log rather
       than from a customer.
-- [ ] In `src/app/api/cron/reset/route.ts`, answer `404` — not `403` — when the
+- [x] In `src/app/api/cron/reset/route.ts`, answer `404` — not `403` — when the
       deployment is not a demo. On a client installation the endpoint should not
       exist, and the route's own comment already establishes the principle that
       it says nothing that distinguishes one refusal from another.
@@ -217,27 +236,27 @@ dangerous operation, not the door in front of it.
 
 ### A4. Gate the one-click sign-in
 
-- [ ] `src/app/(auth)/sign-in/page.tsx` — render the `DemoAccounts` panel and
+- [x] `src/app/(auth)/sign-in/page.tsx` — render the `DemoAccounts` panel and
       the shared-password paragraph (line ~48) only when `isDemo`. The page is a
       Server Component, so read the config there and pass a boolean down.
-- [ ] `src/app/(auth)/sign-in/actions.ts` — `signInAs` (line ~139) must refuse
+- [x] `src/app/(auth)/sign-in/actions.ts` — `signInAs` (line ~139) must refuse
       when `isDemo` is false, **on the server**, before it resolves the roster
       or touches `DEMO_PASSWORD`. Not rendering the buttons is cosmetics; the
       server action is a public endpoint that mints sessions and it is reachable
       whether or not anything renders a form that posts to it.
-- [ ] Leave `src/lib/demo.ts` and `DemoAccounts.tsx` in place, unchanged. They
+- [x] Leave `src/lib/demo.ts` and `DemoAccounts.tsx` in place, unchanged. They
       are dead code on a client deployment and that is fine — deleting them
       would fork the codebase, which is the thing this whole plan exists to
       avoid.
 
 ### A5. Gate the seed's password provisioning
 
-- [ ] `src/infra/seed/logins.ts` sets `DEMO_PASSWORD` on every account it
+- [x] `src/infra/seed/logins.ts` sets `DEMO_PASSWORD` on every account it
       creates (lines ~95 and ~122). Make the seed program refuse to run at all
       when `isDemo` is false, at its entry point in `src/infra/seed/program.ts`,
       so that `npm run db:seed` pointed at a client database stops before the
       wipe rather than after it.
-- [ ] This is the same guard as A3 at a second entry point. The script and the
+- [x] This is the same guard as A3 at a second entry point. The script and the
       cron both reach `seed`; guarding only one leaves the other.
 
 ### A6. The tests that make this real
@@ -245,16 +264,16 @@ dangerous operation, not the door in front of it.
 The existing `src/infra/seed/demo.test.ts` asserts the roster matches what the
 seed provisions. Add the inverse — that with the flag off, none of it works:
 
-- [ ] `signInAs` refuses with `DEMO_DEPLOYMENT` unset, for a key that is
+- [x] `signInAs` refuses with `DEMO_DEPLOYMENT` unset, for a key that is
       otherwise valid. This is the single most important test in the phase: it
       is the one that fails if someone later "simplifies" the gate away.
-- [ ] `resetDemoData` refuses with the flag unset, and **does not delete
+- [x] `resetDemoData` refuses with the flag unset, and **does not delete
       anything** — assert a row still exists afterwards, not merely that the
       call returned a failure.
-- [ ] The sign-in page renders no demo panel and no password with the flag
+- [x] The sign-in page renders no demo panel and no password with the flag
       unset.
-- [ ] The seed refuses with the flag unset.
-- [ ] Check whether `src/architecture.test.ts` or `eslint.boundaries.mjs` need
+- [x] The seed refuses with the flag unset.
+- [x] Check whether `src/architecture.test.ts` or `eslint.boundaries.mjs` need
       to know about the new config dependency in `src/runtime/` and `src/app/`.
 
 - [ ] `npm run verify`
@@ -264,11 +283,11 @@ seed provisions. Add the inverse — that with the flag off, none of it works:
 
 ### A7. Record the decision
 
-- [ ] Amend `docs/adr/0013-one-click-demo-access.md`. Do not supersede it — the
+- [x] Amend `docs/adr/0013-one-click-demo-access.md`. Do not supersede it — the
       reasoning still holds for the deployment it was written about. Add a
       section saying the affordances it describes are now conditional on
       `DEMO_DEPLOYMENT`, and why the default is `false`.
-- [ ] Note in `ROADMAP.md` §8 that the system now distinguishes deployment kinds.
+- [x] Note in `ROADMAP.md` §8 that the system now distinguishes deployment kinds.
 
 ---
 
@@ -307,7 +326,7 @@ parameterised.
 
 ### B1. Firm identity as deployment configuration, not a table
 
-- [ ] Add `FirmIdentity` to `src/infra/config.ts`: `name` (full legal name, e.g.
+- [x] Add `FirmIdentity` to `src/infra/config.ts`: `name` (full legal name, e.g.
       "Kimani & Otieno Advocates"), `shortName` (the wordmark, ~12 characters),
       and default both to the current values so the demo needs no new variables
       to keep working.
@@ -321,30 +340,30 @@ a real feature to sell later and roughly a day's work (migration, repository,
 service, policy, form). It is not blocking client #1, and building it now would
 push Phase C out by a day for nothing.
 
-- [ ] Write that tradeoff into the doc comment so the future upgrade is a
+- [x] Write that tradeoff into the doc comment so the future upgrade is a
       decision someone makes rather than a rewrite they discover.
 
 ### B2. Replace the render sites
 
-- [ ] Work down the table above. Server Components read `FirmIdentity` directly;
+- [x] Work down the table above. Server Components read `FirmIdentity` directly;
       for anything client-side, pass it from the layout rather than reaching for
       a context.
-- [ ] `src/app/icon.svg` — leave for now, and put "replace the favicon and
+- [x] `src/app/icon.svg` — leave for now, and put "replace the favicon and
       wordmark mark" on the client onboarding checklist in Phase C. A per-deploy
       SVG is a build concern and not worth solving before you know what the firm
       hands you.
 
 ### B3. Explicitly leave alone
 
-- [ ] `COOKIE_PREFIX` in `src/infra/auth/options.ts`. `src/proxy.ts` depends on
+- [x] `COOKIE_PREFIX` in `src/infra/auth/options.ts`. `src/proxy.ts` depends on
       the same literal, the two deployments are on different domains so there is
       no collision to solve, and changing it per-deploy buys nothing and risks
       the session check.
-- [ ] `ServiceIdentity.name` in `src/infra/config.ts`. Traces should say which
+- [x] `ServiceIdentity.name` in `src/infra/config.ts`. Traces should say which
       _product_ emitted them. When you have three installations you will want
       them distinguishable, and the right tool for that is a separate
       `firm.name` span attribute — not renaming the service.
-- [ ] The `@oklaw.co.ke` addresses throughout `src/lib/data/*` and
+- [x] The `@oklaw.co.ke` addresses throughout `src/lib/data/*` and
       `src/infra/seed/*`. That is demo fixture data for a firm that does not
       exist. It never runs on a client deployment.
 
@@ -364,15 +383,61 @@ that creates a user is the demo seed. **There is currently no way to create a
 real account on a fresh database.** You will hit this after provisioning
 Postgres, at exactly the moment you want to show the firm their system.
 
-- [ ] Write `scripts/provision-admin.ts` and a `npm run provision:admin` script.
-      It takes a name, an email and a role, creates the `advocates` row and the
-      linked `users` row through `UserRepository` — the same path
-      `src/infra/seed/logins.ts` uses, for the same reason: `users_exactly_one_subject`
-      refuses an unlinked row, so the link cannot be skipped.
-- [ ] It must **not** wipe anything, must refuse if the email already exists,
+- [x] Write the program and a `npm run provision:admin` script. It takes a name,
+      an email and a role, creates the `advocates` row and the linked `users`
+      row through `UserRepository` — the same path `src/infra/seed/logins.ts`
+      uses, for the same reason: `users_exactly_one_subject` refuses an unlinked
+      row, so the link cannot be skipped.
+
+**It lives in `src/infra/provision/`, not `scripts/`.** This plan originally
+said `scripts/provision-admin.ts`, and that was the wrong address. Everything in
+`scripts/` today is documentation or tooling that deliberately _cannot_ reach
+the real database — `erd.ts` says so in as many words, and runs the migrations
+against an in-process PGlite specifically so a docs command can never be pointed
+at production. A program whose entire purpose is to write two rows into a law
+firm's database belongs beside `migrate.ts` and `seed/run.ts`, which is where
+the other things that touch Postgres already live.
+
+Split three ways, following the seed's own precedent that a module calling
+`runMain` at import time cannot be imported by the test that would prove it
+works:
+
+| File                   | What it is                                               |
+| ---------------------- | -------------------------------------------------------- |
+| `provision/options.ts` | argument parsing, pure, refuses before anything connects |
+| `provision/admin.ts`   | the program and the layer it needs                       |
+| `provision/run.ts`     | argv, the hidden password prompt, `runMain`              |
+
+- [x] It must **not** wipe anything, must refuse if the email already exists,
       and must take the password from a prompt or an env var — never a default,
       and never anything written into the repository.
-- [ ] Test it against a scratch database before you point it at the client's.
+
+Three refusals, all of them before either insert: a password under the
+application's own `minPasswordLength` (read from `AUTH_OPTIONS`, so this is not
+a lower bar than the app's), an address that already has a login, and an address
+already on the staff list. That last one is the one nothing else would catch —
+`users.email` is `UNIQUE` but `advocates.email` deliberately is not, so a second
+run would otherwise produce two staff records with one name and point the login
+at the second.
+
+The password is asked for on the terminal in raw mode, never echoed.
+`ADMIN_PASSWORD` exists for a session with no terminal and is documented as the
+second choice, because an environment variable is visible to `ps` and lands in
+shell history.
+
+- [ ] **Run it against the demo database once, to see it work.** This one is
+      yours: it writes to a live database, and it is the only step in C0 that no
+      test can stand in for. The nightly reset will remove the account again,
+      which the program warns you about before it asks for a password.
+
+```
+npm run provision:admin -- --name "Your Name" \
+  --email you@example.com --role "Managing Partner"
+```
+
+Then sign in as that account on the demo, confirm it works, and run the same
+command a second time to watch it refuse.
+
 - [ ] Decide now how staff #2 through #12 get created. If it is this script,
       that is you running a terminal command every time the firm hires someone,
       and you should say so in the contract. A "add member of staff" screen for
@@ -394,6 +459,16 @@ Postgres, at exactly the moment you want to show the firm their system.
 - [ ] Create a second Vercel project from this same Git repository.
 - [ ] Set its production branch to `release`. Create the branch from `main`.
 - [ ] Protect `release` — no direct pushes, merges from `main` only.
+
+**This contradicts D-9, and the contradiction should be resolved in the roadmap
+rather than left for a reader to find.** ROADMAP §5 settles on trunk-based
+development, `main` only, no branches — and the reasoning given is that PR
+review on a solo project is self-review anyway. That reasoning is about _review_
+and it still holds. `release` is not a review branch; it is a deployment
+pointer, and it exists because the thing on the other end of it is somebody
+else's practice. Amend D-9 to say so when you create the branch, or the next
+person to read §5 will delete the branch to comply with it.
+
 - [ ] Confirm the reset cron: it will be registered from `vercel.json`, and it
       must answer 404 (A3) with no `CRON_SECRET` and no `DEMO_DEPLOYMENT`.
       **Verify this by calling it, on the real deployment, before there is any
@@ -445,13 +520,13 @@ goes in:
 
 ### C5. Operating it
 
-- [ ] Write down the release procedure: `main` → PR into `release` → preview →
+- [x] Write down the release procedure: `main` → PR into `release` → preview →
       merge. One paragraph in `README.md` is enough, but it must exist, because
       the failure mode is you pushing an experiment straight to a law firm at
       11pm.
-- [ ] Never point the portfolio, the README or a screenshot at the client
+- [x] Never point the portfolio, the README or a screenshot at the client
       deployment. The public demo stays fictional, permanently.
-- [ ] Regenerate `docs/images/*` from the demo only.
+- [x] Regenerate `docs/images/*` from the demo only.
 
 ---
 
@@ -459,6 +534,11 @@ goes in:
 
 **Do this before you invoice, not before you go live.** It is ten minutes now
 and unwindable never.
+
+The positions are drafted in **[`docs/engagement-terms.md`](engagement-terms.md)**
+— plain English, one page, written to be taken to an advocate rather than used
+as it stands. The summary below is what each section is for; the reasoning and
+the clauses the firm will push back on are in that document.
 
 - [ ] **Ownership.** A default work-for-hire arrangement means the firm owns what
       you build and you cannot sell it again — and you would find that out after
@@ -501,6 +581,15 @@ customer requires it.
 
 **A "firm settings" screen** (B1's table) — the first time a customer asks to
 change their own letterhead.
+
+When you build it, it replaces two things rather than one. `src/rx/records.ts`
+still carries a `DEFAULT_SETTINGS` with its own `firmName`, `currency`,
+`timezone` and `dateFormat`, stored in `localStorage` by `src/rx/session.ts`.
+Nothing renders it — it is a wireframe remnant, exported and read only by its
+own test — but it is a second answer to "what is this firm called", living in
+the browser, per person. The table is what makes both of those one thing. Until
+then, leave it: deleting it is unrelated work, and it is currently harmless
+precisely because no screen consults it.
 
 **A staff management screen** — the first time C0's script becomes tedious,
 which will be soon.

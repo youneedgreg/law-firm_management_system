@@ -16,7 +16,7 @@ do strictly less than the one above it, and that is the point.
 [![CI](https://github.com/youneedgreg/law-firm_management_system/actions/workflows/ci.yml/badge.svg)](https://github.com/youneedgreg/law-firm_management_system/actions/workflows/ci.yml)
 ![Coverage](docs/coverage.svg)
 
-1,097 unit tests · 49 integration tests against real Postgres · 29 end-to-end
+1,147 unit tests · 49 integration tests against real Postgres · 29 end-to-end
 specs in a browser · 14 [architecture decision records](docs/adr/)
 
 ---
@@ -86,7 +86,7 @@ src/
   rx/          The same idea in the browser: atoms built on the generated client.
   app/         Next.js App Router. Thin; calls into services.
   components/  React components.
-  lib/         Formatting, nav config, the demo roster.
+  lib/         Formatting, nav config, the demo roster, the firm's identity.
 ```
 
 This is enforced, not documented. `eslint.boundaries.mjs` declares the
@@ -213,6 +213,10 @@ npm run db:migrate   # against the DATABASE_URL in .env.local
 npm run db:seed      # the demonstration firm, decoded through the domain schemas
 ```
 
+`db:seed` needs `DEMO_DEPLOYMENT=true` in `.env.local`. It wipes every table it
+owns before loading, so it refuses to run anywhere that has not said it is a
+demonstration — see [running it for a firm](#running-it-for-a-firm).
+
 | Command                    | What it does                                          |
 | -------------------------- | ----------------------------------------------------- |
 | `npm test`                 | Unit, service and schema tests — no database required |
@@ -225,6 +229,7 @@ npm run db:seed      # the demonstration firm, decoded through the domain schema
 | `npm run verify:clean`     | The same, from a wiped `node_modules` and `.next`     |
 | `npm run docs:erd`         | Regenerates `docs/erd.md` from the migrations         |
 | `npm run docs:screens`     | Retakes the screenshots above                         |
+| `npm run provision:admin`  | Creates a login on an installation. See below         |
 | `npm run perf`             | Signs in and runs Lighthouse over five screens        |
 
 Typechecking runs `next typegen` first because `PageProps` and `LayoutProps` are
@@ -248,10 +253,69 @@ a message about `undefined`.
 | `OTEL_EXPORTER_OTLP_HEADERS`  | unset                                  | The backend's auth header, if it wants one               |
 | `DATABASE_MAX_CONNECTIONS`    | `5`                                    | Neon pools at the proxy, so a small local pool is plenty |
 | `CRON_SECRET`                 | unset                                  | The nightly demo reset. Unset, the endpoint answers 503  |
+| `DEMO_DEPLOYMENT`             | `false`                                | Whether this is the demonstration. See below             |
+| `FIRM_NAME`                   | `OKLaw Advocates`                      | The firm this installation serves, in full               |
+| `FIRM_SHORT_NAME`             | `OKLaw`                                | The masthead wordmark. Around a dozen characters         |
+| `FIRM_TAGLINE`                | `Nairobi · General Practice`           | The line beside the wordmark                             |
 
 `GET /api/health` reports whether the database answered, how long it took, and
 which commit is serving. It is unauthenticated and says nothing about _why_ a
 dependency failed; that goes to the log.
+
+### Running it for a firm
+
+The demonstration and an installation are the same build. What separates them is
+`DEMO_DEPLOYMENT`, and the interesting part is its default.
+
+A public demo needs things a real system must not have: a one-click switcher
+that mints a session for any of six roles without a password, a shared password
+printed on the sign-in page, and a cron that empties every table at midnight so
+that the next visitor finds the firm as the last one did. Each of those is a
+breach on a system holding real matters.
+
+So each is conditional, and the flag **defaults to off**. An unset variable, a
+misspelt one, and a deployment created by somebody who has never read this file
+all mean the same thing: a real installation, with the demonstration
+affordances absent. Absence cannot mean "demo", because the two mistakes are not
+comparable — a demonstration that quietly becomes an ordinary application is a
+dull afternoon, and the reverse publishes a one-click administrator login.
+
+|                        | Demonstration | Installation |
+| ---------------------- | ------------- | ------------ |
+| `DEMO_DEPLOYMENT`      | `true`        | unset        |
+| `CRON_SECRET`          | set           | unset        |
+| One-click sign-in      | on            | refused      |
+| `POST /api/cron/reset` | resets        | `404`        |
+| `npm run db:seed`      | loads         | refused      |
+| `FIRM_*`               | defaults      | the firm's   |
+
+The reset is guarded twice — the secret **and** the flag, required together
+rather than either alone — because `vercel.json` is committed, so a second
+project built from this repository registers the same nightly cron whether
+anybody meant it to or not. One variable is too much weight for that.
+
+Sign-up is closed permanently (`disableSignUp`), which is right for a system
+where a login belongs to a member of staff or to a client the firm has already
+taken on. It also means a freshly migrated database has nobody who can sign in,
+so the first account is made from a terminal:
+
+```bash
+npm run db:migrate                      # no seed: it refuses outside the demo
+npm run provision:admin -- --name "Grace Kimani" \
+  --email grace@example.co.ke \
+  --role "Managing Partner" \
+  --certificate P.105/2026 --certificate-year 2026
+```
+
+It writes two rows and reads three. It refuses a password shorter than the
+application's own floor, an address that already has a login, and an address
+already on the staff list — all three before either insert, so a refused run
+leaves nothing behind. The password is asked for on the terminal and never
+echoed.
+
+The reasoning behind all of this, including what a second installation would
+cost and when row-level tenancy would be worth it, is in
+[`docs/first-client.md`](docs/first-client.md).
 
 This repository is trunk-based: all work lands on `main`, with no feature
 branches or pull requests. Two hooks stand in for the review gate — pre-commit
@@ -259,6 +323,17 @@ runs Prettier and ESLint on staged files, and pre-push runs the lockfile check,
 formatting, typecheck, lint, and tests. CI then runs the full suite, including
 the build and the coverage thresholds, on every push to `main`, which also
 deploys.
+
+An installation is the one exception, and it is a deployment pointer rather than
+a return to feature branches. `main` deploys the demonstration; a `release`
+branch deploys installations, and changes reach it by merge from `main` after
+they have been seen working on the demo. The reason is not review — D-9 already
+settles that self-review is the cost of working alone — it is that the thing on
+the other end belongs to somebody else, and an experiment pushed at eleven at
+night should not be able to reach a firm's live matters by being pushed at all.
+
+Nothing about a firm's installation appears in this repository: no name, no
+domain, no screenshots. The demonstration is fictional and stays that way.
 
 ## What this was for, and what I learned
 
@@ -335,6 +410,20 @@ client portal. Adding
 `firm_id` to every table and every query would be plumbing rather than signal;
 the reasoning is in [ADR 0003](docs/adr/0003-single-firm-scope.md).
 
+That decision is what makes the separation above a deployment boundary rather
+than a row-level one. A second firm is a second deployment with a second
+database, not a column — which costs an installation to stand up and, in
+exchange, means no query in this system can return one firm's matters to
+another by omitting a predicate. Where row-level tenancy would start to be worth
+its price is written down in [`docs/first-client.md`](docs/first-client.md)
+rather than left as an implication.
+
+**Stood up, and not:** the demonstration is live and is the link at the top of
+this page. No firm's installation has been deployed from this repository yet;
+the code that separates the two is written and tested, and the checks that can
+only be run against a real second deployment are listed, unticked, in the same
+document.
+
 ## Documentation
 
 - [`docs/architecture.md`](docs/architecture.md) — system context, layers, and
@@ -348,6 +437,8 @@ the reasoning is in [ADR 0003](docs/adr/0003-single-firm-scope.md).
   citations and confidence markers
 - [`docs/design-system.md`](docs/design-system.md) — tokens, contrast
   obligations, and the exemptions
+- [`docs/first-client.md`](docs/first-client.md) — how one build serves a public
+  demonstration and a firm's installation, and what row-level tenancy would cost
 - [`ROADMAP.md`](ROADMAP.md) — the plan, phase by phase, with the decision log
 
 ---
