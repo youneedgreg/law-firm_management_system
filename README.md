@@ -19,6 +19,11 @@ do strictly less than the one above it, and that is the point.
 1,147 unit tests · 49 integration tests against real Postgres · 29 end-to-end
 specs in a browser · 14 [architecture decision records](docs/adr/)
 
+> **Source-available, not open source.** © 2026 Gregory Temwa Odete, all rights
+> reserved. Read it, evaluate it, learn from it — but commercial use, deployment
+> and derivative works need written permission. See [LICENSE.md](LICENSE.md);
+> commercial licences are available.
+
 ---
 
 ![Managing Partner dashboard](docs/images/dashboard.jpg)
@@ -440,6 +445,29 @@ document.
 - [`docs/first-client.md`](docs/first-client.md) — how one build serves a public
   demonstration and a firm's installation, and what row-level tenancy would cost
 - [`ROADMAP.md`](ROADMAP.md) — the plan, phase by phase, with the decision log
+
+## Licence
+
+**© 2026 Gregory Temwa Odete. All rights reserved.** This is source-available,
+not open source — the full terms are in [LICENSE.md](LICENSE.md).
+
+The short version:
+
+|                                                |                    |
+| ---------------------------------------------- | ------------------ |
+| Read the source, evaluate it, learn from it    | Yes, and welcome   |
+| Quote excerpts with attribution                | Yes                |
+| Run it locally to see it work while evaluating | Yes                |
+| Deploy it, for yourself or anyone else         | Written permission |
+| Use it commercially, modified or not           | Written permission |
+| Copy substantial parts into your own work      | Written permission |
+
+The restrictions exist so that commercial conversations happen rather than to
+prevent them — **commercial licences are available**, including for firms
+wanting to run this as their practice management system.
+
+This repository is public because the reasoning in it is the point. None of
+that is a grant of use.
 
 ---
 

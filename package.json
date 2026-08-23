@@ -2,6 +2,8 @@
   "name": "law-firm_management_system",
   "version": "0.1.0",
   "private": true,
+  "license": "SEE LICENSE IN LICENSE.md",
+  "author": "Gregory Temwa Odete",
   "engines": {
     "node": ">=24"
   },
