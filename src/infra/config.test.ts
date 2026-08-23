@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   DatabaseConfig,
   DeploymentConfig,
+  FirmIdentity,
   ServiceIdentity,
   TelemetryConfig,
 } from "./config";
@@ -124,6 +125,73 @@ const deploymentIn = (environment: Record<string, string>) =>
     DeploymentConfig.pipe(Effect.provide(DeploymentConfig.Default)),
     environment,
   );
+
+const firmIn = (environment: Record<string, string>) =>
+  from(FirmIdentity.pipe(Effect.provide(FirmIdentity.Default)), environment);
+
+/**
+ * Whose practice the installation says it is (D-12).
+ *
+ * The defaults matter as much as the reads: the portfolio deployment sets none
+ * of these and has to go on looking exactly as it does, so a change to the
+ * fallbacks is a change to the demonstration and should have to be made on
+ * purpose.
+ */
+describe("firm identity", () => {
+  it("falls back to the demonstration's own firm", async () => {
+    const exit = await firmIn({});
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (Exit.isSuccess(exit)) {
+      expect(exit.value.name).toBe("OKLaw Advocates");
+      expect(exit.value.shortName).toBe("OKLaw");
+      expect(exit.value.tagline).toBe("Nairobi · General Practice");
+    }
+  });
+
+  it("takes an installation's own name, wordmark and tagline", async () => {
+    const exit = await firmIn({
+      FIRM_NAME: "Kimani, Otieno & Partners Advocates",
+      FIRM_SHORT_NAME: "Kimani & Otieno",
+      FIRM_TAGLINE: "Mombasa · Shipping and Trade",
+    });
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (Exit.isSuccess(exit)) {
+      expect(exit.value.name).toBe("Kimani, Otieno & Partners Advocates");
+      expect(exit.value.shortName).toBe("Kimani & Otieno");
+      expect(exit.value.tagline).toBe("Mombasa · Shipping and Trade");
+    }
+  });
+
+  /**
+   * The three are set independently, so a deployment that names itself and
+   * forgets the tagline gets its own name beside the demonstration's location.
+   * Pinned because the alternative — falling back to all three together when
+   * any is missing — is a plausible-sounding design that would put "Nairobi ·
+   * General Practice" under a firm in Mombasa without saying anything.
+   */
+  it("does not make a partial configuration into a whole one", async () => {
+    const exit = await firmIn({ FIRM_SHORT_NAME: "Kimani & Otieno" });
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (Exit.isSuccess(exit)) {
+      expect(exit.value.shortName).toBe("Kimani & Otieno");
+      expect(exit.value.name).toBe("OKLaw Advocates");
+    }
+  });
+
+  /**
+   * Empty is refused rather than defaulted. A variable set to nothing is a
+   * script that did not find what it was looking for, and falling back would
+   * hide that behind a wordmark reading "OKLaw" on somebody else's system —
+   * which is a worse outcome than a deployment that will not start.
+   */
+  it("refuses a name set to nothing", async () => {
+    expect(Exit.isFailure(await firmIn({ FIRM_NAME: "" }))).toBe(true);
+    expect(Exit.isFailure(await firmIn({ FIRM_SHORT_NAME: "   " }))).toBe(true);
+  });
+});
 
 /**
  * The one configuration value whose *default* is the control rather than a

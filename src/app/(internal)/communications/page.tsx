@@ -56,7 +56,7 @@ export default async function CommunicationsPage() {
       <p className="page-subtitle">
         Calls, meetings, emails and messages that happened outside this system,
         recorded against the client they concerned. Messages sent{" "}
-        <em>through</em> OKLaw live on the client&rsquo;s file &mdash; those are
+        <em>through</em> it live on the client&rsquo;s file &mdash; those are
         reproducible verbatim, and these are somebody&rsquo;s summary.
       </p>
 

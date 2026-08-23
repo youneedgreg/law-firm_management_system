@@ -116,6 +116,89 @@ export class AuthConfig extends Effect.Service<AuthConfig>()("AuthConfig", {
 }) {}
 
 /**
+ * Whose practice this installation serves (D-12).
+ *
+ * ## Two things were both called "OKLaw", and only one of them is yours
+ *
+ * The name appears in this codebase in two unrelated senses, and until now
+ * nothing could tell them apart:
+ *
+ * - **The product.** `ServiceIdentity.name`, the cookie prefix, the package,
+ *   the design system's stylesheets. That is the thing being built, and it does
+ *   not change when it is sold. None of it is here.
+ * - **The firm.** The wordmark in the masthead, the tagline beside it, the
+ *   sentence in the client portal that says whose correspondence this is. On
+ *   the demonstration that is *OKLaw Advocates*, a firm in Nairobi that does
+ *   not exist. On an installation it is a real practice with headed paper.
+ *
+ * This is the second one. Keeping them apart is what turns "a system built for
+ * one firm" into "a system with an installation", and the reason `oklaw` is
+ * still hard-coded a few lines up rather than swept along with it: a span
+ * should say which *product* emitted it. When there are three installations,
+ * the way to tell them apart is a `firm.name` attribute on the span — not three
+ * differently-named services.
+ *
+ * ## Configuration rather than a `firm_settings` table
+ *
+ * One deployment serves one firm. That is the architecture — there is no
+ * `firm_id` on any of the twenty-three tables — so the firm's name is a
+ * property of the deployment in exactly the way `BETTER_AUTH_URL` is, and it is
+ * read the same way.
+ *
+ * A table would say something different and untrue: that this is editable at
+ * runtime, by somebody, under some permission. It is worth building the day a
+ * managing partner should be able to change their own letterhead without a
+ * redeploy — a migration, a repository, a service, a policy and a form, call it
+ * a day's work, and a good thing to sell. It is not worth doing first, because
+ * every hour of it is an hour the firm's data is still sitting in a system
+ * whose demo affordances were only just switched off.
+ *
+ * So: when that day comes, this service is what the table replaces, and these
+ * defaults are what it seeds itself from.
+ *
+ * ## The defaults are the demonstration
+ *
+ * Both fall back to what the fixtures already say, so the portfolio deployment
+ * needs no new variables to keep looking exactly as it does. An installation
+ * sets all three.
+ *
+ * `shortName` goes in the masthead beside a tagline and a search box. Around a
+ * dozen characters fits; a firm styled "Kimani, Otieno & Partners Advocates"
+ * wants `Kimani & Otieno` here and the full name in `name`. That is guidance
+ * and not a rule — a validated ceiling would fail a deployment over a
+ * cosmetic judgement, which is disproportionate for a value nobody can set by
+ * accident.
+ *
+ * Empty *is* refused, for all three. A blank wordmark is not a style choice, it
+ * is a variable that was set to nothing by a script, and the masthead would
+ * render a hole rather than say so.
+ */
+const named = (variable: string, fallback: string) =>
+  Config.string(variable).pipe(
+    Config.validate({
+      message: `${variable} must not be empty`,
+      validation: (value) => value.trim().length > 0,
+    }),
+    Config.withDefault(fallback),
+  );
+
+export class FirmIdentity extends Effect.Service<FirmIdentity>()(
+  "FirmIdentity",
+  {
+    effect: Effect.gen(function* () {
+      return {
+        /** The full legal name, as it would appear on a letterhead. */
+        name: yield* named("FIRM_NAME", "OKLaw Advocates"),
+        /** The masthead wordmark. Around a dozen characters. */
+        shortName: yield* named("FIRM_SHORT_NAME", "OKLaw"),
+        /** The line beside the wordmark: where they are, and what they do. */
+        tagline: yield* named("FIRM_TAGLINE", "Nairobi · General Practice"),
+      };
+    }),
+  },
+) {}
+
+/**
  * Whether this deployment is the public demonstration (D-11).
  *
  * This repository runs in two places: the portfolio demo, where strangers are

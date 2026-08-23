@@ -2,14 +2,14 @@ import { Option } from "effect";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { DEMO_PASSWORD } from "@/lib/demo";
-import { isDemoDeployment } from "@/runtime/deployment";
+import { firmIdentity, isDemoDeployment } from "@/runtime/deployment";
 import { principal } from "@/runtime/session";
 import { DemoAccounts } from "./DemoAccounts";
 import { SignInForm } from "./SignInForm";
 
-export const metadata: Metadata = {
-  title: "Sign in · OKLaw",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: `Sign in · ${(await firmIdentity()).shortName}` };
+}
 
 /**
  * The way in.
@@ -41,12 +41,12 @@ export default async function SignInPage({
   if (Option.isSome(await principal())) redirect("/dashboard");
 
   const { next } = await searchParams;
-  const demo = await isDemoDeployment();
+  const [demo, firm] = await Promise.all([isDemoDeployment(), firmIdentity()]);
 
   return (
     <main className="signin">
       <div className="signin-card card elev-sm">
-        <div className="card-kicker">OKLaw</div>
+        <div className="card-kicker">{firm.shortName}</div>
         <h1 style={{ fontSize: 30, margin: "0 0 var(--space-2)" }}>Sign in</h1>
         <p className="page-subtitle" style={{ marginBottom: "var(--space-4)" }}>
           Matters, clients and client money for the firm.

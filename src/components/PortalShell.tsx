@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "@/app/(auth)/sign-in/actions";
 import { type Session, SessionProvider } from "@/components/Session";
 import { ThemeChoice } from "@/components/ThemeChoice";
+import type { Firm } from "@/lib/firm";
 import { PORTAL_NAV } from "@/lib/nav";
 
 /**
@@ -22,9 +23,12 @@ import { PORTAL_NAV } from "@/lib/nav";
  * says which client is signed in.
  */
 export function PortalShell({
+  firm,
   session,
   children,
 }: {
+  /** Whose practice this is, read by the layout above (D-12). */
+  firm: Firm;
   session: Session;
   children: React.ReactNode;
 }) {
@@ -38,7 +42,7 @@ export function PortalShell({
         </a>
         <header className="portal-header">
           <div className="portal-brand">
-            <span className="portal-wordmark">OKLaw</span>
+            <span className="portal-wordmark">{firm.shortName}</span>
             <span className="portal-kicker">CLIENT PORTAL</span>
           </div>
           <div

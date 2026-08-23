@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { signOut } from "@/app/(auth)/sign-in/actions";
 import { useSession } from "@/components/Session";
 import { roleLabel } from "@/domain/identity/principal";
+import type { Firm } from "@/lib/firm";
 import { initials } from "@/lib/format";
 
 /**
@@ -30,11 +31,14 @@ import { initials } from "@/lib/format";
  * is watching.
  */
 export function Topbar({
+  firm,
   navOpen,
   onToggleNav,
   toggleRef,
   needsAttention,
 }: {
+  /** Whose practice this is, read by the layout above (D-12). */
+  firm: Firm;
   /** Whether the mobile drawer is showing, for `aria-expanded`. */
   navOpen: boolean;
   onToggleNav: () => void;
@@ -84,9 +88,9 @@ export function Topbar({
         className="topbar-brand"
         style={{ color: "inherit", textDecoration: "none" }}
       >
-        OKLaw
+        {firm.shortName}
       </Link>
-      <span className="topbar-tagline">Nairobi · General Practice</span>
+      <span className="topbar-tagline">{firm.tagline}</span>
 
       <span className="topbar-spacer" />
 

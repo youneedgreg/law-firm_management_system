@@ -1,5 +1,6 @@
 import { Effect, Option } from "effect";
 import { Empty } from "@/components/ui";
+import { firmIdentity } from "@/runtime/deployment";
 import { runAs, signedIn } from "@/runtime/session";
 import { MessageService } from "@/services/message-service";
 import { Composer } from "./Composer";
@@ -30,18 +31,21 @@ export default async function PortalMessagesPage() {
     );
   }
 
-  const thread = await runAs(
-    Effect.flatMap(MessageService, (service) =>
-      service.thread(principal.clientId),
+  const [thread, firm] = await Promise.all([
+    runAs(
+      Effect.flatMap(MessageService, (service) =>
+        service.thread(principal.clientId),
+      ),
     ),
-  );
+    firmIdentity(),
+  ]);
 
   return (
     <>
       <h2 style={{ fontSize: 28, margin: "0 0 var(--space-2)" }}>Messages</h2>
       <p className="dek" style={{ marginBottom: "var(--space-4)" }}>
-        Your correspondence with OKLaw. Messages cannot be edited or withdrawn
-        by either side &mdash; a correction is a new message.
+        Your correspondence with {firm.shortName}. Messages cannot be edited or
+        withdrawn by either side &mdash; a correction is a new message.
       </p>
 
       <div className="message-thread">

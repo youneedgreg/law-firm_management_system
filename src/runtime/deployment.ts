@@ -1,5 +1,31 @@
 import { Effect } from "effect";
-import { DeploymentConfig } from "../infra/config";
+import { DeploymentConfig, FirmIdentity } from "../infra/config";
+import type { Firm } from "../lib/firm";
+
+/**
+ * Whose practice this is.
+ *
+ * Beside `isDemoDeployment` because it answers the same kind of question —
+ * something true of the deployment rather than of the request — and is wanted
+ * in the same places: a layout, a page's metadata, a shell that renders a
+ * masthead.
+ *
+ * The shells are client components, so this is read in the two server layouts
+ * above them and passed down as a prop. That is the only way it could work, and
+ * it is also the right shape: a wordmark is data the page was rendered with,
+ * not a thing a button reaches out to discover.
+ */
+export const firmIdentity = (): Promise<Firm> =>
+  Effect.runPromise(
+    FirmIdentity.pipe(
+      Effect.provide(FirmIdentity.Default),
+      Effect.map((firm): Firm => ({
+        name: firm.name,
+        shortName: firm.shortName,
+        tagline: firm.tagline,
+      })),
+    ),
+  );
 
 /**
  * Whether the code answering this request is the public demonstration (D-11).
