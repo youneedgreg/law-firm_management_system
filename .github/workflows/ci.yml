@@ -73,6 +73,12 @@ jobs:
 
       - name: Integration tests
         run: npm run test:integration
+        env:
+          # The seed refuses to run outside the demonstration (D-11), and these
+          # specs run the real seed against a throwaway container. Set here so
+          # that turning this job on is one `if:` rather than an afternoon
+          # reading a refusal that is working correctly.
+          DEMO_DEPLOYMENT: "true"
 
   e2e:
     name: End-to-end (browser, real database)
@@ -112,3 +118,6 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.E2E_DATABASE_URL }}
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          # The specs sign in through the one-click switcher, which refuses
+          # outside the demonstration (D-11).
+          DEMO_DEPLOYMENT: "true"

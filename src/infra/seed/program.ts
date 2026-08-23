@@ -19,6 +19,7 @@ import {
 } from "../../services/repositories";
 import { AuthLive } from "../auth/auth";
 import { DocumentStoreLive } from "../blob/store";
+import { DeploymentConfig } from "../config";
 import { AdvocateRepositoryLive } from "../sql/advocate-repository";
 import { CaseRepositoryLive } from "../sql/case-repository";
 import { PgLive } from "../sql/client";
@@ -157,6 +158,39 @@ const wipe = Effect.gen(function* () {
 });
 
 export const seed = Effect.gen(function* () {
+  /**
+   * The demonstration dataset only loads onto the demonstration (D-11).
+   *
+   * This is the third place the question is asked, and the one that covers the
+   * path the other two do not: `npm run db:seed`, run from a laptop against
+   * whatever `DATABASE_URL` happens to be exported. The route and
+   * `resetDemoData` guard the cron; nothing guarded a person with a terminal
+   * and the wrong environment file, and `wipe` below empties twenty-three
+   * tables before it writes anything.
+   *
+   * At the top, before a single repository is resolved, so a refusal costs
+   * nothing and — more to the point — happens before the wipe rather than
+   * somewhere in the middle of it.
+   *
+   * The message names the variable because the person who sees this is either
+   * about to make a serious mistake, or is running the seed locally and has not
+   * set `.env.local` up yet. Those two need to be told apart by a human, so it
+   * says what is true and what would change it rather than guessing which one
+   * this is.
+   */
+  const deployment = yield* DeploymentConfig;
+
+  if (!deployment.isDemo) {
+    return yield* Effect.fail(
+      new Error(
+        "Refused: the seed wipes every table it owns and loads fixtures for a " +
+          "firm that does not exist, so it runs only where DEMO_DEPLOYMENT is " +
+          "set. If this is the demonstration, set DEMO_DEPLOYMENT=true. If it " +
+          "is a firm's installation, this is not the program you want.",
+      ),
+    );
+  }
+
   const advocateRepo = yield* AdvocateRepository;
   const clientRepo = yield* ClientRepository;
   const caseRepo = yield* CaseRepository;
@@ -362,6 +396,13 @@ export const seed = Effect.gen(function* () {
 });
 
 export const SeedLayer = Layer.mergeAll(
+  /**
+   * Merged rather than provided, because the guard at the top of `seed` asks
+   * for it directly (D-11). It reads one environment variable and reaches
+   * nothing, so it sits outside the `Layer.provide(PgLive)` below with the
+   * things that are not repositories.
+   */
+  DeploymentConfig.Default,
   AdvocateRepositoryLive,
   UserRepositoryLive,
   CaseRepositoryLive,

@@ -1,5 +1,7 @@
-import { Effect, type Either, Layer, ManagedRuntime } from "effect";
+import { Effect, Either, Layer, ManagedRuntime } from "effect";
 import { seed, SeedLayer } from "../infra/seed/program";
+import { LoggingLive } from "../infra/telemetry/logging";
+import { isDemoDeployment } from "./deployment";
 import { runtime } from ".";
 
 /**
@@ -61,10 +63,60 @@ const seeding = (): SeedRuntime =>
  * no matters in it is the only person who will find out. So it is an error, at
  * `Error`, with what broke on the line.
  */
-export const resetDemoData = (): Promise<
+export const resetDemoData = async (): Promise<
   Either.Either<void, Layer.Layer.Error<typeof SeedLayer> | Error>
-> =>
-  seeding().runPromise(
+> => {
+  /**
+   * The lock that is not the door (D-11).
+   *
+   * `/api/cron/reset` checks this too, and checking it twice is the design
+   * rather than an oversight. That route is one caller; *this* is the function
+   * that empties twenty-three tables, and a guard belongs on the dangerous
+   * operation rather than on the corridor leading to it. The next caller — a
+   * script, an admin action, a test somebody writes in a hurry — inherits the
+   * refusal without having to remember it.
+   *
+   * It runs before `seeding()`, so a deployment that is not the demo does not
+   * build the seed's layers or open its pool to be told no.
+   *
+   * The log is at `Error` and says what happened rather than that a rule fired.
+   * Nothing should ever reach this line: it means a nightly cron is registered
+   * against an installation holding a real firm's records, which is a
+   * misconfiguration somebody needs to go and fix tonight — not a routine
+   * refusal to be counted.
+   */
+  if (!(await isDemoDeployment())) {
+    /**
+     * Logged through `LoggingLive` alone rather than through `runtime`.
+     *
+     * `runtime.runPromise` would build `AppLayer`, and `AppLayer` contains
+     * `PgLive` — which would make *refusing* depend on Postgres being
+     * reachable, so a deployment with a bad `DATABASE_URL` would throw here
+     * instead of returning the refusal it is trying to return. `LoggingLive`
+     * is `Layer<never, ConfigError>`: it reads the telemetry settings and
+     * touches nothing else, so the refusal path stays as close to pure as a
+     * log line gets.
+     *
+     * `ignore` because a failure to *describe* the refusal must not become a
+     * failure to refuse. The only way that layer fails is a malformed
+     * `LOG_LEVEL`, and a deployment in that state has larger problems than
+     * this line.
+     */
+    await Effect.runPromise(
+      Effect.logError(
+        "A demo reset was attempted on a deployment that is not the demo",
+      ).pipe(Effect.provide(LoggingLive), Effect.ignore),
+    );
+
+    return Either.left(
+      new Error(
+        "Refused: this deployment is not the demonstration, and the reset " +
+          "empties every table the seed owns.",
+      ),
+    );
+  }
+
+  return seeding().runPromise(
     Effect.either(
       seed.pipe(
         Effect.tapError((failure) =>
@@ -79,3 +131,4 @@ export const resetDemoData = (): Promise<
       ),
     ),
   );
+};
