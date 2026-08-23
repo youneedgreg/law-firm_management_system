@@ -108,3 +108,78 @@ most like an exception from it.
   ever writes.
 - Removing the whole feature means deleting `src/lib/demo.ts` and the panel that
   reads it. Nothing in `services/` or `infra/` would need to change.
+
+---
+
+## Amendment, 23 Aug 2026 — the affordances become conditional (D-11)
+
+**Status:** Accepted · **Decision IDs:** D-11
+
+Everything above was written for a repository with one deployment. It now has
+two: this demonstration, and a law firm's installation built from the same
+`main`. Nothing in the reasoning changes — a reviewer still gets six roles in
+one click — but "the deployment" is no longer a thing that can be said without
+asking which.
+
+So `DEMO_DEPLOYMENT` is read by `DeploymentConfig`, and four things are
+conditional on it: the roster panel on the sign-in page, the `signInAs` server
+action, `resetDemoData`, and the seed program itself.
+
+### The default is the decision
+
+It defaults to `false`. An unset variable, a misspelt one, and a Vercel project
+created next year by somebody who has never read this file all mean **a real
+deployment with the affordances off**. Absence cannot mean "demo", because the
+two mistakes are not comparable: a demonstration that quietly turns into an
+ordinary application is a dull afternoon, and an installation that quietly turns
+into a demonstration publishes a one-click Managing Partner login and empties
+the client account at midnight.
+
+### This is not the "demo mode" rejected above
+
+That section refuses a mode that **skips the password check**, and the refusal
+stands. `signInAs` still goes through `IdentityService.signInAsDemo`, which
+verifies the published password, writes the audit entry and issues the session
+through the one gateway. There is still no second way in.
+
+`DEMO_DEPLOYMENT` does the opposite thing: it removes the feature rather than
+weakening the check. On a firm's installation the endpoint refuses before it
+reads the roster, so the code path that exists in the artefact is one that
+answers no — not one that trusts a flag to have been set correctly before it
+signs somebody in.
+
+### The "no flag" paragraph still stands, and is why there are two locks
+
+The reset's guard reasons that a flag is a second way for a control to be
+silently absent. That was right about the shape it was rejecting — a flag
+consulted **instead of** the secret, which is a second door and an attacker
+needs whichever is unlocked. `DEMO_DEPLOYMENT` is required **alongside** it: two
+locks on one door, where absence closes it rather than opening it. A second
+control that is ANDed can only ever be a second way to refuse.
+
+The second lock is there because `vercel.json` is committed. A Vercel project
+built from this repository registers the nightly cron whether or not anybody
+meant it to, so on the firm's installation `CRON_SECRET` being unset was the
+entire distance between their trust ledger and a `DELETE` across every table the
+seed owns. That is too much weight for one variable.
+
+### Consequences of the amendment
+
+- The reset answers `404` off the demonstration, not `403`. On an installation
+  that endpoint does not exist, and `403` would confirm to whoever found the
+  path that there is something there worth being refused from.
+- The guard sits in `resetDemoData` and in `seed`, not only in the route.
+  `npm run db:seed` pointed at a firm's database now stops before the wipe
+  rather than after it — the path nothing previously covered.
+- Refusing does not touch Postgres. The refusal logs through `LoggingLive`
+  alone, so a deployment with an unreachable database still refuses rather than
+  throwing on its way to refusing.
+- The integration and end-to-end CI jobs carry `DEMO_DEPLOYMENT=true`, set while
+  both are still `if: false`, so turning either on is one line rather than an
+  afternoon reading a refusal that is working correctly.
+- Set it lowercase. `true`, `yes`, `on` and `1` are accepted; `True` is not a
+  boolean and fails the deployment. That failure can only land on a deployment
+  trying to be a demonstration, which is the safe direction and is pinned by
+  test.
+- Deleting the feature is still deleting `src/lib/demo.ts` and its panel. The
+  flag changed where it is _decided_, not where it lives.

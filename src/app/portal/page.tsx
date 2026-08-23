@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import { caseStatusTag } from "@/lib/format";
+import { firmIdentity } from "@/runtime/deployment";
 import { runAs, signedIn } from "@/runtime/session";
 import { CaseService } from "@/services/case-service";
 import { courtName } from "../(internal)/cases/display";
@@ -13,9 +14,10 @@ import { courtName } from "../(internal)/cases/display";
  * had chosen, and is now about the person reading it.
  */
 export default async function PortalHomePage() {
-  const [principal, caseload] = await Promise.all([
+  const [principal, caseload, firm] = await Promise.all([
     signedIn(),
     runAs(Effect.flatMap(CaseService, (service) => service.caseload())),
+    firmIdentity(),
   ]);
 
   return (
@@ -28,7 +30,7 @@ export default async function PortalHomePage() {
           ? "You have no matters open with us at the moment."
           : `Here's what's happening with your ${
               caseload.length === 1 ? "matter" : "matters"
-            } at OKLaw.`}
+            } at ${firm.shortName}.`}
       </p>
 
       <div className="portal-grid">

@@ -108,7 +108,7 @@ fact about the code is generated from it or checked against it by a test.
 | [0010](0010-authorization-as-a-typed-policy-layer.md)      | Authorization as a typed policy layer              | 20 Aug | —             |
 | [0011](0011-observability-and-resilience.md)               | Observability and resilience                       | 21 Aug | D-10          |
 | [0012](0012-design-tokens-as-primitives-and-roles.md)      | Design tokens as primitives and roles              | 22 Aug | —             |
-| [0013](0013-one-click-demo-access.md)                      | One-click demo access, without a second way in     | 22 Aug | D-5           |
+| [0013](0013-one-click-demo-access.md)                      | One-click demo access, without a second way in     | 22 Aug | D-5, D-11     |
 | [0014](0014-documentation-that-fails-the-build.md)         | Documentation that fails the build when it lies    | 22 Aug | —             |
 
 The `IDs` column points back at [`ROADMAP.md`](../../ROADMAP.md) §5, where the

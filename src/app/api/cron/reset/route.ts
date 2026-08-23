@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { Effect, Either, Redacted } from "effect";
 import { CronConfig } from "@/infra/config";
 import { attempt } from "@/runtime";
+import { isDemoDeployment } from "@/runtime/deployment";
 import { resetDemoData } from "@/runtime/reset";
 
 /**
@@ -33,8 +34,15 @@ import { resetDemoData } from "@/runtime/reset";
  * ## The door
  *
  * `/api` is excluded from `proxy.ts`, so this path is reachable by anyone who
- * finds it. The only thing in front of it is the shared secret Vercel attaches
- * to a cron invocation, and three properties matter:
+ * finds it. Two things stand in front of it, and they are checked in that
+ * order: whether this deployment is the demonstration at all (D-11), and then
+ * the shared secret Vercel attaches to a cron invocation.
+ *
+ * The first is what makes this endpoint safe to carry in a repository that is
+ * also deployed for a real firm — `vercel.json` is committed, so their project
+ * registers this cron too, and the answer there must be that there is nothing
+ * here. The second is what protects the demonstration itself, and three
+ * properties matter:
  *
  * - **No secret configured means refused, not open.** `CronConfig` reads
  *   `CRON_SECRET` as required, so an unset variable produces no config and this
@@ -70,6 +78,28 @@ const presented = (header: string | null, secret: string): boolean => {
 };
 
 export async function GET(request: Request): Promise<Response> {
+  /**
+   * Before the secret, and answering `404` rather than `403` (D-11).
+   *
+   * On an installation that is not the demonstration this endpoint does not
+   * exist, and that is the honest status code as well as the least informative
+   * one: `403` would confirm to whoever found the path that there is something
+   * here worth being refused from. It is the same reasoning the wrong-secret
+   * branch below is written under, applied one step earlier.
+   *
+   * First, so that a client deployment never reaches the `CRON_SECRET` branch
+   * at all. That branch answers `503` on a missing variable — correct when the
+   * demo is misconfigured, and misleading on an installation where the variable
+   * is *supposed* to be absent and the right answer is that there is no reset
+   * here to configure.
+   *
+   * `resetDemoData` checks this again. See the note there for why the guard is
+   * on the operation and not only on this door.
+   */
+  if (!(await isDemoDeployment())) {
+    return new Response(null, { status: 404 });
+  }
+
   const configured = await attempt(
     Effect.map(CronConfig, (config) => Redacted.value(config.secret)).pipe(
       Effect.provide(CronConfig.Default),

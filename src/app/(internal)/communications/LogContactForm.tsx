@@ -47,7 +47,7 @@ export function LogContactForm({
   return (
     <ActionDialog
       title="Log a conversation"
-      lede="A call, meeting, email or message that happened outside OKLaw — recorded against the client it concerned."
+      lede="A call, meeting, email or message that happened outside this system — recorded against the client it concerned."
       trigger="Log communication"
       triggerIcon="ph-duotone ph-chat-circle-text"
       submitLabel="Log it"

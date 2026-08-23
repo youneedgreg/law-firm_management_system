@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Source_Serif_4 } from "next/font/google";
+import { firmIdentity } from "@/runtime/deployment";
 import { RxRegistry } from "@/rx/provider";
 import { THEME_KEY } from "@/rx/session";
 import "@phosphor-icons/web/duotone";
@@ -17,11 +18,31 @@ const sourceSerif = Source_Serif_4({
   display: "swap",
 });
 
-export const metadata: Metadata = {
-  title: "OKLaw — Law Firm Management System",
-  description:
-    "Case, client, court, document, billing and trust management for OKLaw Advocates.",
-};
+/**
+ * The tab title and the description, named for whoever this installation is
+ * for (D-12).
+ *
+ * `generateMetadata` rather than a `metadata` constant because the firm's name
+ * is read at request time — a constant is evaluated once at module load, which
+ * is fine for a value baked into the build and wrong for one that comes from
+ * the environment the way `BETTER_AUTH_URL` does.
+ *
+ * The wordmark goes in the title and the full legal name in the description.
+ * A browser tab is about eight visible characters wide, and "Kimani, Otieno &
+ * Partners Advocates — Law Firm Management System" is a tab that reads
+ * "Kimani, O…". The description has room and is where a name should be given
+ * in full.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const firm = await firmIdentity();
+
+  return {
+    title: `${firm.shortName} — Law Firm Management System`,
+    description:
+      "Case, client, court, document, billing and trust management for " +
+      `${firm.name}.`,
+  };
+}
 
 /**
  * Applies a stored palette choice before anything is drawn.

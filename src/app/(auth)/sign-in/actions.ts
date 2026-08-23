@@ -8,6 +8,7 @@ import { type ActionState, refused, typedValues } from "@/lib/action-state";
 import { DEMO_PASSWORD, demoAccount } from "@/lib/demo";
 import { sourceOf } from "@/lib/request-source";
 import { attempt } from "@/runtime";
+import { isDemoDeployment } from "@/runtime/deployment";
 import { IdentityService } from "@/services/identity-service";
 import type { SessionCookie } from "@/services/repositories";
 
@@ -136,6 +137,25 @@ export async function signInAs(
   _previous: ActionState,
   form: FormData,
 ): Promise<ActionState> {
+  /**
+   * First, and on the server (D-11).
+   *
+   * Not rendering the buttons is not a control. A Server Action is a POST
+   * endpoint with a generated id, reachable by anything that has seen the id
+   * once — from a bookmarked page, a cached bundle, a script — whether or not
+   * this deployment currently renders a form that posts to it. So the check is
+   * here, at the top, rather than being something the page is trusted to have
+   * decided by not calling.
+   *
+   * Before `demoAccount`, and before `DEMO_PASSWORD` is read. On an
+   * installation that is not the demonstration there is no roster to consult
+   * and no shared password worth touching: the endpoint's answer does not
+   * depend on what was submitted, so nothing submitted is examined.
+   */
+  if (!(await isDemoDeployment())) {
+    return refused("Demo sign-in is not available on this deployment.");
+  }
+
   const account = demoAccount(form.get("account"));
 
   if (account === undefined) {

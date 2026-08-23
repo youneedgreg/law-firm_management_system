@@ -1,6 +1,12 @@
 import { ConfigProvider, Effect, Exit, LogLevel, Redacted } from "effect";
 import { describe, expect, it } from "vitest";
-import { DatabaseConfig, ServiceIdentity, TelemetryConfig } from "./config";
+import {
+  DatabaseConfig,
+  DeploymentConfig,
+  FirmIdentity,
+  ServiceIdentity,
+  TelemetryConfig,
+} from "./config";
 
 /**
  * Configuration is the one place where a mistake is invisible until it is
@@ -113,6 +119,163 @@ const telemetryIn = (environment: Record<string, string>) =>
     TelemetryConfig.pipe(Effect.provide(TelemetryConfig.Default)),
     environment,
   );
+
+const deploymentIn = (environment: Record<string, string>) =>
+  from(
+    DeploymentConfig.pipe(Effect.provide(DeploymentConfig.Default)),
+    environment,
+  );
+
+const firmIn = (environment: Record<string, string>) =>
+  from(FirmIdentity.pipe(Effect.provide(FirmIdentity.Default)), environment);
+
+/**
+ * Whose practice the installation says it is (D-12).
+ *
+ * The defaults matter as much as the reads: the portfolio deployment sets none
+ * of these and has to go on looking exactly as it does, so a change to the
+ * fallbacks is a change to the demonstration and should have to be made on
+ * purpose.
+ */
+describe("firm identity", () => {
+  it("falls back to the demonstration's own firm", async () => {
+    const exit = await firmIn({});
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (Exit.isSuccess(exit)) {
+      expect(exit.value.name).toBe("OKLaw Advocates");
+      expect(exit.value.shortName).toBe("OKLaw");
+      expect(exit.value.tagline).toBe("Nairobi · General Practice");
+    }
+  });
+
+  it("takes an installation's own name, wordmark and tagline", async () => {
+    const exit = await firmIn({
+      FIRM_NAME: "Kimani, Otieno & Partners Advocates",
+      FIRM_SHORT_NAME: "Kimani & Otieno",
+      FIRM_TAGLINE: "Mombasa · Shipping and Trade",
+    });
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (Exit.isSuccess(exit)) {
+      expect(exit.value.name).toBe("Kimani, Otieno & Partners Advocates");
+      expect(exit.value.shortName).toBe("Kimani & Otieno");
+      expect(exit.value.tagline).toBe("Mombasa · Shipping and Trade");
+    }
+  });
+
+  /**
+   * The three are set independently, so a deployment that names itself and
+   * forgets the tagline gets its own name beside the demonstration's location.
+   * Pinned because the alternative — falling back to all three together when
+   * any is missing — is a plausible-sounding design that would put "Nairobi ·
+   * General Practice" under a firm in Mombasa without saying anything.
+   */
+  it("does not make a partial configuration into a whole one", async () => {
+    const exit = await firmIn({ FIRM_SHORT_NAME: "Kimani & Otieno" });
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (Exit.isSuccess(exit)) {
+      expect(exit.value.shortName).toBe("Kimani & Otieno");
+      expect(exit.value.name).toBe("OKLaw Advocates");
+    }
+  });
+
+  /**
+   * Empty is refused rather than defaulted. A variable set to nothing is a
+   * script that did not find what it was looking for, and falling back would
+   * hide that behind a wordmark reading "OKLaw" on somebody else's system —
+   * which is a worse outcome than a deployment that will not start.
+   */
+  it("refuses a name set to nothing", async () => {
+    expect(Exit.isFailure(await firmIn({ FIRM_NAME: "" }))).toBe(true);
+    expect(Exit.isFailure(await firmIn({ FIRM_SHORT_NAME: "   " }))).toBe(true);
+  });
+});
+
+/**
+ * The one configuration value whose *default* is the control rather than a
+ * convenience (D-11).
+ *
+ * Everything the demonstration is allowed to do — a login that needs no
+ * password, a cron that empties every table — is gated on `isDemo`. So the
+ * question these tests ask is not "does it read the variable", which would be
+ * testing Effect. It is "what does this system believe when nobody has told it
+ * anything", because that is the state a freshly created Vercel project starts
+ * in, and the answer has to be *not a demo*.
+ */
+describe("deployment kind", () => {
+  /**
+   * The test to break if you are about to make this required. A client
+   * deployment sets no such variable, and it must run — with the affordances
+   * off — rather than refuse to start.
+   */
+  it("is not a demo when nothing says it is", async () => {
+    const exit = await deploymentIn({});
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (Exit.isSuccess(exit)) expect(exit.value.isDemo).toBe(false);
+  });
+
+  it("is a demo only when it is asked to be", async () => {
+    const exit = await deploymentIn({ DEMO_DEPLOYMENT: "true" });
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (Exit.isSuccess(exit)) expect(exit.value.isDemo).toBe(true);
+  });
+
+  /**
+   * `Config.boolean` takes the whole shell-truthy family, which is worth
+   * pinning rather than assuming: somebody setting this in a dashboard is as
+   * likely to type `yes` or `1` as `true`, and all three have to mean the same
+   * thing on the deployment that wants to be a demo.
+   */
+  it("takes the spellings a person actually types", async () => {
+    for (const value of ["true", "yes", "on", "1"]) {
+      const exit = await deploymentIn({ DEMO_DEPLOYMENT: value });
+      expect(Exit.isSuccess(exit)).toBe(true);
+      if (Exit.isSuccess(exit)) expect(exit.value.isDemo).toBe(true);
+    }
+
+    for (const value of ["false", "no", "off", "0"]) {
+      const exit = await deploymentIn({ DEMO_DEPLOYMENT: value });
+      expect(Exit.isSuccess(exit)).toBe(true);
+      if (Exit.isSuccess(exit)) expect(exit.value.isDemo).toBe(false);
+    }
+  });
+
+  /**
+   * It is case-sensitive, and this is the one that will bite somebody in a
+   * dashboard: `DEMO_DEPLOYMENT=True` does not mean true, it means the
+   * deployment refuses to start.
+   *
+   * Pinned deliberately rather than filed as a wart, because the direction is
+   * the safe one. A capitalised value can only be typed on the deployment that
+   * *wants* to be a demo — the client's is set by leaving it alone — so the
+   * failure is loud, immediate, and lands on the portfolio site rather than
+   * silently arming the switcher somewhere it should not be.
+   */
+  it("refuses a value it cannot read rather than guessing at one", async () => {
+    for (const value of ["True", "YES", "maybe", ""]) {
+      expect(
+        Exit.isFailure(await deploymentIn({ DEMO_DEPLOYMENT: value })),
+      ).toBe(true);
+    }
+  });
+
+  /**
+   * The likeliest mistake of all, and the one with no error attached: a
+   * variable set on the right project under very slightly the wrong name. It
+   * has to land on "not a demo", which is what makes the default rather than
+   * the validation the thing protecting the client.
+   */
+  it("ignores a variable that is not the one it reads", async () => {
+    const exit = await deploymentIn({ DEMO_DEPLOMENT: "true" });
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (Exit.isSuccess(exit)) expect(exit.value.isDemo).toBe(false);
+  });
+});
 
 /**
  * Both of these exist to make a log line and a span attributable to a build and

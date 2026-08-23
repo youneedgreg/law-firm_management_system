@@ -2,13 +2,14 @@ import { Option } from "effect";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { DEMO_PASSWORD } from "@/lib/demo";
+import { firmIdentity, isDemoDeployment } from "@/runtime/deployment";
 import { principal } from "@/runtime/session";
 import { DemoAccounts } from "./DemoAccounts";
 import { SignInForm } from "./SignInForm";
 
-export const metadata: Metadata = {
-  title: "Sign in · OKLaw",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: `Sign in · ${(await firmIdentity()).shortName}` };
+}
 
 /**
  * The way in.
@@ -23,6 +24,16 @@ export const metadata: Metadata = {
  * holds seeded fixtures for a firm that does not exist, and a reviewer who has
  * to email for a password is a reviewer who closes the tab. It is stated here,
  * in the code, rather than being something to notice and wonder about.
+ *
+ * Which is why the whole panel is conditional (D-11). On a firm's installation
+ * this page is the form and nothing else — no roster, no password, no mention
+ * that either ever existed. The condition is `isDemoDeployment()` rather than a
+ * hand-maintained list of what to hide, so a role added to the roster later
+ * cannot arrive on a client's sign-in page by being forgotten about.
+ *
+ * Hiding it is presentation, not protection: `signInAs` refuses on its own, for
+ * the reasons written above it. This is what stops a client's staff reading
+ * about a demonstration they are not part of.
  */
 export default async function SignInPage({
   searchParams,
@@ -30,11 +41,12 @@ export default async function SignInPage({
   if (Option.isSome(await principal())) redirect("/dashboard");
 
   const { next } = await searchParams;
+  const [demo, firm] = await Promise.all([isDemoDeployment(), firmIdentity()]);
 
   return (
     <main className="signin">
       <div className="signin-card card elev-sm">
-        <div className="card-kicker">OKLaw</div>
+        <div className="card-kicker">{firm.shortName}</div>
         <h1 style={{ fontSize: 30, margin: "0 0 var(--space-2)" }}>Sign in</h1>
         <p className="page-subtitle" style={{ marginBottom: "var(--space-4)" }}>
           Matters, clients and client money for the firm.
@@ -42,18 +54,20 @@ export default async function SignInPage({
 
         <SignInForm next={typeof next === "string" ? next : ""} />
 
-        <div className="signin-demo">
-          <strong>Demo accounts</strong>
-          <p>
-            Every seeded account uses the password <code>{DEMO_PASSWORD}</code>,
-            and the addresses are on the firm&rsquo;s pattern —{" "}
-            <code>sarah.wanjiru@oklaw.co.ke</code> for the managing partner. The
-            buttons below fill both in. Read down them: each role can do
-            strictly less than the one above it.
-          </p>
+        {demo && (
+          <div className="signin-demo">
+            <strong>Demo accounts</strong>
+            <p>
+              Every seeded account uses the password{" "}
+              <code>{DEMO_PASSWORD}</code>, and the addresses are on the
+              firm&rsquo;s pattern — <code>sarah.wanjiru@oklaw.co.ke</code> for
+              the managing partner. The buttons below fill both in. Read down
+              them: each role can do strictly less than the one above it.
+            </p>
 
-          <DemoAccounts next={typeof next === "string" ? next : ""} />
-        </div>
+            <DemoAccounts next={typeof next === "string" ? next : ""} />
+          </div>
+        )}
       </div>
     </main>
   );

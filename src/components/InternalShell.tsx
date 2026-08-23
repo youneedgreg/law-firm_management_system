@@ -6,6 +6,7 @@ import { useRef, useState } from "react";
 import { type Session, SessionProvider } from "@/components/Session";
 import { Sidebar } from "@/components/Sidebar";
 import { Topbar } from "@/components/Topbar";
+import type { Firm } from "@/lib/firm";
 import { canAccessPath, itemForPath } from "@/lib/nav";
 
 /**
@@ -25,10 +26,13 @@ import { canAccessPath, itemForPath } from "@/lib/nav";
  * every read and every write, and it does not know this component exists.
  */
 export function InternalShell({
+  firm,
   session,
   needsAttention,
   children,
 }: {
+  /** Whose practice this is, read by the layout above (D-12). */
+  firm: Firm;
   session: Session;
   /** How many notices are overdue, for the masthead badge. */
   needsAttention: number;
@@ -56,6 +60,7 @@ export function InternalShell({
           Skip to content
         </a>
         <Topbar
+          firm={firm}
           navOpen={navOpen}
           onToggleNav={() => setNavOpen((open) => !open)}
           toggleRef={toggleRef}

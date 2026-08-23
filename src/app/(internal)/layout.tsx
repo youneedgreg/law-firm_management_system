@@ -2,6 +2,7 @@ import { Effect } from "effect";
 import { redirect } from "next/navigation";
 import { InternalShell } from "@/components/InternalShell";
 import { permissionsOf } from "@/domain/identity/permissions";
+import { firmIdentity } from "@/runtime/deployment";
 import { runAs, signedIn } from "@/runtime/session";
 import { NoticeService, pressing } from "@/services/notice-service";
 
@@ -43,6 +44,7 @@ export default async function InternalLayout({ children }: LayoutProps<"/">) {
 
   return (
     <InternalShell
+      firm={await firmIdentity()}
       session={{ principal, permissions: permissionsOf(principal) }}
       needsAttention={needsAttention}
     >

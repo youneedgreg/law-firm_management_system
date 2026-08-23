@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { PortalShell } from "@/components/PortalShell";
 import { permissionsOf } from "@/domain/identity/permissions";
+import { firmIdentity } from "@/runtime/deployment";
 import { signedIn } from "@/runtime/session";
 
 /**
@@ -24,7 +25,10 @@ export default async function PortalLayout({
   if (principal._tag === "Staff") redirect("/dashboard");
 
   return (
-    <PortalShell session={{ principal, permissions: permissionsOf(principal) }}>
+    <PortalShell
+      firm={await firmIdentity()}
+      session={{ principal, permissions: permissionsOf(principal) }}
+    >
       {children}
     </PortalShell>
   );
