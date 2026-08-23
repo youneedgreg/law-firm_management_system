@@ -21,6 +21,25 @@ export default defineConfig({
     include: ["src/**/*.test.ts", "src/**/*.test.tsx", "test/**/*.test.ts"],
     exclude: ["**/*.integration.test.ts", "**/node_modules/**"],
     globals: false,
+    /**
+     * Fifteen seconds rather than the default five, and not because anything
+     * here waits for anything.
+     *
+     * Standing up jsdom, React and a file's own module graph is a one-off cost
+     * that Vitest charges to whichever test in the file runs first — around a
+     * second on an idle machine. Two things multiply it: sixty-seven files
+     * running in parallel across a handful of cores, and the v8 coverage
+     * instrumentation that `npm run test:coverage` turns on, which is what CI
+     * runs. Together they have taken the first test of a component file past
+     * five seconds, and a test that fails when the computer is busy is a flake
+     * however sound its logic.
+     *
+     * The alternative — a `vi.setConfig` in each heavy file — puts the same
+     * explanation in five places and quietly omits it from the sixth. This
+     * number is not a budget for slow tests: nothing in this suite sleeps, and
+     * anything that genuinely hangs still fails, fifteen seconds later.
+     */
+    testTimeout: 15_000,
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov", "json-summary"],
