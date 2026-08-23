@@ -1,11 +1,10 @@
-import { createLocalAccountIssuer } from "@better-auth/core/db";
 import { Effect, Schema } from "effect";
 import type * as Client from "../../domain/client/client";
 import type * as Firm from "../../domain/firm/advocate";
 import { UserId } from "../../domain/shared/ids";
 import { DEMO_PASSWORD } from "../../lib/demo";
 import { UserRepository } from "../../services/repositories";
-import { Auth } from "../auth/auth";
+import { setPassword } from "../auth/credentials";
 import { stableId } from "./ids";
 
 /**
@@ -28,52 +27,14 @@ import { stableId } from "./ids";
  * one thing it is here for: the password hash, and the `accounts` row that
  * holds it.
  *
- * `$context` is the library's own internals, and reaching into them is a real
- * cost worth naming: it is a surface with no compatibility promise, and a minor
- * upgrade could move it. The alternative is hashing passwords in this
- * repository, which ADR 0004 rejected for good reasons that have not changed.
- * Of the two, borrowing the library's hasher is the one whose failure mode is a
- * loud break at build time.
+ * The credential itself is written by `setPassword` in `auth/credentials.ts`,
+ * which moved there when `provision/admin.ts` needed the same operation for a
+ * real person's chosen password. Its comment carries the reasoning about
+ * Better Auth's internals that used to live here.
  */
 
 const userId = (key: string) =>
   Schema.decodeSync(UserId)(stableId("user", key));
-
-/**
- * Writes the credential Better Auth will check on sign-in.
- *
- * `provider_id = 'credential'` is the library's name for an email-and-password
- * account, as opposed to a social one. A second seed run does not produce a
- * second row: the wipe deletes `users` first and `accounts` cascades from it,
- * so there is never more than one password per person — two rows would mean two
- * passwords that both work, and only one of them ever changed.
- */
-const setPassword = (id: string, password: string) =>
-  Effect.gen(function* () {
-    const auth = yield* Auth;
-    const context = yield* Effect.promise(() => auth.$context);
-    const hash = yield* Effect.promise(() => context.password.hash(password));
-
-    yield* Effect.promise(() =>
-      context.internalAdapter.createAccount({
-        userId: id,
-        accountId: id,
-        providerId: "credential",
-        /**
-         * `local:credential`, computed rather than written out.
-         *
-         * The value is Better Auth's own namespacing — it is what keeps an
-         * OAuth provider that happens to be called "credential" from
-         * colliding with a password — and it is half of the unique index the
-         * library looks a password up by. Hardcoding the string would work
-         * until the format changed, and the symptom would be a password that
-         * saves and never matches.
-         */
-        issuer: createLocalAccountIssuer("credential"),
-        password: hash,
-      }),
-    );
-  });
 
 export const provisionLogins = (
   staff: readonly Firm.Advocate[],

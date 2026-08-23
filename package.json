@@ -28,7 +28,8 @@
     "verify:clean": "rm -rf .next node_modules && npm ci && npm run verify",
     "prepare": "husky",
     "db:migrate": "tsx --env-file-if-exists=.env.local src/infra/sql/migrate.ts",
-    "db:seed": "tsx --env-file-if-exists=.env.local src/infra/seed/run.ts"
+    "db:seed": "tsx --env-file-if-exists=.env.local src/infra/seed/run.ts",
+    "provision:admin": "tsx --env-file-if-exists=.env.local src/infra/provision/run.ts"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
