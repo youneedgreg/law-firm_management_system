@@ -30,12 +30,14 @@ import type { AdminRequest } from "./options";
  *
  * ## What it will not do
  *
- * It writes two rows and reads three. It does not wipe, does not migrate, does
- * not seed, and has no code path that touches a table it is not inserting into.
- * That is deliberate and worth stating: the last program in this repository
- * that provisioned logins was a wipe-and-load, and the whole reason this one
- * exists separately is so that "create an account" and "empty the database"
- * are not two behaviours of one script.
+ * Two reads — is this address a login already, is it on the staff list already —
+ * and three writes: the `advocates` row, the `users` row that points at it, and
+ * the `accounts` row holding the password hash. It does not wipe, does not
+ * migrate, does not seed, and has no code path that touches a table it is not
+ * inserting into. That is deliberate and worth stating: the last program in
+ * this repository that provisioned logins was a wipe-and-load, and the whole
+ * reason this one exists separately is so that "create an account" and "empty
+ * the database" are not two behaviours of one script.
  *
  * ## Refusing before writing
  *

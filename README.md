@@ -85,7 +85,8 @@ src/
                No I/O, no framework, no imports from anywhere else in src/.
   services/    Effect services and Layers. Depends on repository interfaces
                it declares itself, never on a concrete implementation.
-  infra/       The dirty edges: Postgres repositories, blob storage, telemetry.
+  infra/       The dirty edges: Postgres repositories, blob storage, telemetry,
+               migrations, the seed, and provisioning a firm's first login.
   api/         HttpApi definition — one contract, server and client derived.
   runtime/     ManagedRuntime wiring the Layers together, one per process.
   rx/          The same idea in the browser: atoms built on the generated client.
@@ -222,6 +223,10 @@ npm run db:seed      # the demonstration firm, decoded through the domain schema
 owns before loading, so it refuses to run anywhere that has not said it is a
 demonstration — see [running it for a firm](#running-it-for-a-firm).
 
+`.env.local` is not committed. On a machine linked to the deployment,
+`vercel env pull` writes it; otherwise the required variables are listed under
+[configuration](#configuration).
+
 | Command                    | What it does                                          |
 | -------------------------- | ----------------------------------------------------- |
 | `npm test`                 | Unit, service and schema tests — no database required |
@@ -234,6 +239,9 @@ demonstration — see [running it for a firm](#running-it-for-a-firm).
 | `npm run verify:clean`     | The same, from a wiped `node_modules` and `.next`     |
 | `npm run docs:erd`         | Regenerates `docs/erd.md` from the migrations         |
 | `npm run docs:screens`     | Retakes the screenshots above                         |
+| `npm run docs:coverage`    | Measures coverage and redraws the badge above         |
+| `npm run db:migrate`       | Applies pending migrations to `DATABASE_URL`          |
+| `npm run db:seed`          | Loads the demonstration firm. Refuses elsewhere       |
 | `npm run provision:admin`  | Creates a login on an installation. See below         |
 | `npm run perf`             | Signs in and runs Lighthouse over five screens        |
 
@@ -285,14 +293,14 @@ affordances absent. Absence cannot mean "demo", because the two mistakes are not
 comparable — a demonstration that quietly becomes an ordinary application is a
 dull afternoon, and the reverse publishes a one-click administrator login.
 
-|                        | Demonstration | Installation |
-| ---------------------- | ------------- | ------------ |
-| `DEMO_DEPLOYMENT`      | `true`        | unset        |
-| `CRON_SECRET`          | set           | unset        |
-| One-click sign-in      | on            | refused      |
-| `POST /api/cron/reset` | resets        | `404`        |
-| `npm run db:seed`      | loads         | refused      |
-| `FIRM_*`               | defaults      | the firm's   |
+|                       | Demonstration | Installation |
+| --------------------- | ------------- | ------------ |
+| `DEMO_DEPLOYMENT`     | `true`        | unset        |
+| `CRON_SECRET`         | set           | unset        |
+| One-click sign-in     | on            | refused      |
+| `GET /api/cron/reset` | resets        | `404`        |
+| `npm run db:seed`     | loads         | refused      |
+| `FIRM_*`              | defaults      | the firm's   |
 
 The reset is guarded twice — the secret **and** the flag, required together
 rather than either alone — because `vercel.json` is committed, so a second
@@ -312,11 +320,14 @@ npm run provision:admin -- --name "Grace Kimani" \
   --certificate P.105/2026 --certificate-year 2026
 ```
 
-It writes two rows and reads three. It refuses a password shorter than the
-application's own floor, an address that already has a login, and an address
-already on the staff list — all three before either insert, so a refused run
-leaves nothing behind. The password is asked for on the terminal and never
-echoed.
+It makes two reads and three writes — the staff record, the login, and the
+credential Better Auth checks — and touches nothing else. It refuses a password
+shorter than the application's own floor, an address that already has a login,
+and an address already on the staff list, all three before the first write, so a
+refused run leaves nothing behind. The password is asked for on the terminal and
+never echoed; `ADMIN_PASSWORD` exists for a session with no terminal and is
+documented as the second choice, because an environment variable is visible to
+`ps` and lands in shell history.
 
 The reasoning behind all of this, including what a second installation would
 cost and when row-level tenancy would be worth it, is in
@@ -342,7 +353,7 @@ domain, no screenshots. The demonstration is fictional and stays that way.
 
 ## What this was for, and what I learned
 
-Six things I would not have learned from a tutorial, in the order they cost me
+Seven things I would not have learned from a tutorial, in the order they cost me
 the most time.
 
 **A rule enforced in one place is not enforced.** Rule 10 lives in the domain,
@@ -376,11 +387,23 @@ out on the morning of a hearing. Every counter here includes the source, and the
 one thing that would actually raise the floor — a second factor — is named as
 absent rather than left as an implication.
 
+**The default is the control, not the flag.** Making the demonstration's
+affordances conditional was an afternoon; deciding which way the condition
+should fail took longer and mattered more. `DEMO_DEPLOYMENT` defaults to `false`
+so that an unset variable, a misspelt one, and a project created by somebody who
+has never read this file all mean _a real installation with the affordances
+off_. Get that backwards and the flag is worse than no flag. The same argument
+runs through the reset being guarded twice: a second control consulted
+_instead_ of the first is a second door, and one required _alongside_ it is a
+second lock.
+
 **Documents rot in a way code does not.** Nothing breaks when a diagram becomes
 wrong, so the ones that state facts are generated from the code or checked
 against it by a test ([ADR 0014](docs/adr/0014-documentation-that-fails-the-build.md)).
 This README is the exception, and it is the document that had already drifted
-two phases behind the code when Phase 10 rewrote it.
+two phases behind the code when Phase 10 rewrote it. It still drifts: writing
+this revision turned up a table claiming the reset endpoint was a `POST` and a
+sentence with its own reads and writes the wrong way round.
 
 ## Honest status
 
@@ -444,7 +467,10 @@ document.
   obligations, and the exemptions
 - [`docs/first-client.md`](docs/first-client.md) — how one build serves a public
   demonstration and a firm's installation, and what row-level tenancy would cost
+- [`docs/engagement-terms.md`](docs/engagement-terms.md) — the commercial half:
+  ownership, data protection, support and exit, in plain English
 - [`ROADMAP.md`](ROADMAP.md) — the plan, phase by phase, with the decision log
+- [`LICENSE.md`](LICENSE.md) — what reading this does and does not permit
 
 ## Licence
 

@@ -394,9 +394,9 @@ said `scripts/provision-admin.ts`, and that was the wrong address. Everything in
 `scripts/` today is documentation or tooling that deliberately _cannot_ reach
 the real database — `erd.ts` says so in as many words, and runs the migrations
 against an in-process PGlite specifically so a docs command can never be pointed
-at production. A program whose entire purpose is to write two rows into a law
-firm's database belongs beside `migrate.ts` and `seed/run.ts`, which is where
-the other things that touch Postgres already live.
+at production. A program whose entire purpose is to write into a law firm's
+database belongs beside `migrate.ts` and `seed/run.ts`, which is where the other
+things that touch Postgres already live.
 
 Split three ways, following the seed's own precedent that a module calling
 `runMain` at import time cannot be imported by the test that would prove it
