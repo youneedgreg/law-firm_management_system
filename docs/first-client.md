@@ -465,8 +465,18 @@ command a second time to watch it refuse.
 
 - [ ] Create a second Vercel project, from the **private** repository
       (`youneedgreg/oklaw`) rather than this one.
-- [ ] Leave its production branch as `main`. The private repository's `main`
-      mirrors the public one; client-specific work lives on `installations`.
+- [ ] Set its production branch to **`installations`**, not `main`.
+
+Both would work today, because there is no bespoke work yet and the two branches
+are identical. `installations` is right anyway: it merges from `main`, so it is
+always at least `main`, and the day a firm asks for a report only they want, the
+deployment already points at the branch that has it. Pointing it at `main` and
+switching later means remembering to switch at the exact moment attention is
+elsewhere.
+
+One firm, one branch. A second installation is `installations/<firm>`, branched
+the same way, and the day that happens is the day to re-read Phase E about
+whether row-level tenancy has started to be cheaper.
 
 **Two repositories rather than two branches of one (D-14).** An earlier version
 of this plan put installations on a `release` branch here. That worked for
