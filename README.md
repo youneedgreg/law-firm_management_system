@@ -467,8 +467,6 @@ document.
   obligations, and the exemptions
 - [`docs/first-client.md`](docs/first-client.md) — how one build serves a public
   demonstration and a firm's installation, and what row-level tenancy would cost
-- [`docs/engagement-terms.md`](docs/engagement-terms.md) — the commercial half:
-  ownership, data protection, support and exit, in plain English
 - [`ROADMAP.md`](ROADMAP.md) — the plan, phase by phase, with the decision log
 - [`LICENSE.md`](LICENSE.md) — what reading this does and does not permit
 

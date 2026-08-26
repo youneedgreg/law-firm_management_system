@@ -1,7 +1,8 @@
 # From demo to first client
 
-> How this repository becomes two running systems — the public portfolio demo
-> and one law firm's live installation — without becoming two codebases.
+> How one codebase serves two running systems — the public portfolio demo and
+> one law firm's live installation — across two repositories, without becoming
+> two codebases.
 
 The phases are ordered by dependency and by blast radius:
 Phase A removes the things that would be a breach in a client
@@ -15,18 +16,24 @@ go; the diff is the progress log.
 
 ## 0. The decision this plan implements
 
-**One repository, two deployments, two databases, no multi-tenancy.**
+**One codebase, two repositories, two deployments, two databases, no
+multi-tenancy.**
 
 There is no tenancy in this system and this plan does not add any. Every one of
 the 23 tables answers questions about _the_ firm, singular — there is no
 `firm_id` anywhere in `src/`, and that was the right call. Separation between
 the demo and the client is therefore a deployment boundary, not a row-level one:
 
+The code lives in two remotes and is the same code. `main` is identical in both
+and is the product and the portfolio; the private repository adds an
+`installations` branch for what must never be published (D-14). The rule is one
+sentence: **if it is on `main`, it is public.**
+
 |                | Demo                                    | Client               |
 | -------------- | --------------------------------------- | -------------------- |
 | Vercel project | existing                                | new                  |
 | Neon database  | existing                                | new, its own project |
-| Deploys from   | `main`                                  | `release`            |
+| Deploys from   | public repo, `main`                     | private repo         |
 | Domain         | `law-firmmanagementsystem.vercel.app`   | the firm's           |
 | Demo sign-in   | on                                      | **off**              |
 | Nightly reset  | on                                      | **off, twice over**  |
@@ -456,18 +463,28 @@ command a second time to watch it refuse.
 
 ### C2. Vercel project
 
-- [ ] Create a second Vercel project from this same Git repository.
-- [ ] Set its production branch to `release`. Create the branch from `main`.
-- [ ] Protect `release` — no direct pushes, merges from `main` only.
+- [ ] Create a second Vercel project, from the **private** repository
+      (`youneedgreg/oklaw`) rather than this one.
+- [ ] Leave its production branch as `main`. The private repository's `main`
+      mirrors the public one; client-specific work lives on `installations`.
 
-**This contradicts D-9, and the contradiction should be resolved in the roadmap
-rather than left for a reader to find.** ROADMAP §5 settles on trunk-based
-development, `main` only, no branches — and the reasoning given is that PR
-review on a solo project is self-review anyway. That reasoning is about _review_
-and it still holds. `release` is not a review branch; it is a deployment
-pointer, and it exists because the thing on the other end of it is somebody
-else's practice. Amend D-9 to say so when you create the branch, or the next
-person to read §5 will delete the branch to comply with it.
+**Two repositories rather than two branches of one (D-14).** An earlier version
+of this plan put installations on a `release` branch here. That worked for
+deployment and solved nothing else, because the problem was never which commit
+deploys — it is that some material must not be published at all. A negotiating
+position, a firm's bespoke report, a note about their infrastructure: none of
+those belong in a public repository, and a branch of a public repository is
+public.
+
+So the line is drawn at the repository boundary, and the rule is one sentence:
+**if it is on `main`, it is public.** `main` is identical in both remotes and
+carries the product and the portfolio. The private repository adds
+`installations`, which merges from `main` and is never pushed anywhere else.
+
+This does not reopen D-9. Trunk-based development is about review, and there is
+still no review branch and no pull request between a change and `main`.
+`installations` is a publication boundary, which is a different thing from a
+review gate.
 
 - [ ] Confirm the reset cron: it will be registered from `vercel.json`, and it
       must answer 404 (A3) with no `CRON_SECRET` and no `DEMO_DEPLOYMENT`.
@@ -535,10 +552,11 @@ goes in:
 **Do this before you invoice, not before you go live.** It is ten minutes now
 and unwindable never.
 
-The positions are drafted in **[`docs/engagement-terms.md`](engagement-terms.md)**
-— plain English, one page, written to be taken to an advocate rather than used
-as it stands. The summary below is what each section is for; the reasoning and
-the clauses the firm will push back on are in that document.
+The positions are drafted in `docs/engagement-terms.md`, **which lives only in
+the private repository** — a negotiating position is not something to publish to
+the party you are negotiating with. The checklist below says what each section
+has to settle; the reasoning, and the clauses a firm will push back on, are in
+that document.
 
 - [ ] **Ownership.** A default work-for-hire arrangement means the firm owns what
       you build and you cannot sell it again — and you would find that out after
