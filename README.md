@@ -454,6 +454,8 @@ document.
 
 ## Documentation
 
+- [`docs/case-study.md`](docs/case-study.md) — the project in one page: problem,
+  approach, one decision, verification and limits
 - [`docs/architecture.md`](docs/architecture.md) — system context, layers, and
   the lifecycle of one request
 - [`docs/erd.md`](docs/erd.md) — the database, generated from the migrations
